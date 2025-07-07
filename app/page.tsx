@@ -1,103 +1,372 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabaseClient'
+import { useRouter } from 'next/navigation'
+
+export default function DataEntryPage() {
+  const router = useRouter()
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  const [message, setMessage] = useState('')
+  const [isWorking, setIsWorking] = useState(false)
+  const [isSessionActive, setIsSessionActive] = useState(false)
+  const [currentTime, setCurrentTime] = useState(new Date())
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskMessage, setTaskMessage] = useState('')
+  const [note, setNote] = useState('')
+  const [availableTags, setAvailableTags] = useState([])
+  const [tagTarget, setTagTarget] = useState('note')
+  const [showTags, setShowTags] = useState(true)
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/login')
+      } else {
+        setUser(user)
+        checkSession()
+        fetchTags()
+        setLoading(false)
+      }
+    }
+    getUser()
+  }, [])
+
+  const logout = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  const checkSession = async () => {
+    const { data, error } = await supabase
+      .from('work_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('end_time', null)
+      .order('start_time', { ascending: false })
+      .limit(1)
+
+    if (!error && data && data.length > 0) {
+      setIsSessionActive(true)
+    } else {
+      setIsSessionActive(false)
+    }
+  }
+
+  const fetchTags = async () => {
+    const { data, error } = await supabase
+      .from('tags')
+      .select('name, usage_count')
+      .order('usage_count', { ascending: false })
+
+    if (!error && data) {
+      setAvailableTags(data.map(tag => tag.name))
+    }
+  }
+
+  const extractTagsFromNote = (text) => {
+    const tagSet = new Set()
+    const regex = /#([\p{L}\p{N}_]+)/gu
+    let match
+    while ((match = regex.exec(text))) {
+      tagSet.add(match[1])
+    }
+    return Array.from(tagSet)
+  }
+
+  const insertNewTags = async (tags) => {
+    const newTags = tags.filter(tag => !availableTags.includes(tag))
+    if (newTags.length === 0) return
+
+    const insertData = newTags.map(name => ({ name, usage_count: 1 }))
+    const { error } = await supabase.from('tags').insert(insertData)
+    if (!error) fetchTags()
+  }
+
+  const incrementTagUsage = async (tags) => {
+    for (const tag of tags) {
+      await supabase.rpc('increment_tag_usage', { tag_name: tag })
+    }
+  }
+
+  const startWorkday = async () => {
+    const { error } = await supabase.from('work_logs').insert([
+      {
+        user_id: user.id,
+        project: 'Darba diena',
+        start_time: new Date(),
+        description: '',
+      },
+    ])
+
+    if (!error) {
+      setMessage('🟢 Darbadiena sākta!')
+      await checkSession()
+    }
+  }
+
+  const endWorkday = async () => {
+    const { data, error } = await supabase
+      .from('work_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('end_time', null)
+      .order('start_time', { ascending: false })
+      .limit(1)
+
+    if (data && data.length > 0) {
+      const id = data[0].id
+      const { error: updateError } = await supabase
+        .from('work_logs')
+        .update({ end_time: new Date() })
+        .eq('id', id)
+
+      if (!updateError) {
+        setMessage('🔴 Darbadiena pabeigta!')
+        setIsSessionActive(false)
+        setIsWorking(false)
+      }
+    }
+  }
+
+  const startTask = async () => {
+  const { data: sessions } = await supabase
+    .from('work_logs')
+    .select('id')
+    .eq('user_id', user.id)
+    .is('end_time', null)
+    .order('start_time', { ascending: false })
+    .limit(1)
+
+  if (!sessions || sessions.length === 0) {
+    setTaskMessage('⚠️ Nav aktīvas darbadienas.')
+    return
+  }
+
+  const sessionId = sessions[0].id
+
+  const tagsFromNote = extractTagsFromNote(note)
+  const tagsFromTitle = extractTagsFromNote(taskTitle)
+  const allTags = Array.from(new Set([...tagsFromNote, ...tagsFromTitle])) // Apvieno, bez dublikātiem
+
+  const finalTitle = taskTitle.trim() || allTags[0] || 'Uzdevums'
+
+  const { data: insertedTasks, error: taskError } = await supabase
+    .from('task_logs')
+    .insert([
+      {
+        user_id: user.id,
+        session_id: sessionId,
+        title: finalTitle,
+        start_time: new Date(),
+        note,
+      },
+    ])
+    .select('id')
+
+  if (taskError || !insertedTasks || insertedTasks.length === 0) {
+    setTaskMessage('❌ Neizdevās sākt uzdevumu.')
+    return
+  }
+
+  const taskId = insertedTasks[0].id
+  await insertNewTags(allTags)
+  await incrementTagUsage(allTags)
+
+  setTaskMessage('🟢 Uzdevums sācies!')
+  setTaskTitle('')
+  setNote('')
+}
+
+  const endTask = async () => {
+    const { data, error } = await supabase
+      .from('task_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('end_time', null)
+      .order('start_time', { ascending: false })
+      .limit(1)
+
+    if (error || !data || data.length === 0) {
+      setTaskMessage('⚠️ Nav aktīva uzdevuma, ko beigt.')
+      return
+    }
+
+    const task = data[0]
+    const { error: updateError } = await supabase
+      .from('task_logs')
+      .update({ end_time: new Date() })
+      .eq('id', task.id)
+
+    if (updateError) {
+      console.error('❌ Kļūda pabeidzot uzdevumu:', updateError)
+      setTaskMessage('❌ Neizdevās beigt uzdevumu.')
+    } else {
+      setTaskMessage('🔴 Uzdevums pabeigts!')
+    }
+  }
+
+  const handleImageUpload = async (e) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    const { data: activeTask } = await supabase
+      .from('task_logs')
+      .select('id')
+      .eq('user_id', user.id)
+      .is('end_time', null)
+      .order('start_time', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (!activeTask) {
+      alert('Nav aktīva uzdevuma!')
+      return
+    }
+
+    for (const file of files) {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${activeTask.id}_${Date.now()}.${fileExt}`
+      const filePath = `${activeTask.id}/${fileName}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('task-images')
+        .upload(filePath, file)
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        continue
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('task-images')
+        .getPublicUrl(filePath)
+
+      const imageUrl = publicUrlData?.publicUrl
+
+      const { error: insertError } = await supabase
+        .from('task_images')
+        .insert({ task_id: activeTask.id, image_url: imageUrl, user_id: user.id })
+
+      if (insertError) {
+        console.error('Insert error:', insertError)
+      }
+    }
+
+    alert('✅ Attēli augšupielādēti!')
+  }
+
+  const formatDate = (date) => date.toLocaleDateString('lv-LV', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  })
+  const formatTime = (date) => date.toLocaleTimeString('lv-LV')
+
+  if (loading) return <div className="text-center p-10">Loading...</div>
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="p-4 max-w-xl mx-auto text-center relative">
+      <button
+        onClick={logout}
+        className="absolute top-4 right-4 bg-zinc-800 text-white px-3 py-1 rounded hover:bg-zinc-700"
+      >
+        🚪 Iziet
+      </button>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      <h1 className="text-2xl font-bold mb-2">{formatDate(currentTime)}</h1>
+      <p className="text-lg mb-6">🕒 {formatTime(currentTime)}</p>
+
+      <div className="flex flex-col gap-3 mb-4">
+        {!isSessionActive ? (
+          <button
+            onClick={startWorkday}
+            className="bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+            🟢 Sākt darbadienu
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={endWorkday}
+              className="bg-red-600 text-white px-6 py-3 rounded hover:bg-red-700"
+            >
+              🔴 Beigt darbadienu
+            </button>
+            <div className="mt-6 p-4 border rounded bg-zinc-900">
+              <h2 className="text-xl font-semibold mb-3">Uzdevumu reģistrācija</h2>
+              <input
+                type="text"
+                placeholder="Uzdevuma nosaukums"
+                value={taskTitle}
+                onFocus={() => setTagTarget('title') || setShowTags(true)}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                className="border p-2 rounded mb-3 w-full"
+              />
+              <textarea
+                placeholder="Apraksts"
+                value={note}
+                onFocus={() => setTagTarget('note') || setShowTags(true)}
+                onChange={(e) => setNote(e.target.value)}
+                className="border p-2 rounded mb-3 w-full"
+              />
+              {availableTags.length > 0 && showTags && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {availableTags.map((tag) => (
+                    <span
+                      key={tag + '-tag'}
+                      onClick={() => {
+                        if (tagTarget === 'title') {
+                          if (!taskTitle.includes(tag)) {
+                            setTaskTitle(prev => prev ? `${prev}, ${tag}` : tag)
+                          }
+                        } else if (tagTarget === 'note') {
+                          if (!note.includes('#' + tag)) {
+                            setNote(prev => prev.trim() + ' #' + tag)
+                          }
+                        }
+                      }}
+                      className={`cursor-pointer text-sm px-2 py-1 bg-zinc-700 text-white rounded hover:bg-zinc-600 ${tagTarget === 'title' ? 'ring ring-blue-500' : tagTarget === 'note' ? 'ring ring-yellow-500' : ''}`}
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/jpeg"
+                multiple
+                onChange={handleImageUpload}
+                className="border p-2 rounded mb-3 w-full text-white"
+              />
+              <button
+                onClick={startTask}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full"
+              >
+                ➕ Sākt darbu
+              </button>
+              <button
+                onClick={endTask}
+                className="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 w-full mt-2"
+              >
+                🔚 Beigt darbu
+              </button>
+              {taskMessage && <p className="text-sm mt-3">{taskMessage}</p>}
+            </div>
+          </>
+        )}
+      </div>
+
+      {message && <p className="text-sm mt-2 text-green-400">{message}</p>}
+    </main>
+  )
 }
