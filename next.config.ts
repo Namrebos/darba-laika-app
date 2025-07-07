@@ -1,8 +1,5 @@
-import type { NextConfig } from 'next'
-import type { Configuration } from 'webpack'
-
-const nextConfig: NextConfig = {
-  webpack(config: Configuration) {
+const nextConfig = {
+  webpack(config) {
     config.resolve = config.resolve || {}
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
