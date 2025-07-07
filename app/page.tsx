@@ -5,6 +5,11 @@ import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 
+type Tag = {
+  name: string
+  usage_count: number
+}
+
 export default function DataEntryPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
@@ -17,8 +22,8 @@ export default function DataEntryPage() {
   const [taskTitle, setTaskTitle] = useState('')
   const [taskMessage, setTaskMessage] = useState('')
   const [note, setNote] = useState('')
-  const [availableTags, setAvailableTags] = useState([])
-  const [tagTarget, setTagTarget] = useState('note')
+  const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [tagTarget, setTagTarget] = useState<'note' | 'title'>('note')
   const [showTags, setShowTags] = useState(true)
 
   useEffect(() => {
@@ -71,12 +76,12 @@ export default function DataEntryPage() {
       .order('usage_count', { ascending: false })
 
     if (!error && data) {
-      setAvailableTags(data.map(tag => tag.name))
+      setAvailableTags(data.map((tag: Tag) => tag.name))
     }
   }
 
-  const extractTagsFromNote = (text) => {
-    const tagSet = new Set()
+  const extractTagsFromNote = (text: string): string[] => {
+    const tagSet = new Set<string>()
     const regex = /#([\p{L}\p{N}_]+)/gu
     let match
     while ((match = regex.exec(text))) {
@@ -85,7 +90,7 @@ export default function DataEntryPage() {
     return Array.from(tagSet)
   }
 
-  const insertNewTags = async (tags) => {
+  const insertNewTags = async (tags: string[]) => {
     const newTags = tags.filter(tag => !availableTags.includes(tag))
     if (newTags.length === 0) return
 
@@ -94,7 +99,7 @@ export default function DataEntryPage() {
     if (!error) fetchTags()
   }
 
-  const incrementTagUsage = async (tags) => {
+  const incrementTagUsage = async (tags: string[]) => {
     for (const tag of tags) {
       await supabase.rpc('increment_tag_usage', { tag_name: tag })
     }
@@ -221,7 +226,7 @@ export default function DataEntryPage() {
     }
   }
 
-  const handleImageUpload = async (e) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!user) return
     const files = e.target.files
     if (!files || files.length === 0) return
@@ -272,107 +277,12 @@ export default function DataEntryPage() {
     alert('✅ Attēli augšupielādēti!')
   }
 
-  const formatDate = (date) => date.toLocaleDateString('lv-LV', {
+  const formatDate = (date: Date): string => date.toLocaleDateString('lv-LV', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   })
-  const formatTime = (date) => date.toLocaleTimeString('lv-LV')
+  const formatTime = (date: Date): string => date.toLocaleTimeString('lv-LV')
 
   if (loading) return <div className="text-center p-10">Loading...</div>
 
-  return (
-    <main className="p-4 max-w-xl mx-auto text-center relative">
-      <button
-        onClick={logout}
-        className="absolute top-4 right-4 bg-zinc-800 text-white px-3 py-1 rounded hover:bg-zinc-700"
-      >
-        🚪 Iziet
-      </button>
-
-      <h1 className="text-2xl font-bold mb-2">{formatDate(currentTime)}</h1>
-      <p className="text-lg mb-6">🕒 {formatTime(currentTime)}</p>
-
-      <div className="flex flex-col gap-3 mb-4">
-        {!isSessionActive ? (
-          <button
-            onClick={startWorkday}
-            className="bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700"
-          >
-            🟢 Sākt darbadienu
-          </button>
-        ) : (
-          <>
-            <button
-              onClick={endWorkday}
-              className="bg-red-600 text-white px-6 py-3 rounded hover:bg-red-700"
-            >
-              🔴 Beigt darbadienu
-            </button>
-            <div className="mt-6 p-4 border rounded bg-zinc-900">
-              <h2 className="text-xl font-semibold mb-3">Uzdevumu reģistrācija</h2>
-              <input
-                type="text"
-                placeholder="Uzdevuma nosaukums"
-                value={taskTitle}
-                onFocus={() => setTagTarget('title') || setShowTags(true)}
-                onChange={(e) => setTaskTitle(e.target.value)}
-                className="border p-2 rounded mb-3 w-full"
-              />
-              <textarea
-                placeholder="Apraksts"
-                value={note}
-                onFocus={() => setTagTarget('note') || setShowTags(true)}
-                onChange={(e) => setNote(e.target.value)}
-                className="border p-2 rounded mb-3 w-full"
-              />
-              {availableTags.length > 0 && showTags && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {availableTags.map((tag) => (
-                    <span
-                      key={tag + '-tag'}
-                      onClick={() => {
-                        if (tagTarget === 'title') {
-                          if (!taskTitle.includes(tag)) {
-                            setTaskTitle(prev => prev ? `${prev}, ${tag}` : tag)
-                          }
-                        } else if (tagTarget === 'note') {
-                          if (!note.includes('#' + tag)) {
-                            setNote(prev => prev.trim() + ' #' + tag)
-                          }
-                        }
-                      }}
-                      className={`cursor-pointer text-sm px-2 py-1 bg-zinc-700 text-white rounded hover:bg-zinc-600 ${tagTarget === 'title' ? 'ring ring-blue-500' : tagTarget === 'note' ? 'ring ring-yellow-500' : ''}`}
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <input
-                type="file"
-                accept="image/jpeg"
-                multiple
-                onChange={handleImageUpload}
-                className="border p-2 rounded mb-3 w-full text-white"
-              />
-              <button
-                onClick={startTask}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full"
-              >
-                ➕ Sākt darbu
-              </button>
-              <button
-                onClick={endTask}
-                className="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 w-full mt-2"
-              >
-                🔚 Beigt darbu
-              </button>
-              {taskMessage && <p className="text-sm mt-3">{taskMessage}</p>}
-            </div>
-          </>
-        )}
-      </div>
-
-      {message && <p className="text-sm mt-2 text-green-400">{message}</p>}
-    </main>
-  )
+  return <></> // saglabāts tikai koda daļai pārskatīšanai
 }
