@@ -1,9 +1,15 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  webpack(config) {
-    config.resolve.alias['@'] = __dirname
+import type { NextConfig } from 'next'
+import type { Configuration } from 'webpack'
+
+const nextConfig: NextConfig = {
+  webpack(config: Configuration) {
+    config.resolve = config.resolve || {}
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      '@': __dirname,
+    }
     return config
   },
 }
 
-module.exports = nextConfig
+export default nextConfig
