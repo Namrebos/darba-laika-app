@@ -35,7 +35,7 @@ export default function DataEntryPage() {
         router.push('/login')
       } else {
         setUser(user)
-        checkSession()
+        checkSession(user)
         fetchTags()
         setLoading(false)
       }
@@ -48,7 +48,7 @@ export default function DataEntryPage() {
     router.push('/login')
   }
 
-  const checkSession = async () => {
+  const checkSession = async (user: User) => {
     const { data, error } = await supabase
       .from('work_logs')
       .select('*')
@@ -101,6 +101,7 @@ export default function DataEntryPage() {
   }
 
   const startWorkday = async () => {
+    if (!user) return
     const { error } = await supabase.from('work_logs').insert([
       {
         user_id: user.id,
@@ -112,11 +113,12 @@ export default function DataEntryPage() {
 
     if (!error) {
       setMessage('🟢 Darbadiena sākta!')
-      await checkSession()
+      await checkSession(user)
     }
   }
 
   const endWorkday = async () => {
+    if (!user) return
     const { data, error } = await supabase
       .from('work_logs')
       .select('*')
@@ -141,55 +143,57 @@ export default function DataEntryPage() {
   }
 
   const startTask = async () => {
-  const { data: sessions } = await supabase
-    .from('work_logs')
-    .select('id')
-    .eq('user_id', user.id)
-    .is('end_time', null)
-    .order('start_time', { ascending: false })
-    .limit(1)
+    if (!user) return
+    const { data: sessions } = await supabase
+      .from('work_logs')
+      .select('id')
+      .eq('user_id', user.id)
+      .is('end_time', null)
+      .order('start_time', { ascending: false })
+      .limit(1)
 
-  if (!sessions || sessions.length === 0) {
-    setTaskMessage('⚠️ Nav aktīvas darbadienas.')
-    return
+    if (!sessions || sessions.length === 0) {
+      setTaskMessage('⚠️ Nav aktīvas darbadienas.')
+      return
+    }
+
+    const sessionId = sessions[0].id
+
+    const tagsFromNote = extractTagsFromNote(note)
+    const tagsFromTitle = extractTagsFromNote(taskTitle)
+    const allTags = Array.from(new Set([...tagsFromNote, ...tagsFromTitle]))
+
+    const finalTitle = taskTitle.trim() || allTags[0] || 'Uzdevums'
+
+    const { data: insertedTasks, error: taskError } = await supabase
+      .from('task_logs')
+      .insert([
+        {
+          user_id: user.id,
+          session_id: sessionId,
+          title: finalTitle,
+          start_time: new Date(),
+          note,
+        },
+      ])
+      .select('id')
+
+    if (taskError || !insertedTasks || insertedTasks.length === 0) {
+      setTaskMessage('❌ Neizdevās sākt uzdevumu.')
+      return
+    }
+
+    const taskId = insertedTasks[0].id
+    await insertNewTags(allTags)
+    await incrementTagUsage(allTags)
+
+    setTaskMessage('🟢 Uzdevums sācies!')
+    setTaskTitle('')
+    setNote('')
   }
-
-  const sessionId = sessions[0].id
-
-  const tagsFromNote = extractTagsFromNote(note)
-  const tagsFromTitle = extractTagsFromNote(taskTitle)
-  const allTags = Array.from(new Set([...tagsFromNote, ...tagsFromTitle])) // Apvieno, bez dublikātiem
-
-  const finalTitle = taskTitle.trim() || allTags[0] || 'Uzdevums'
-
-  const { data: insertedTasks, error: taskError } = await supabase
-    .from('task_logs')
-    .insert([
-      {
-        user_id: user.id,
-        session_id: sessionId,
-        title: finalTitle,
-        start_time: new Date(),
-        note,
-      },
-    ])
-    .select('id')
-
-  if (taskError || !insertedTasks || insertedTasks.length === 0) {
-    setTaskMessage('❌ Neizdevās sākt uzdevumu.')
-    return
-  }
-
-  const taskId = insertedTasks[0].id
-  await insertNewTags(allTags)
-  await incrementTagUsage(allTags)
-
-  setTaskMessage('🟢 Uzdevums sācies!')
-  setTaskTitle('')
-  setNote('')
-}
 
   const endTask = async () => {
+    if (!user) return
     const { data, error } = await supabase
       .from('task_logs')
       .select('*')
@@ -213,11 +217,12 @@ export default function DataEntryPage() {
       console.error('❌ Kļūda pabeidzot uzdevumu:', updateError)
       setTaskMessage('❌ Neizdevās beigt uzdevumu.')
     } else {
-      setTaskMessage('🔴 Uzdevums pabeigts!')
+      setTaskMessage('🔚 Uzdevums pabeigts!')
     }
   }
 
   const handleImageUpload = async (e) => {
+    if (!user) return
     const files = e.target.files
     if (!files || files.length === 0) return
 
