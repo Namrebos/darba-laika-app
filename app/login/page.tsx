@@ -10,7 +10,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login')
   const [message, setMessage] = useState('')
-  const [newPassword, setNewPassword] = useState('')
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -32,7 +31,7 @@ export default function LoginPage() {
       }
     } else if (mode === 'reset') {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'http://localhost:3000/reset-password'
+        redirectTo: 'http://localhost:3000/reset-password',
       })
       if (error) {
         setMessage('❌ Neizdevās nosūtīt paroles atjaunošanas saiti')
