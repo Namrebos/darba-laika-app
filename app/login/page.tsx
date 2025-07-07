@@ -31,7 +31,7 @@ export default function LoginPage() {
       }
     } else if (mode === 'reset') {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'http://localhost:3000/reset-password',
+        redirectTo: 'https://tavs-vercel-domeins.vercel.app/reset-password' // <-- nomaini uz production URL
       })
       if (error) {
         setMessage('❌ Neizdevās nosūtīt paroles atjaunošanas saiti')
