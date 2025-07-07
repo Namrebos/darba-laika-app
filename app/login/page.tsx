@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [message, setMessage] = useState('')
   const [newPassword, setNewPassword] = useState('')
 
-  const sync (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setMessage('')
 
