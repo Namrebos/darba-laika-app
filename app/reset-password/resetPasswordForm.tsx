@@ -11,7 +11,7 @@ export default function ActualResetPasswordForm() {
   const [message, setMessage] = useState('')
 
   const handleReset = async () => {
-    const { data, error } = await supabase.auth.updateUser({ password })
+    const { error } = await supabase.auth.updateUser({ password })
 
     if (error) {
       setMessage('❌ Neizdevās nomainīt paroli.')
