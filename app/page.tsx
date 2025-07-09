@@ -76,7 +76,7 @@ export default function DataEntryPage() {
       .order('usage_count', { ascending: false })
 
     if (!error && data) {
-      setAvailableTags(data.map((tag: Tag) => tag.name))
+      setAvailableTags(data.map(tag => tag.name))
     }
   }
 
@@ -282,7 +282,122 @@ export default function DataEntryPage() {
   })
   const formatTime = (date: Date): string => date.toLocaleTimeString('lv-LV')
 
-  if (loading) return <div className="text-center p-10">Loading...</div>
+  if (loading) return <div className="text-center p-10">Notiek ielāde...</div>
 
-  return <></> // saglabāts tikai koda daļai pārskatīšanai
+  return (
+    <div className="p-4 space-y-4 max-w-2xl mx-auto">
+      <div className="flex justify-between items-center">
+        <div>
+          <div className="text-xl font-bold">{formatDate(currentTime)}</div>
+          <div className="text-sm text-gray-500">{formatTime(currentTime)}</div>
+        </div>
+        <button
+          onClick={logout}
+          className="text-red-600 border border-red-600 px-4 py-1 rounded hover:bg-red-100"
+        >
+          Izlogoties
+        </button>
+      </div>
+
+      <div className="border rounded p-4 space-y-4">
+        <div className="flex gap-4">
+          <button
+            onClick={startWorkday}
+            disabled={isSessionActive}
+            className={`px-4 py-2 rounded text-white ${isSessionActive ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
+          >
+            Sākt
+          </button>
+          <button
+            onClick={endWorkday}
+            disabled={!isSessionActive}
+            className={`px-4 py-2 rounded text-white ${!isSessionActive ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}
+          >
+            Pabeigt
+          </button>
+        </div>
+        {message && <p>{message}</p>}
+      </div>
+
+      {isSessionActive && (
+        <div className="space-y-4">
+          <div className="border rounded p-4 space-y-2">
+            <input
+              type="text"
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+              placeholder="Uzdevuma nosaukums"
+              className="w-full border rounded p-2"
+            />
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Piezīmes vai #tēmturi"
+              className="w-full border rounded p-2"
+            />
+            <div className="flex gap-4">
+              <button
+                onClick={startTask}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              >
+                Sākt uzdevumu
+              </button>
+              <button
+                onClick={endTask}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded"
+              >
+                Beigt uzdevumu
+              </button>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="text-sm"
+              />
+            </div>
+            {taskMessage && <p>{taskMessage}</p>}
+          </div>
+
+          {showTags && (
+            <div className="border rounded p-4">
+              <h2 className="font-bold mb-2">Pieejamie tēmturi:</h2>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map(tag => (
+                  <span
+                    key={tag}
+                    onClick={() => {
+                      const targetText = tagTarget === 'note' ? note : taskTitle
+                      const setter = tagTarget === 'note' ? setNote : setTaskTitle
+                      if (!targetText.includes(`#${tag}`)) setter(`${targetText} #${tag}`)
+                    }}
+                    className="cursor-pointer bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-sm"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-2">
+                <label className="mr-2 text-sm">Ievietot tēmturi:</label>
+                <select
+                  value={tagTarget}
+                  onChange={(e) => setTagTarget(e.target.value as 'note' | 'title')}
+                  className="text-sm border rounded p-1"
+                >
+                  <option value="note">Piezīmēs</option>
+                  <option value="title">Nosaukumā</option>
+                </select>
+                <button
+                  onClick={() => setShowTags(false)}
+                  className="ml-4 text-xs text-gray-500 hover:underline"
+                >
+                  Paslēpt tēmturus
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
