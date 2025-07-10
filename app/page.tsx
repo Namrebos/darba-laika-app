@@ -1,8 +1,8 @@
-// Pilns fails ar tagu saglabāšanu Supabase `tags` tabulā
+// page.tsx
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
@@ -28,6 +28,9 @@ export default function DataEntryPage() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [workdayState, setWorkdayState] = useState<'inactive' | 'active'>('inactive')
   const [tasks, setTasks] = useState<Task[]>([])
+  const [tagLibrary, setTagLibrary] = useState<string[]>([])
+  const [activeInput, setActiveInput] = useState<'title' | 'notes' | null>(null)
+  const [sessionId, setSessionId] = useState<number | null>(null)
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -41,15 +44,25 @@ export default function DataEntryPage() {
       else {
         setUser(user)
         checkSession(user)
+        loadTags(user.id)
         setLoading(false)
       }
     }
     getUser()
   }, [])
 
-  useEffect(() => {
-    setWorkdayState(isSessionActive ? 'active' : 'inactive')
-  }, [isSessionActive])
+  const loadTags = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('tags')
+      .select('name')
+      .eq('user_id', userId)
+      .order('usage_count', { ascending: false })
+
+    if (!error && data) {
+      const names = data.map(row => row.name)
+      setTagLibrary(names)
+    }
+  }
 
   const checkSession = async (user: User) => {
     const { data, error } = await supabase
@@ -60,7 +73,12 @@ export default function DataEntryPage() {
       .order('start_time', { ascending: false })
       .limit(1)
 
-    setIsSessionActive(!error && data && data.length > 0)
+    if (!error && data && data.length > 0) {
+      setIsSessionActive(true)
+      setSessionId(data[0].id)
+    } else {
+      setIsSessionActive(false)
+    }
   }
 
   const logout = async () => {
@@ -70,17 +88,19 @@ export default function DataEntryPage() {
 
   const startWorkday = async () => {
     if (!user) return
-    const { error } = await supabase.from('work_logs').insert([
+    const { data, error } = await supabase.from('work_logs').insert([
       {
         user_id: user.id,
         project: 'Darba diena',
         start_time: new Date(),
         description: '',
       },
-    ])
-    if (!error) {
+    ]).select().single()
+
+    if (!error && data) {
       setIsSessionActive(true)
       setWorkdayState('active')
+      setSessionId(data.id)
       addNewTask()
     }
   }
@@ -118,36 +138,45 @@ export default function DataEntryPage() {
         setIsSessionActive(false)
         setWorkdayState('inactive')
         setTasks([])
+        setSessionId(null)
       }
     }
   }
 
   const extractTags = (text: string): string[] => {
-    const matches = text.match(/#\w+/g)
-    return matches ? matches.map(t => t.toLowerCase()) : []
+    const matches = text.match(/#([A-Za-zĀ-ž0-9]+)/g)
+    return matches ? [...new Set(matches.map(t => t.slice(1)))] : []
   }
 
   const extractAndSaveTags = async (title: string, notes: string): Promise<string[]> => {
-    const tags = [...extractTags(title), ...extractTags(notes)]
-    for (const tag of tags) {
-      const { data, error } = await supabase
+    if (!user) return []
+    const rawTags = [...extractTags(title), ...extractTags(notes)]
+
+    const cleanTags = [...new Set(rawTags)].filter(t => t.trim() !== '')
+
+    for (const tag of cleanTags) {
+      const { data } = await supabase
         .from('tags')
-        .select('count')
+        .select('usage_count')
         .eq('name', tag)
+        .eq('user_id', user.id)
         .single()
 
       if (data) {
         await supabase
           .from('tags')
-          .update({ count: data.count + 1 })
+          .update({ usage_count: data.usage_count + 1 })
           .eq('name', tag)
+          .eq('user_id', user.id)
       } else {
         await supabase
           .from('tags')
-          .insert({ name: tag, count: 1 })
+          .insert({ name: tag, usage_count: 1, user_id: user.id })
       }
     }
-    return tags
+
+    await loadTags(user.id)
+    return cleanTags
   }
 
   const addNewTask = (isCall = false) => {
@@ -155,7 +184,7 @@ export default function DataEntryPage() {
       id: crypto.randomUUID(),
       title: '',
       notes: '',
-      tags: ['#projekts'],
+      tags: [],
       images: [],
       status: 'starting',
       isCall,
@@ -167,6 +196,34 @@ export default function DataEntryPage() {
     setTasks((prev) =>
       prev.map((task) => (task.id === id ? { ...task, ...updated } : task))
     )
+  }
+
+  const insertTag = (taskId: string, tag: string) => {
+    setTasks((prev) =>
+      prev.map((task) => {
+        if (task.id !== taskId) return task
+        if (activeInput === 'title') {
+          return { ...task, title: `${task.title} #${tag}` }
+        } else if (activeInput === 'notes') {
+          return { ...task, notes: `${task.notes} #${tag}` }
+        }
+        return task
+      })
+    )
+  }
+
+  const saveTaskToDB = async (task: Task, tags: string[]) => {
+    if (!user || !sessionId) return
+    await supabase.from('task_logs').insert([
+      {
+        session_id: sessionId,
+        title: task.title,
+        note: task.notes,
+        start_time: task.startTime,
+        end_time: new Date(),
+        user_id: user.id,
+      },
+    ])
   }
 
   const renderTask = (task: Task) => {
@@ -190,6 +247,7 @@ export default function DataEntryPage() {
             className="flex-1 border p-2 rounded"
             value={task.title}
             onChange={(e) => !readonly && updateTask(task.id, { title: e.target.value })}
+            onFocus={() => setActiveInput('title')}
             readOnly={readonly}
           />
           {!readonly && (
@@ -199,9 +257,7 @@ export default function DataEntryPage() {
                 const notesFilled = task.notes.trim().length > 0
 
                 if (!titleFilled && !notesFilled) {
-                  const shouldDelete = window.confirm(
-                    'Uzdevums netiks saglabāts.\n\nVai dzēst šo uzdevumu?'
-                  )
+                  const shouldDelete = window.confirm('Uzdevums netiks saglabāts.\n\nVai dzēst šo uzdevumu?')
                   if (shouldDelete) {
                     setTasks((prev) => prev.filter((t) => t.id !== task.id))
                   }
@@ -214,6 +270,7 @@ export default function DataEntryPage() {
                 }
 
                 const tags = await extractAndSaveTags(task.title, task.notes)
+                await saveTaskToDB(task, tags)
 
                 updateTask(task.id, {
                   tags,
@@ -231,15 +288,26 @@ export default function DataEntryPage() {
         <div className="flex gap-4">
           <textarea
             placeholder="Piezīmes"
-            className="w-1/2 border p-2 rounded h-28"
+            className="w-1/2 border p-2 rounded h-28 resize-none"
             value={task.notes}
+            onFocus={() => setActiveInput('notes')}
             onChange={(e) => !readonly && updateTask(task.id, { notes: e.target.value })}
             readOnly={readonly}
           />
-          <div className="w-1/2 border p-2 rounded min-h-[7rem]">
-            {task.tags.map((tag, idx) => (
-              <span key={idx} className="text-sm text-gray-600 mr-2">{tag}</span>
-            ))}
+          <div className="w-1/2 border p-2 rounded min-h-[7rem] bg-black text-white">
+            {!readonly && tagLibrary.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {tagLibrary.map((tag, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => insertTag(task.id, tag)}
+                    className="bg-cyan-700 text-white text-sm px-2 py-1 rounded hover:bg-cyan-500"
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
