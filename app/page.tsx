@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
@@ -14,6 +14,7 @@ type Task = {
   notes: string
   tags: string[]
   images: File[]
+  uploadedImageUrls: string[]
   status: 'starting' | 'active' | 'finished' | 'review'
   startTime?: Date
   endTime?: Date
@@ -31,6 +32,7 @@ export default function DataEntryPage() {
   const [tagLibrary, setTagLibrary] = useState<string[]>([])
   const [activeInput, setActiveInput] = useState<'title' | 'notes' | null>(null)
   const [sessionId, setSessionId] = useState<number | null>(null)
+  const [savingTasks, setSavingTasks] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -52,20 +54,20 @@ export default function DataEntryPage() {
   }, [])
 
   const loadTags = async (userId: string) => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('tags')
       .select('name')
       .eq('user_id', userId)
       .order('usage_count', { ascending: false })
 
-    if (!error && data) {
+    if (data) {
       const names = data.map(row => row.name)
       setTagLibrary(names)
     }
   }
 
   const checkSession = async (user: User) => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('work_logs')
       .select('*')
       .eq('user_id', user.id)
@@ -73,7 +75,7 @@ export default function DataEntryPage() {
       .order('start_time', { ascending: false })
       .limit(1)
 
-    if (!error && data && data.length > 0) {
+    if (data && data.length > 0) {
       setIsSessionActive(true)
       setSessionId(data[0].id)
     } else {
@@ -88,7 +90,7 @@ export default function DataEntryPage() {
 
   const startWorkday = async () => {
     if (!user) return
-    const { data, error } = await supabase.from('work_logs').insert([
+    const { data } = await supabase.from('work_logs').insert([
       {
         user_id: user.id,
         project: 'Darba diena',
@@ -97,7 +99,7 @@ export default function DataEntryPage() {
       },
     ]).select().single()
 
-    if (!error && data) {
+    if (data) {
       setIsSessionActive(true)
       setWorkdayState('active')
       setSessionId(data.id)
@@ -129,17 +131,15 @@ export default function DataEntryPage() {
 
     if (data && data.length > 0) {
       const id = data[0].id
-      const { error: updateError } = await supabase
+      await supabase
         .from('work_logs')
         .update({ end_time: new Date() })
         .eq('id', id)
 
-      if (!updateError) {
-        setIsSessionActive(false)
-        setWorkdayState('inactive')
-        setTasks([])
-        setSessionId(null)
-      }
+      setIsSessionActive(false)
+      setWorkdayState('inactive')
+      setTasks([])
+      setSessionId(null)
     }
   }
 
@@ -151,7 +151,6 @@ export default function DataEntryPage() {
   const extractAndSaveTags = async (title: string, notes: string): Promise<string[]> => {
     if (!user) return []
     const rawTags = [...extractTags(title), ...extractTags(notes)]
-
     const cleanTags = [...new Set(rawTags)].filter(t => t.trim() !== '')
 
     for (const tag of cleanTags) {
@@ -186,6 +185,7 @@ export default function DataEntryPage() {
       notes: '',
       tags: [],
       images: [],
+      uploadedImageUrls: [],
       status: 'starting',
       isCall,
     }
@@ -212,9 +212,38 @@ export default function DataEntryPage() {
     )
   }
 
+  const uploadImages = async (task: Task, taskLogId: number): Promise<string[]> => {
+    if (!user) return []
+    const urls: string[] = []
+
+    for (const image of task.images) {
+      const fileName = `${user.id}/${taskLogId}/${Date.now()}-${image.name}`
+      const { error: uploadError } = await supabase.storage
+        .from('task-images')
+        .upload(fileName, image)
+
+      if (!uploadError) {
+        const publicUrl = supabase.storage
+          .from('task-images')
+          .getPublicUrl(fileName).data.publicUrl
+
+        urls.push(publicUrl)
+
+        await supabase.from('task_images').insert({
+          user_id: user.id,
+          task_log_id: taskLogId,
+          url: publicUrl,
+        })
+      }
+    }
+
+    return urls
+  }
+
   const saveTaskToDB = async (task: Task, tags: string[]) => {
     if (!user || !sessionId) return
-    await supabase.from('task_logs').insert([
+
+    const { data } = await supabase.from('task_logs').insert([
       {
         session_id: sessionId,
         title: task.title,
@@ -223,10 +252,20 @@ export default function DataEntryPage() {
         end_time: new Date(),
         user_id: user.id,
       },
-    ])
+    ]).select().single()
+
+    if (data) {
+      const uploadedUrls = await uploadImages(task, data.id)
+      updateTask(task.id, { uploadedImageUrls: uploadedUrls })
+    }
   }
 
+  // TURPINĀJUMS SEKOS 2. daļā...
+
+
   const renderTask = (task: Task) => {
+    const isSaving = savingTasks[task.id] === true
+
     if (task.status === 'starting') {
       return (
         <button
@@ -252,6 +291,7 @@ export default function DataEntryPage() {
           />
           {!readonly && (
             <button
+              disabled={isSaving}
               onClick={async () => {
                 const titleFilled = task.title.trim().length > 0
                 const notesFilled = task.notes.trim().length > 0
@@ -269,18 +309,19 @@ export default function DataEntryPage() {
                   return
                 }
 
-                const tags = await extractAndSaveTags(task.title, task.notes)
-                await saveTaskToDB(task, tags)
-
+                setSavingTasks((prev) => ({ ...prev, [task.id]: true }))
                 updateTask(task.id, {
-                  tags,
                   status: 'finished',
                   endTime: new Date(),
                 })
+
+                const tags = await extractAndSaveTags(task.title, task.notes)
+                await saveTaskToDB(task, tags)
+                setSavingTasks((prev) => ({ ...prev, [task.id]: false }))
               }}
-              className="bg-red-600 text-white px-4 py-2 rounded"
+              className={`px-4 py-2 rounded text-white ${isSaving ? 'bg-gray-500' : 'bg-red-600 hover:bg-red-700'}`}
             >
-              Pabeigt
+              {isSaving ? 'Saglabājas...' : 'Pabeigt'}
             </button>
           )}
         </div>
@@ -321,17 +362,55 @@ export default function DataEntryPage() {
                 className="hidden"
                 onChange={(e) => {
                   if (e.target.files) {
-                    const files = Array.from(e.target.files)
-                    updateTask(task.id, { images: [...task.images, ...files] })
+                    const newFiles = Array.from(e.target.files)
+                    const total = task.images.length + task.uploadedImageUrls.length
+                    const available = 5 - total
+                    if (available <= 0) {
+                      alert('Maksimālais attēlu skaits ir 5!')
+                      return
+                    }
+                    const allowedFiles = newFiles.slice(0, available)
+                    if (allowedFiles.length < newFiles.length) {
+                      alert(`Var pievienot tikai vēl ${available} attēlu(s)!`)
+                    }
+                    updateTask(task.id, {
+                      images: [...task.images, ...allowedFiles],
+                    })
                   }
                 }}
               />
               Pievienot attēlus
             </label>
           )}
-          <div className="flex gap-2">
-            {task.images.map((_, idx) => (
-              <div key={idx} className="w-12 h-12 bg-yellow-400 rounded" />
+          <div className="flex gap-2 flex-wrap">
+            {task.uploadedImageUrls.map((url, idx) => (
+              <img
+                key={idx}
+                src={url}
+                alt="Attēls"
+                className="w-16 h-16 object-cover rounded cursor-pointer"
+                onClick={() => window.open(url, '_blank')}
+              />
+            ))}
+            {!readonly && task.images.map((file, idx) => (
+              <div key={`new-${idx}`} className="relative w-16 h-16">
+                <img
+                  src={URL.createObjectURL(file)}
+                  alt="Jauns attēls"
+                  className="w-16 h-16 object-cover rounded"
+                />
+                <button
+                  className="absolute top-0 right-0 bg-black bg-opacity-70 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                  onClick={() => {
+                    const updated = [...task.images]
+                    updated.splice(idx, 1)
+                    updateTask(task.id, { images: updated })
+                  }}
+                  title="Dzēst attēlu"
+                >
+                  ×
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -369,6 +448,17 @@ export default function DataEntryPage() {
               no {start.toLocaleTimeString('lv-LV')} līdz {end.toLocaleTimeString('lv-LV')} ({durationText})
             </p>
           )}
+          <div className="flex gap-2 flex-wrap">
+            {task.uploadedImageUrls.map((url, idx) => (
+              <img
+                key={idx}
+                src={url}
+                alt="Attēls"
+                className="w-16 h-16 object-cover rounded cursor-pointer"
+                onClick={() => window.open(url, '_blank')}
+              />
+            ))}
+          </div>
           <button
             className="text-blue-600 underline text-sm"
             onClick={() => updateTask(task.id, { status: 'review' })}
@@ -389,6 +479,7 @@ export default function DataEntryPage() {
 
   return (
     <div className="p-4 space-y-4 max-w-2xl mx-auto">
+      {/* Header */}
       <div className="flex justify-between items-center border-b pb-2">
         <button className="text-black">
           <Menu size={32} />
@@ -409,6 +500,7 @@ export default function DataEntryPage() {
         </button>
       </div>
 
+      {/* Workday Controls */}
       <div className="border rounded p-4 space-y-4">
         <div className="flex justify-between">
           <button
@@ -428,6 +520,7 @@ export default function DataEntryPage() {
         </div>
       </div>
 
+      {/* Regular Tasks */}
       {workdayState === 'active' && (
         <div className="space-y-6">
           {tasks.filter(t => !t.isCall).map((task) => (
@@ -458,6 +551,7 @@ export default function DataEntryPage() {
         </div>
       )}
 
+      {/* Call Tasks */}
       {callTasks.length > 0 && (
         <div className="border-t pt-4 space-y-6">
           {callTasks.map((task) => (
@@ -466,6 +560,7 @@ export default function DataEntryPage() {
         </div>
       )}
 
+      {/* Add Call Task */}
       <div className="pt-6 border-t">
         {(() => {
           const lastCall = callTasks[callTasks.length - 1]
