@@ -28,6 +28,8 @@ type Props = {
   activeInput: 'title' | 'notes' | null
   setActiveInput: (input: 'title' | 'notes' | null) => void
   loadTags: (userId: string) => Promise<void>
+  extractAndSaveTags: (title: string, notes: string) => Promise<string[]>
+  saveTaskToDB: (task: Task, tags: string[]) => Promise<void>
 }
 
 export default function TaskCard({
@@ -41,91 +43,10 @@ export default function TaskCard({
   activeInput,
   setActiveInput,
   loadTags,
+  extractAndSaveTags,
+  saveTaskToDB,
 }: Props) {
   const isSaving = savingTasks[task.id] === true
-
-  const extractTags = (text: string): string[] => {
-    const matches = text.match(/#([A-Za-zĀ-ž0-9]+)/g)
-    return matches ? [...new Set(matches.map(t => t.slice(1)))] : []
-  }
-
-  const extractAndSaveTags = async (title: string, notes: string): Promise<string[]> => {
-    if (!user) return []
-    const rawTags = [...extractTags(title), ...extractTags(notes)]
-    const cleanTags = [...new Set(rawTags)].filter(t => t.trim() !== '')
-
-    for (const tag of cleanTags) {
-      const { data } = await supabase
-        .from('tags')
-        .select('usage_count')
-        .eq('name', tag)
-        .eq('user_id', user.id)
-        .single()
-
-      if (data) {
-        await supabase
-          .from('tags')
-          .update({ usage_count: data.usage_count + 1 })
-          .eq('name', tag)
-          .eq('user_id', user.id)
-      } else {
-        await supabase
-          .from('tags')
-          .insert({ name: tag, usage_count: 1, user_id: user.id })
-      }
-    }
-
-    await loadTags(user.id)
-    return cleanTags
-  }
-
-  const uploadImages = async (task: Task, taskLogId: number): Promise<string[]> => {
-    if (!user) return []
-    const urls: string[] = []
-
-    for (const image of task.images) {
-      const fileName = `${user.id}/${taskLogId}/${Date.now()}-${image.name}`
-      const { error: uploadError } = await supabase.storage
-        .from('task-images')
-        .upload(fileName, image)
-
-      if (!uploadError) {
-        const publicUrl = supabase.storage
-          .from('task-images')
-          .getPublicUrl(fileName).data.publicUrl
-
-        urls.push(publicUrl)
-
-        await supabase.from('task_images').insert({
-          user_id: user.id,
-          task_log_id: taskLogId,
-          url: publicUrl,
-        })
-      }
-    }
-
-    return urls
-  }
-
-  const saveTaskToDB = async (task: Task, tags: string[]) => {
-    if (!user || !sessionId) return
-
-    const { data } = await supabase.from('task_logs').insert([
-      {
-        session_id: sessionId,
-        title: task.title,
-        note: task.notes,
-        start_time: task.startTime,
-        end_time: new Date(),
-        user_id: user.id,
-      },
-    ]).select().single()
-
-    if (data) {
-      const uploadedUrls = await uploadImages(task, data.id)
-      updateTask(task.id, { uploadedImageUrls: uploadedUrls })
-    }
-  }
 
   if (task.status === 'starting') {
     return (
