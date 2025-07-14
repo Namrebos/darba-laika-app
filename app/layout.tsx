@@ -13,6 +13,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname()
   const router = useRouter()
 
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/reset-password'
+
   useEffect(() => {
     const saved = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -55,6 +57,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     { href: '/summary', label: 'Kopsavilkums' },
     { href: '/finance', label: 'Finanses' },
   ]
+
+  if (isAuthPage) {
+    return (
+      <html lang="lv">
+        <body className="bg-white dark:bg-zinc-900 text-black dark:text-white transition-colors">
+          <main className="min-h-screen flex items-center justify-center">
+            {children}
+          </main>
+        </body>
+      </html>
+    )
+  }
 
   return (
     <html lang="lv">
