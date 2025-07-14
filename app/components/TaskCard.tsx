@@ -22,6 +22,7 @@ type Props = {
   user: User | null
   sessionId: number | null
   updateTask: (id: string, updated: Partial<Task>) => void
+  deleteTask: (id: string) => void
   tagLibrary: string[]
   setSavingTasks: (s: (prev: Record<string, boolean>) => Record<string, boolean>) => void
   savingTasks: Record<string, boolean>
@@ -37,6 +38,7 @@ export default function TaskCard({
   user,
   sessionId,
   updateTask,
+  deleteTask,
   tagLibrary,
   setSavingTasks,
   savingTasks,
@@ -65,7 +67,7 @@ export default function TaskCard({
         <input
           type="text"
           placeholder="Uzdevuma nosaukums"
-          className="flex-1 border p-2 rounded"
+          className="flex-1 border p-2 rounded bg-white dark:bg-zinc-800 text-black dark:text-white"
           value={task.title}
           onChange={(e) => !readonly && updateTask(task.id, { title: e.target.value })}
           onFocus={() => setActiveInput('title')}
@@ -81,7 +83,7 @@ export default function TaskCard({
               if (!titleFilled && !notesFilled) {
                 const shouldDelete = window.confirm('Uzdevums netiks saglabāts.\n\nVai dzēst šo uzdevumu?')
                 if (shouldDelete) {
-                  updateTask(task.id, { status: 'finished' })
+                  deleteTask(task.id)
                 }
                 return
               }
@@ -112,7 +114,7 @@ export default function TaskCard({
       <div className="flex gap-4">
         <textarea
           placeholder="Piezīmes"
-          className="w-1/2 border p-2 rounded h-28 resize-none"
+          className="w-1/2 border p-2 rounded h-28 resize-none bg-white dark:bg-zinc-800 text-black dark:text-white"
           value={task.notes}
           onFocus={() => setActiveInput('notes')}
           onChange={(e) => !readonly && updateTask(task.id, { notes: e.target.value })}
@@ -228,10 +230,10 @@ export default function TaskCard({
     }
 
     return (
-      <div className="border p-4 rounded bg-gray-100 space-y-2">
-        <h3 className="font-bold">{task.title}</h3>
+      <div className="border p-4 rounded bg-gray-100 dark:bg-zinc-800 space-y-2">
+        <h3 className="font-bold text-black dark:text-white">{task.title}</h3>
         {start && end && (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
             no {start.toLocaleTimeString('lv-LV')} līdz {end.toLocaleTimeString('lv-LV')} ({durationText})
           </p>
         )}

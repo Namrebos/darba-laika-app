@@ -10,6 +10,7 @@ import './globals.css'
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
+  const [currentTime, setCurrentTime] = useState(new Date())
   const pathname = usePathname()
   const router = useRouter()
 
@@ -30,6 +31,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', listener)
     return () =>
       window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', listener)
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(interval)
   }, [])
 
   const applyTheme = (mode: 'light' | 'dark') => {
@@ -171,9 +177,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <button onClick={() => setSidebarOpen(true)} className="text-zinc-800 dark:text-white">
                 <Menu size={28} />
               </button>
-              <h1 className="text-lg font-semibold">Darba Laika Aplikācija</h1>
-              <div className="w-7" />
+              <div className="text-center flex-1">
+                <div className="text-xl font-bold">{currentTime.toLocaleDateString('lv-LV')}</div>
+                <div className="text-2xl text-gray-500 dark:text-gray-400">{currentTime.toLocaleTimeString('lv-LV', { hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+              <div className="w-7" /> {/* Simetrijai */}
             </header>
+
             <main className="flex-1 overflow-y-auto p-4">{children}</main>
           </div>
         </div>

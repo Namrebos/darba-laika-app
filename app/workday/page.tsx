@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
-import { Menu } from 'lucide-react'
 import TaskCard from '../components/TaskCard'
 
 type Task = {
@@ -240,6 +239,10 @@ export default function WorkdayPage() {
     )
   }
 
+  const deleteTask = (id: string) => {
+    setTasks(prev => prev.filter(task => task.id !== id))
+  }
+
   if (loading) return <div className="text-center p-10">Notiek ielāde...</div>
 
   const finishedTasks = tasks.filter((t) => t.status === 'finished' && !t.isCall)
@@ -247,20 +250,6 @@ export default function WorkdayPage() {
 
   return (
     <div className="p-4 space-y-4 max-w-2xl mx-auto">
-      <div className="flex justify-between items-center border-b pb-2">
-        <button className="text-black">
-          <Menu size={32} />
-        </button>
-        <div className="text-center flex-1">
-          <div className="text-2xl font-bold">
-            {currentTime.toLocaleDateString('lv-LV')}
-          </div>
-          <div className="text-xl text-gray-400">
-            {currentTime.toLocaleTimeString('lv-LV')}
-          </div>
-        </div>
-      </div>
-
       <div className="border rounded p-4 space-y-4">
         <div className="flex justify-between">
           <button
@@ -289,6 +278,7 @@ export default function WorkdayPage() {
               user={user}
               sessionId={sessionId}
               updateTask={updateTask}
+              deleteTask={deleteTask}
               tagLibrary={tagLibrary}
               setSavingTasks={setSavingTasks}
               savingTasks={savingTasks}
@@ -333,6 +323,7 @@ export default function WorkdayPage() {
               user={user}
               sessionId={sessionId}
               updateTask={updateTask}
+              deleteTask={deleteTask}
               tagLibrary={tagLibrary}
               setSavingTasks={setSavingTasks}
               savingTasks={savingTasks}
