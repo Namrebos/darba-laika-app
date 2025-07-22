@@ -10,10 +10,21 @@ type DayModalProps = {
   onClose: () => void
 }
 
+type Task = {
+  id: string
+  title: string
+  note: string
+  start_time: string
+  end_time: string
+  isCall: boolean
+  images?: string[]
+}
+
 export default function DayModal({ date, onClose }: DayModalProps) {
   const [workLog, setWorkLog] = useState<any | null>(null)
-  const [tasks, setTasks] = useState<any[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
+  const [imagesByTask, setImagesByTask] = useState<Record<string, string[]>>({})
   const [hours, setHours] = useState<{ baseHours: number; overtimeHours: number; callHours: number }>({
     baseHours: 0,
     overtimeHours: 0,
@@ -45,7 +56,21 @@ export default function DayModal({ date, onClose }: DayModalProps) {
       .gte('start_time', from)
       .lte('end_time', to)
 
-    setTasks(taskLogs || [])
+    const tasksWithImages = taskLogs || []
+    setTasks(tasksWithImages)
+
+    const { data: imageData } = await supabase
+      .from('task_images')
+      .select('url, task_log_id')
+      .in('task_log_id', tasksWithImages.map((t) => t.id))
+
+    const groupedImages: Record<string, string[]> = {}
+    imageData?.forEach((img) => {
+      if (!groupedImages[img.task_log_id]) groupedImages[img.task_log_id] = []
+      groupedImages[img.task_log_id].push(img.url)
+    })
+
+    setImagesByTask(groupedImages)
 
     const { baseHours, overtimeHours } = work
       ? calculateWorkHours(new Date(work.start_time), new Date(work.end_time))
@@ -59,35 +84,66 @@ export default function DayModal({ date, onClose }: DayModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background p-6 rounded-xl shadow-xl w-full max-w-md space-y-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-neutral-900 text-foreground rounded-xl shadow-2xl p-6 w-[90%] max-w-md space-y-4 border border-border">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-bold">{format(parseISO(date), 'yyyy-MM-dd')}</h2>
-          <button onClick={onClose} className="text-sm text-red-500 font-semibold">Aizvērt</button>
+          <button
+            onClick={onClose}
+            className="text-sm font-semibold text-red-600 hover:underline"
+          >
+            Aizvērt
+          </button>
         </div>
 
         {loading ? (
           <div>Ielādē...</div>
         ) : (
-          <div className="space-y-2">
-            <div>
-              <p><strong>Darba laiks:</strong> {workLog ? `${format(new Date(workLog.start_time), 'HH:mm')} – ${format(new Date(workLog.end_time), 'HH:mm')}` : 'Nav datu'}</p>
-              <p><strong>Pamata:</strong> {hours.baseHours}h, <strong>Virsstundas:</strong> {hours.overtimeHours}h, <strong>Izsaukumi:</strong> {hours.callHours}h</p>
+          <div className="space-y-4">
+            <div className="text-sm space-y-1">
+              <p>
+                <span className="font-semibold">Darba laiks:</span>{' '}
+                {workLog
+                  ? `${format(new Date(workLog.start_time), 'HH:mm')} – ${format(
+                      new Date(workLog.end_time),
+                      'HH:mm'
+                    )}`
+                  : 'Nav datu'}
+              </p>
+              <p>
+                <span className="font-semibold">Pamata:</span> {hours.baseHours}h,{' '}
+                <span className="font-semibold">Virsstundas:</span> {hours.overtimeHours}h,{' '}
+                <span className="font-semibold">Izsaukumi:</span> {hours.callHours}h
+              </p>
             </div>
 
-            <div className="space-y-1">
-              <p className="font-semibold">Uzdevumi:</p>
+            <div className="space-y-2">
+              <p className="font-semibold text-sm">Uzdevumi:</p>
               {tasks.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nav uzdevumu</p>
               ) : (
                 tasks.map((task) => (
-                  <div key={task.id} className="p-2 border rounded bg-muted text-sm">
-                    <p><strong>{task.title || 'Bez nosaukuma'}</strong></p>
-                    <p>{task.note}</p>
-                    <p className="text-xs text-gray-500">
+                  <div key={task.id} className="p-3 bg-muted rounded border border-border text-sm space-y-2">
+                    <p className="font-bold">{task.title || 'Bez nosaukuma'}</p>
+                    <p className="whitespace-pre-line">{task.note}</p>
+                    <p className="text-xs text-muted-foreground">
                       {format(new Date(task.start_time), 'HH:mm')} – {format(new Date(task.end_time), 'HH:mm')}
                       {task.isCall ? ' (izsaukums)' : ''}
                     </p>
+
+                    {imagesByTask[task.id]?.length > 0 && (
+                      <div className="flex gap-2 flex-wrap">
+                        {imagesByTask[task.id].map((url, idx) => (
+                          <img
+                            key={idx}
+                            src={url}
+                            alt="Uzdevuma attēls"
+                            className="w-16 h-16 object-cover rounded cursor-pointer"
+                            onClick={() => window.open(url, '_blank')}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))
               )}

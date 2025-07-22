@@ -25,6 +25,15 @@ type CalendarProps = {
   onDayClick: (date: string) => void
 }
 
+function formatDuration(hours: number) {
+  const totalMinutes = Math.round(hours * 60)
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  if (h > 0 && m > 0) return `${h}h${m}min`
+  if (h > 0) return `${h}h`
+  return `${m}min`
+}
+
 export default function Calendar({ year, month, data, onDayClick }: CalendarProps) {
   const monthStart = startOfMonth(new Date(year, month))
   const monthEnd = endOfMonth(monthStart)
@@ -43,20 +52,52 @@ export default function Calendar({ year, month, data, onDayClick }: CalendarProp
       const isToday = isSameDay(day, new Date())
       const dayNum = day.getDate()
 
+      const base = entry?.baseHours || 0
+      const over = entry?.overtimeHours || 0
+      const call = entry?.callHours || 0
+
+      const showBase = base >= 0.25
+      const showOver = over >= 0.25
+      const showCall = call >= 0.25
+
+      const timeTextClass = isToday ? 'text-black' : ''
+      const nonCurrentClass = !isCurrentMonth ? 'opacity-30 cursor-default pointer-events-none' : ''
+      const borderColor = isToday ? 'border-black' : 'border-black dark:border-white'
+      const bgColor = isToday ? 'bg-yellow-100' : ''
+      const textColor = isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'
+
       days.push(
         <div
           key={dateStr}
           onClick={() => isCurrentMonth && onDayClick(dateStr)}
-          className={`aspect-square flex flex-col items-center text-sm cursor-pointer select-none rounded 
-            pt-[15%] pb-[5%] border-[1.5px]
-            ${isToday ? 'bg-yellow-100 border-black' : 'border-black dark:border-border'}
-            ${isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'} hover:bg-muted`}
+          className={`aspect-square flex flex-col items-center text-sm select-none rounded 
+            pt-[15%] pb-[5%] border-[1.5px] ${borderColor} ${bgColor}
+            ${textColor} ${nonCurrentClass} ${isCurrentMonth ? 'cursor-pointer hover:bg-muted' : ''}
+          `}
         >
-          <div className="text-xl font-bold">{dayNum}</div>
-          <div className="flex gap-1 mt-auto">
-            {entry?.baseHours > 0 && <div className="w-2 h-2 bg-blue-500 rounded-full" />}
-            {entry?.overtimeHours > 0 && <div className="w-2 h-2 bg-red-500 rounded-full" />}
-            {entry?.callHours > 0 && <div className="w-2 h-2 bg-yellow-400 rounded-full" />}
+          <div className={`text-xl font-bold ${isToday ? 'text-black' : ''}`}>
+            {dayNum}
+          </div>
+
+          <div className={`flex flex-col items-center justify-center mt-[10%] space-y-[4px] text-[13px] leading-tight ${timeTextClass}`}>
+            {showBase && (
+              <div className="flex items-center gap-1">
+                <div className="w-5 h-5 bg-blue-500 rounded-full" />
+                <span>{formatDuration(base)}</span>
+              </div>
+            )}
+            {showOver && (
+              <div className="flex items-center gap-1">
+                <div className="w-5 h-5 bg-red-500 rounded-full" />
+                <span>{formatDuration(over)}</span>
+              </div>
+            )}
+            {showCall && (
+              <div className="flex items-center gap-1">
+                <div className="w-5 h-5 bg-yellow-400 rounded-full" />
+                <span>{formatDuration(call)}</span>
+              </div>
+            )}
           </div>
         </div>
       )

@@ -14,7 +14,6 @@ type Task = {
   status: 'starting' | 'active' | 'finished' | 'review'
   startTime?: Date
   endTime?: Date
-  isCall?: boolean
 }
 
 type Props = {
@@ -50,6 +49,84 @@ export default function TaskCard({
 }: Props) {
   const isSaving = savingTasks[task.id] === true
 
+  const handleFinish = async () => {
+    const titleFilled = task.title.trim().length > 0
+    const notesFilled = task.notes.trim().length > 0
+
+    if (!titleFilled && !notesFilled) {
+      const shouldDelete = window.confirm('Uzdevums netiks saglabāts.\n\nVai dzēst šo uzdevumu?')
+      if (shouldDelete) deleteTask(task.id)
+      return
+    }
+
+    if (!titleFilled || !notesFilled) {
+      alert('Lūdzu aizpildi gan uzdevuma nosaukumu, gan piezīmes!')
+      return
+    }
+
+    setSavingTasks((prev) => ({ ...prev, [task.id]: true }))
+    const endTime = new Date()
+    updateTask(task.id, { status: 'finished', endTime })
+
+    const tags = await extractAndSaveTags(task.title, task.notes)
+
+    const { data: insertedTask, error: insertError } = await supabase
+      .from('task_logs')
+      .insert({
+        title: task.title,
+        note: task.notes,
+        user_id: user?.id,
+        session_id: sessionId,
+        start_time: task.startTime?.toISOString(),
+        end_time: endTime.toISOString(),
+      })
+      .select()
+      .single()
+
+    if (insertError) {
+      console.error('Kļūda saglabājot uzdevumu:', insertError.message)
+      setSavingTasks((prev) => ({ ...prev, [task.id]: false }))
+      return
+    }
+
+    const taskLogId = insertedTask.id
+    const uploadedUrls: string[] = []
+
+    for (const image of task.images) {
+      const filePath = `${user?.id}/${Date.now()}_${image.name}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('task-images')
+        .upload(filePath, image)
+
+      if (uploadError) {
+        console.error('Kļūda augšupielādējot attēlu:', uploadError.message)
+        continue
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('task-images')
+        .getPublicUrl(filePath)
+
+      const publicUrl = publicUrlData?.publicUrl
+
+      if (publicUrl) {
+        uploadedUrls.push(publicUrl)
+        await supabase.from('task_images').insert({
+          task_log_id: taskLogId,
+          user_id: user?.id,
+          url: publicUrl,
+        })
+      }
+    }
+
+    if (uploadedUrls.length > 0) {
+      updateTask(task.id, { uploadedImageUrls: uploadedUrls })
+    }
+
+    setSavingTasks((prev) => ({ ...prev, [task.id]: false }))
+  }
+
   if (task.status === 'starting') {
     return (
       <button
@@ -76,34 +153,7 @@ export default function TaskCard({
         {!readonly && (
           <button
             disabled={isSaving}
-            onClick={async () => {
-              const titleFilled = task.title.trim().length > 0
-              const notesFilled = task.notes.trim().length > 0
-
-              if (!titleFilled && !notesFilled) {
-                const shouldDelete = window.confirm('Uzdevums netiks saglabāts.\n\nVai dzēst šo uzdevumu?')
-                if (shouldDelete) {
-                  deleteTask(task.id)
-                }
-                return
-              }
-
-              if (!titleFilled || !notesFilled) {
-                alert('Lūdzu aizpildi gan uzdevuma nosaukumu, gan piezīmes!')
-                return
-              }
-
-              setSavingTasks((prev) => ({ ...prev, [task.id]: true }))
-              updateTask(task.id, {
-                status: 'finished',
-                endTime: new Date(),
-              })
-
-              const tags = await extractAndSaveTags(task.title, task.notes)
-              await saveTaskToDB(task, tags)
-
-              setSavingTasks((prev) => ({ ...prev, [task.id]: false }))
-            }}
+            onClick={handleFinish}
             className={`px-4 py-2 rounded text-white ${isSaving ? 'bg-gray-500' : 'bg-red-600 hover:bg-red-700'}`}
           >
             {isSaving ? 'Saglabājas...' : 'Pabeigt'}
@@ -172,26 +222,23 @@ export default function TaskCard({
           </label>
         )}
         <div className="flex gap-2 flex-wrap">
-          {!readonly && task.images.map((file, idx) => (
-            <div key={idx} className="relative w-16 h-16">
-              <img
-                src={URL.createObjectURL(file)}
-                alt="Jauns attēls"
-                className="w-16 h-16 object-cover rounded"
-              />
-              <button
-                className="absolute top-0 right-0 bg-black bg-opacity-70 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
-                onClick={() => {
-                  const updated = [...task.images]
-                  updated.splice(idx, 1)
-                  updateTask(task.id, { images: updated })
-                }}
-                title="Dzēst attēlu"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+          {!readonly &&
+            task.images.map((file, idx) => (
+              <div key={idx} className="relative w-16 h-16">
+                <img src={URL.createObjectURL(file)} alt="Jauns attēls" className="w-16 h-16 object-cover rounded" />
+                <button
+                  className="absolute top-0 right-0 bg-black bg-opacity-70 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                  onClick={() => {
+                    const updated = [...task.images]
+                    updated.splice(idx, 1)
+                    updateTask(task.id, { images: updated })
+                  }}
+                  title="Dzēst attēlu"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
           {task.uploadedImageUrls.map((url, idx) => (
             <img
               key={idx}
