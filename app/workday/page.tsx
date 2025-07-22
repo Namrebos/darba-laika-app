@@ -116,7 +116,7 @@ export default function WorkdayPage() {
     return cleanTags
   }
 
-  const uploadImages = async (task: Task, taskLogId: number): Promise<string[]> => {
+  const uploadImages = async (task: Task, taskLogId: string): Promise<string[]> => {
     if (!user) return []
     const urls: string[] = []
 
