@@ -32,10 +32,9 @@ export default function SummaryPage() {
 
     const { data: taskLogs } = await supabase
       .from('task_logs')
-      .select('start_time')
-      .eq('isCall', true)
+      .select('start_time, session_id')
 
-    const allDates = [...(workLogs || []), ...(taskLogs || [])].map((entry: any) => new Date(entry.start_time))
+    const allDates = [...(workLogs || []), ...(taskLogs || []).filter(t => !t.session_id)].map((entry: any) => new Date(entry.start_time))
     const monthSet = new Set<string>()
 
     allDates.forEach(date => {
@@ -51,7 +50,6 @@ export default function SummaryPage() {
 
     setAvailableMonths(sorted)
 
-    // Noklusējuma izvēle: šodienas mēnesis, ja tas ir pieejams
     const today = new Date()
     const todayMatch = sorted.find(m => m.year === today.getFullYear() && m.month === today.getMonth())
 
@@ -85,7 +83,7 @@ export default function SummaryPage() {
 
     const dataMap: { [date: string]: { baseHours: number; overtimeHours: number; callHours: number } } = {}
 
-    // Work logs (darba dienas)
+    // Darbadienas
     workLogs?.forEach(log => {
       const date = format(new Date(log.start_time), 'yyyy-MM-dd')
       const { baseHours, overtimeHours } = calculateWorkHours(new Date(log.start_time), new Date(log.end_time))
@@ -94,16 +92,16 @@ export default function SummaryPage() {
       dataMap[date].overtimeHours += overtimeHours
     })
 
-    // Call tasks (izsaukumi)
-    const callTasks = (taskLogs || []).filter((t) => t.isCall)
-    const callsByDate: { [date: string]: { start_time: Date; end_time: Date }[] } = {}
+    // Izsaukumi: session_id === null
+    const callTasks = (taskLogs || []).filter((t) => !t.session_id)
+    const callsByDate: { [date: string]: { start_time: string; end_time: string }[] } = {}
 
     callTasks.forEach(task => {
       const date = format(new Date(task.start_time), 'yyyy-MM-dd')
       if (!callsByDate[date]) callsByDate[date] = []
       callsByDate[date].push({
-        start_time: new Date(task.start_time),
-        end_time: new Date(task.end_time),
+        start_time: task.start_time,
+        end_time: task.end_time,
       })
     })
 
