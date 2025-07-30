@@ -1,3 +1,5 @@
+// PILNS page.tsx FAILS AR TASKU IELĀDI UN SAGLABĀŠANU
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -17,6 +19,7 @@ type Task = {
   startTime?: Date
   endTime?: Date
   isCall?: boolean
+  supabaseTaskId?: number
 }
 
 export default function WorkdayPage() {
@@ -51,6 +54,52 @@ export default function WorkdayPage() {
     getUser()
   }, [])
 
+  useEffect(() => {
+    if (user && sessionId) loadSavedTasks(user.id, sessionId)
+  }, [user, sessionId])
+
+  const loadSavedTasks = async (userId: string, sessionId: number) => {
+    const { data: logs } = await supabase
+      .from('task_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('session_id', sessionId)
+      .order('start_time', { ascending: true })
+
+    if (!logs) return
+
+    const { data: images } = await supabase
+      .from('task_images')
+      .select('*')
+      .eq('user_id', userId)
+
+    const restoredTasks: Task[] = logs.map((log) => {
+      const uploaded = images
+        ?.filter((img) => img.task_log_id === log.id)
+        .map((img) => img.url) || []
+
+      // Automātiski atzīmē kā 'review' tikai ja end_time eksistē, citādi 'active'
+      const status: Task['status'] = log.end_time
+        ? 'finished'
+        : (log.start_time ? 'active' : 'starting')
+
+      return {
+        id: crypto.randomUUID(),
+        title: log.title,
+        notes: log.note,
+        tags: [],
+        images: [],
+        uploadedImageUrls: uploaded,
+        status,
+        startTime: log.start_time ? new Date(log.start_time) : undefined,
+        endTime: log.end_time ? new Date(log.end_time) : undefined,
+        supabaseTaskId: log.id,
+      }
+    })
+
+    setTasks(restoredTasks)
+  }
+
   const checkSession = async (user: User) => {
     const { data } = await supabase
       .from('work_logs')
@@ -63,6 +112,8 @@ export default function WorkdayPage() {
     if (data && data.length > 0) {
       setIsSessionActive(true)
       setSessionId(data[0].id)
+      setWorkdayState('active')
+      addNewTask() // <- šis nodrošina, ka TaskCard tiek renderēts un var ielādēt taskus
     } else {
       setIsSessionActive(false)
     }
@@ -179,7 +230,6 @@ export default function WorkdayPage() {
       setIsSessionActive(true)
       setWorkdayState('active')
       setSessionId(data.id)
-      addNewTask()
     }
   }
 
@@ -232,15 +282,35 @@ export default function WorkdayPage() {
     }
     setTasks((prev) => [...prev, newTask])
   }
-
-  const updateTask = (id: string, updated: Partial<Task>) => {
+        // --- SAGLABĀ UZDEVUMA STATUSA IZMAIŅAS SUPABASE ---
+  const updateTask = async (id: string, updated: Partial<Task>) => {
     setTasks((prev) =>
       prev.map((task) => (task.id === id ? { ...task, ...updated } : task))
     )
-  }
 
-  const deleteTask = (id: string) => {
-    setTasks(prev => prev.filter(task => task.id !== id))
+    const task = tasks.find((t) => t.id === id)
+    if (!task || !task.supabaseTaskId) return
+
+    const updates: any = {}
+    if (updated.status === 'finished' && updated.endTime) {
+      updates.end_time = updated.endTime.toISOString()
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await supabase
+        .from('task_logs')
+        .update(updates)
+        .eq('id', task.supabaseTaskId)
+    }
+  }
+      // --- DZĒŠANAS FUNKCIJA AR DZĒŠANU NO SUPABASE ---
+  const deleteTask = async (id: string) => {
+    const taskToDelete = tasks.find((t) => t.id === id)
+    if (taskToDelete?.supabaseTaskId) {
+      await supabase.from('task_logs').delete().eq('id', taskToDelete.supabaseTaskId)
+      await supabase.from('task_images').delete().eq('task_log_id', taskToDelete.supabaseTaskId)
+    }
+    setTasks((prev) => prev.filter((t) => t.id !== id))
   }
 
   if (loading) return <div className="text-center p-10">Notiek ielāde...</div>
