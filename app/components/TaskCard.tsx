@@ -98,7 +98,7 @@ export default function TaskCard({
       const uploadedUrls: string[] = [...task.uploadedImageUrls]
 
       for (const image of newImages) {
-        const filePath = `task-images/${sessionId}/${task.supabaseTaskId}/${file.name}`
+        const filePath = `task-images/${sessionId}/${task.supabaseTaskId}/${image.name}`
         const { error: uploadError } = await supabase.storage.from('task-images').upload(filePath, image)
         if (uploadError) {
           console.error('Kļūda augšupielādējot attēlu:', uploadError.message)
