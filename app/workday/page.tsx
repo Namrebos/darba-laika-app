@@ -132,40 +132,34 @@ export default function WorkdayPage() {
     }
   }
 
-  const extractTags = (text: string): string[] => {
-    const matches = text.match(/#([A-Za-zĀ-ž0-9]+)/g)
-    return matches ? [...new Set(matches.map(t => t.slice(1)))] : []
+  const extractTagsOnly = (title: string, notes: string): string[] => {
+    const matches = [...(title.match(/#([A-Za-zĀ-ž0-9]+)/g) || []), ...(notes.match(/#([A-Za-zĀ-ž0-9]+)/g) || [])]
+    return [...new Set(matches.map(t => t.slice(1)))]
   }
 
-  const extractAndSaveTags = async (title: string, notes: string): Promise<string[]> => {
-    if (!user) return []
-    const rawTags = [...extractTags(title), ...extractTags(notes)]
-    const cleanTags = [...new Set(rawTags)].filter(t => t.trim() !== '')
-
-    for (const tag of cleanTags) {
+  const saveTagUsage = async (userId: string, tags: string[]) => {
+    for (const tag of tags) {
       const { data } = await supabase
         .from('tags')
-        .select('usage_count')
+        .select('id, usage_count')
         .eq('name', tag)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .single()
 
       if (data) {
         await supabase
           .from('tags')
           .update({ usage_count: data.usage_count + 1 })
-          .eq('name', tag)
-          .eq('user_id', user.id)
+          .eq('id', data.id)
       } else {
         await supabase
           .from('tags')
-          .insert({ name: tag, usage_count: 1, user_id: user.id })
+          .insert({ name: tag, usage_count: 1, user_id: userId })
       }
     }
-
-    await loadTags(user.id)
-    return cleanTags
+    await loadTags(userId)
   }
+
 
   const uploadImages = async (task: Task, taskLogId: string): Promise<string[]> => {
     if (!user) return []
@@ -355,8 +349,9 @@ export default function WorkdayPage() {
               activeInput={activeInput}
               setActiveInput={setActiveInput}
               loadTags={loadTags}
-              extractAndSaveTags={extractAndSaveTags}
               saveTaskToDB={saveTaskToDB}
+              extractTagsOnly={extractTagsOnly}         // ✅ JAUNS
+              saveTagUsage={saveTagUsage}               // ✅ JAUNS
             />
           ))}
           {(() => {
@@ -400,8 +395,9 @@ export default function WorkdayPage() {
               activeInput={activeInput}
               setActiveInput={setActiveInput}
               loadTags={loadTags}
-              extractAndSaveTags={extractAndSaveTags}
               saveTaskToDB={saveTaskToDB}
+              extractTagsOnly={extractTagsOnly}         // ✅ JAUNS
+              saveTagUsage={saveTagUsage}               // ✅ JAUNS
             />
           ))}
         </div>

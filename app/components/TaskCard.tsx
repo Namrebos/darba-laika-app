@@ -29,8 +29,9 @@ type Props = {
   activeInput: 'title' | 'notes' | null
   setActiveInput: (input: 'title' | 'notes' | null) => void
   loadTags: (userId: string) => Promise<void>
-  extractAndSaveTags: (title: string, notes: string) => Promise<string[]>
   saveTaskToDB: (task: Task, tags: string[]) => Promise<void>
+  extractTagsOnly: (title: string, notes: string) => string[]
+  saveTagUsage: (userId: string, tags: string[]) => Promise<void>
 }
 
 export default function TaskCard({
@@ -45,11 +46,13 @@ export default function TaskCard({
   activeInput,
   setActiveInput,
   loadTags,
-  extractAndSaveTags,
   saveTaskToDB,
+  extractTagsOnly,
+  saveTagUsage
 }: Props) {
   const isSaving = savingTasks[task.id] === true
 
+    // Saglabā uzdevumu Supabase
   useEffect(() => {
     const autoSave = async () => {
       const title = task.title.trim()
@@ -62,7 +65,6 @@ export default function TaskCard({
           .update({ title, note: notes })
           .eq('id', task.supabaseTaskId)
       } else {
-        const tags = await extractAndSaveTags(title, notes)
         const { data, error } = await supabase
           .from('task_logs')
           .insert({
@@ -76,7 +78,7 @@ export default function TaskCard({
           .single()
 
         if (!error && data) {
-          updateTask(task.id, { supabaseTaskId: data.id, tags })
+          updateTask(task.id, { supabaseTaskId: data.id })
         }
       }
     }
@@ -84,6 +86,22 @@ export default function TaskCard({
     const timeout = setTimeout(autoSave, 1000)
     return () => clearTimeout(timeout)
   }, [task.title, task.notes])
+
+  // Saglabā tagus no abiem laukiem
+  useEffect(() => {
+    const syncTags = async () => {
+      const title = task.title.trim()
+      const notes = task.notes.trim()
+      if (!title || !notes || !user || !task.supabaseTaskId) return
+
+      const tags = extractTagsOnly(title, notes)
+      updateTask(task.id, { tags })
+    }
+
+    const timeout = setTimeout(syncTags, 1200)
+    return () => clearTimeout(timeout)
+  }, [task.title, task.notes])
+
 
   useEffect(() => {
     const uploadImages = async () => {
@@ -150,10 +168,16 @@ export default function TaskCard({
     }
 
     setSavingTasks((prev) => ({ ...prev, [task.id]: true }))
-    const endTime = new Date()
-    updateTask(task.id, { status: 'finished', endTime })
+      const endTime = new Date()
+      updateTask(task.id, { status: 'finished', endTime })
+
+      // ✅ Šeit tagi tiek izvilkti un skaitīti tikai tagad
+      const tags = extractTagsOnly(task.title, task.notes)
+    if (user) await saveTagUsage(user.id, tags)
+    updateTask(task.id, { tags })
+
     setSavingTasks((prev) => ({ ...prev, [task.id]: false }))
-  }
+}
 
   if (task.status === 'starting') {
     return (
