@@ -16,7 +16,7 @@ type Task = {
   status: 'starting' | 'active' | 'finished' | 'review'
   startTime?: Date
   endTime?: Date
-  isCall?: boolean
+  isCall: boolean          // <- OBLIGĀTS (nevis ?)
   supabaseTaskId?: number
 }
 
@@ -103,7 +103,7 @@ export default function WorkdayPage() {
         startTime: log.start_time ? new Date(log.start_time) : undefined,
         endTime: log.end_time ? new Date(log.end_time) : undefined,
         supabaseTaskId: log.id,
-        isCall: log.isCall || false,
+        isCall: !!log.isCall, // vienmēr boolean
       }
     })
 
@@ -292,14 +292,13 @@ export default function WorkdayPage() {
       images: [],
       uploadedImageUrls: [],
       status: 'starting',
-      isCall,
+      isCall, // vienmēr boolean
     }
     setTasks((prev) => [...prev, newTask])
   }
 
-  // ── DB UPDATE pēc state izmaiņām (title/notes/end_time) ──
+  // DB UPDATE pēc state izmaiņām (title/notes/end_time)
   const updateTask = async (id: string, updated: Partial<Task>) => {
-    // Pirms state maiņas paņem esošo task, lai droši tiktu pie supabaseTaskId
     const existing = tasks.find(t => t.id === id)
 
     setTasks((prev) =>

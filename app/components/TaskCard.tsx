@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -53,8 +53,7 @@ export default function TaskCard({
 }: Props) {
   const isSaving = savingTasks[task.id] === true
 
-  // ❌ NO DB INSERT/UPDATE šeit. Atstājam tikai tagu lokālo sinhronizāciju.
-  // Saglabā tagus no abiem laukiem (lokāli state)
+  // Tikai lokālā tagu sinhronizācija (DB insert/update notiek page.tsx)
   useEffect(() => {
     const syncTags = () => {
       const title = task.title.trim()
@@ -67,7 +66,7 @@ export default function TaskCard({
     return () => clearTimeout(timeout)
   }, [task.title, task.notes])
 
-  // Augšupielādē attēlus TIKAI tad, kad ir supabaseTaskId
+  // Attēlu augšupielāde tikai pēc supabaseTaskId
   useEffect(() => {
     const uploadImages = async () => {
       if (!user || !task.supabaseTaskId) return
@@ -75,7 +74,6 @@ export default function TaskCard({
       const newImages = task.images.filter(
         (file) => !task.uploadedImageUrls.some((url) => url.includes(file.name))
       )
-
       if (newImages.length === 0) return
 
       const uploadedUrls: string[] = [...task.uploadedImageUrls]
@@ -87,10 +85,8 @@ export default function TaskCard({
           console.error('Kļūda augšupielādējot attēlu:', uploadError.message)
           continue
         }
-
         const { data: publicUrlData } = supabase.storage.from('task-images').getPublicUrl(filePath)
         const publicUrl = publicUrlData?.publicUrl
-
         if (publicUrl) {
           uploadedUrls.push(publicUrl)
           await supabase.from('task_images').insert({
@@ -126,7 +122,6 @@ export default function TaskCard({
       if (shouldDelete) deleteTask(task.id)
       return
     }
-
     if (!titleFilled || !notesFilled) {
       alert('Lūdzu aizpildi gan uzdevuma nosaukumu, gan piezīmes!')
       return
@@ -136,12 +131,11 @@ export default function TaskCard({
     const endTime = new Date()
     updateTask(task.id, { status: 'finished', endTime })
 
-    // Marķē tagus un skaiti lietojumu tikai pabeigšanas brīdī
     const tags = extractTagsOnly(task.title, task.notes)
     if (user) await saveTagUsage(user.id, tags)
     updateTask(task.id, { tags })
 
-    // Ja tas ir izsaukums — nodrošini persistenci (insert notiek page.tsx)
+    // isCall gadījumā nodrošinām persistenci
     if (user && task.isCall) {
       await saveTaskToDB({ ...task, endTime, status: 'finished' }, tags)
     }
