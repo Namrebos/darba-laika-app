@@ -1,5 +1,3 @@
-// PILNS page.tsx FAILS AR TASKU IELĀDI UN SAGLABĀŠANU
-
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -58,12 +56,26 @@ export default function WorkdayPage() {
     if (user && sessionId) loadSavedTasks(user.id, sessionId)
   }, [user, sessionId])
 
+  // Vienīgais automātiskais INSERT notiek šeit (nevis TaskCard)
+  useEffect(() => {
+    const autoSave = async () => {
+      for (const t of tasks) {
+        const title = t.title.trim()
+        const notes = t.notes.trim()
+        if (!title || !notes || t.supabaseTaskId) continue
+        await saveTaskToDB(t, extractTagsOnly(title, notes))
+      }
+    }
+    const timeout = setTimeout(autoSave, 1000)
+    return () => clearTimeout(timeout)
+  }, [tasks])
+
   const loadSavedTasks = async (userId: string, sessionId: number) => {
     const { data: logs } = await supabase
       .from('task_logs')
       .select('*')
       .eq('user_id', userId)
-      .eq('session_id', sessionId)
+      .or(`session_id.eq.${sessionId},isCall.eq.true`)
       .order('start_time', { ascending: true })
 
     if (!logs) return
@@ -73,20 +85,17 @@ export default function WorkdayPage() {
       .select('*')
       .eq('user_id', userId)
 
-    const restoredTasks: Task[] = logs.map((log) => {
-      const uploaded = images
-        ?.filter((img) => img.task_log_id === log.id)
-        .map((img) => img.url) || []
+    const restoredTasks: Task[] = logs.map((log: any) => {
+      const uploaded = images?.filter((img: any) => img.task_log_id === log.id).map((img: any) => img.url) || []
 
-      // Automātiski atzīmē kā 'review' tikai ja end_time eksistē, citādi 'active'
       const status: Task['status'] = log.end_time
         ? 'finished'
         : (log.start_time ? 'active' : 'starting')
 
       return {
         id: crypto.randomUUID(),
-        title: log.title,
-        notes: log.note,
+        title: log.title ?? '',
+        notes: log.note ?? '',
         tags: [],
         images: [],
         uploadedImageUrls: uploaded,
@@ -94,6 +103,7 @@ export default function WorkdayPage() {
         startTime: log.start_time ? new Date(log.start_time) : undefined,
         endTime: log.end_time ? new Date(log.end_time) : undefined,
         supabaseTaskId: log.id,
+        isCall: log.isCall || false,
       }
     })
 
@@ -113,7 +123,7 @@ export default function WorkdayPage() {
       setIsSessionActive(true)
       setSessionId(data[0].id)
       setWorkdayState('active')
-      addNewTask() // <- šis nodrošina, ka TaskCard tiek renderēts un var ielādēt taskus
+      addNewTask()
     } else {
       setIsSessionActive(false)
     }
@@ -144,12 +154,12 @@ export default function WorkdayPage() {
         .select('id, usage_count')
         .eq('name', tag)
         .eq('user_id', userId)
-        .single()
+        .maybeSingle()
 
       if (data) {
         await supabase
           .from('tags')
-          .update({ usage_count: data.usage_count + 1 })
+          .update({ usage_count: (data.usage_count ?? 0) + 1 })
           .eq('id', data.id)
       } else {
         await supabase
@@ -160,13 +170,12 @@ export default function WorkdayPage() {
     await loadTags(userId)
   }
 
-
-  const uploadImages = async (task: Task, taskLogId: string): Promise<string[]> => {
+  const uploadImages = async (task: Task, taskLogId: number): Promise<string[]> => {
     if (!user) return []
     const urls: string[] = []
 
     for (const image of task.images) {
-      const fileName = `${user.id}/${taskLogId}/${Date.now()}-${image.name}`
+      const fileName = `${task.isCall ? `isCall/${taskLogId}` : `${user.id}/${taskLogId}`}/${Date.now()}-${image.name}`
       const { error: uploadError } = await supabase.storage
         .from('task-images')
         .upload(fileName, image)
@@ -189,36 +198,47 @@ export default function WorkdayPage() {
     return urls
   }
 
-  const saveTaskToDB = async (task: Task, tags: string[]) => {
-    if (!user || !sessionId) return
+  const saveTaskToDB = async (task: Task, _tags: string[]) => {
+    if (!user) return
+    if (!task.isCall && !sessionId) return
 
-    const { data } = await supabase.from('task_logs').insert([
-      {
-        session_id: sessionId,
-        title: task.title,
-        note: task.notes,
-        start_time: task.startTime,
-        end_time: new Date(),
-        user_id: user.id,
-      },
-    ]).select().single()
+    const startISO = (task.startTime ? new Date(task.startTime) : new Date()).toISOString()
+    const endISO = task.status === 'finished'
+      ? (task.endTime ? new Date(task.endTime) : new Date()).toISOString()
+      : null
+
+    const { data, error } = await supabase.from('task_logs').insert([{
+      session_id: task.isCall ? null : sessionId,
+      title: task.title,
+      note: task.notes,
+      start_time: startISO,
+      end_time: endISO,
+      user_id: user.id,
+      isCall: task.isCall || false,
+    }]).select().single()
+
+    if (error) {
+      console.error('Saglabāšanas kļūda:', error.message)
+      return
+    }
 
     if (data) {
       const uploadedUrls = await uploadImages(task, data.id)
-      updateTask(task.id, { uploadedImageUrls: uploadedUrls })
+      updateTask(task.id, {
+        uploadedImageUrls: uploadedUrls,
+        supabaseTaskId: data.id,
+      })
     }
   }
 
   const startWorkday = async () => {
     if (!user) return
-    const { data } = await supabase.from('work_logs').insert([
-      {
-        user_id: user.id,
-        project: 'Darba diena',
-        start_time: new Date(),
-        description: '',
-      },
-    ]).select().single()
+    const { data } = await supabase.from('work_logs').insert([{
+      user_id: user.id,
+      project: 'Darba diena',
+      start_time: new Date().toISOString(),
+      description: '',
+    }]).select().single()
 
     if (data) {
       setIsSessionActive(true)
@@ -253,7 +273,7 @@ export default function WorkdayPage() {
       const id = data[0].id
       await supabase
         .from('work_logs')
-        .update({ end_time: new Date() })
+        .update({ end_time: new Date().toISOString() })
         .eq('id', id)
 
       setIsSessionActive(false)
@@ -276,28 +296,33 @@ export default function WorkdayPage() {
     }
     setTasks((prev) => [...prev, newTask])
   }
-        // --- SAGLABĀ UZDEVUMA STATUSA IZMAIŅAS SUPABASE ---
+
+  // ── DB UPDATE pēc state izmaiņām (title/notes/end_time) ──
   const updateTask = async (id: string, updated: Partial<Task>) => {
+    // Pirms state maiņas paņem esošo task, lai droši tiktu pie supabaseTaskId
+    const existing = tasks.find(t => t.id === id)
+
     setTasks((prev) =>
       prev.map((task) => (task.id === id ? { ...task, ...updated } : task))
     )
 
-    const task = tasks.find((t) => t.id === id)
-    if (!task || !task.supabaseTaskId) return
+    if (!existing?.supabaseTaskId) return
 
     const updates: any = {}
+    if (typeof updated.title === 'string') updates.title = updated.title.trim()
+    if (typeof updated.notes === 'string') updates.note = updated.notes.trim()
     if (updated.status === 'finished' && updated.endTime) {
-      updates.end_time = updated.endTime.toISOString()
+      updates.end_time = new Date(updated.endTime).toISOString()
     }
 
     if (Object.keys(updates).length > 0) {
       await supabase
         .from('task_logs')
         .update(updates)
-        .eq('id', task.supabaseTaskId)
+        .eq('id', existing.supabaseTaskId)
     }
   }
-      // --- DZĒŠANAS FUNKCIJA AR DZĒŠANU NO SUPABASE ---
+
   const deleteTask = async (id: string) => {
     const taskToDelete = tasks.find((t) => t.id === id)
     if (taskToDelete?.supabaseTaskId) {
@@ -350,8 +375,8 @@ export default function WorkdayPage() {
               setActiveInput={setActiveInput}
               loadTags={loadTags}
               saveTaskToDB={saveTaskToDB}
-              extractTagsOnly={extractTagsOnly}         // ✅ JAUNS
-              saveTagUsage={saveTagUsage}               // ✅ JAUNS
+              extractTagsOnly={extractTagsOnly}
+              saveTagUsage={saveTagUsage}
             />
           ))}
           {(() => {
@@ -396,8 +421,8 @@ export default function WorkdayPage() {
               setActiveInput={setActiveInput}
               loadTags={loadTags}
               saveTaskToDB={saveTaskToDB}
-              extractTagsOnly={extractTagsOnly}         // ✅ JAUNS
-              saveTagUsage={saveTagUsage}               // ✅ JAUNS
+              extractTagsOnly={extractTagsOnly}
+              saveTagUsage={saveTagUsage}
             />
           ))}
         </div>

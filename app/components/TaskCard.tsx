@@ -15,6 +15,7 @@ type Task = {
   startTime?: Date
   endTime?: Date
   supabaseTaskId?: number
+  isCall: boolean
 }
 
 type Props = {
@@ -52,57 +53,21 @@ export default function TaskCard({
 }: Props) {
   const isSaving = savingTasks[task.id] === true
 
-    // Saglabā uzdevumu Supabase
+  // ❌ NO DB INSERT/UPDATE šeit. Atstājam tikai tagu lokālo sinhronizāciju.
+  // Saglabā tagus no abiem laukiem (lokāli state)
   useEffect(() => {
-    const autoSave = async () => {
+    const syncTags = () => {
       const title = task.title.trim()
       const notes = task.notes.trim()
-      if (!title || !notes || !user || !sessionId) return
-
-      if (task.supabaseTaskId) {
-        await supabase
-          .from('task_logs')
-          .update({ title, note: notes })
-          .eq('id', task.supabaseTaskId)
-      } else {
-        const { data, error } = await supabase
-          .from('task_logs')
-          .insert({
-            title,
-            note: notes,
-            user_id: user.id,
-            session_id: sessionId,
-            start_time: task.startTime?.toISOString() ?? new Date().toISOString(),
-          })
-          .select()
-          .single()
-
-        if (!error && data) {
-          updateTask(task.id, { supabaseTaskId: data.id })
-        }
-      }
-    }
-
-    const timeout = setTimeout(autoSave, 1000)
-    return () => clearTimeout(timeout)
-  }, [task.title, task.notes])
-
-  // Saglabā tagus no abiem laukiem
-  useEffect(() => {
-    const syncTags = async () => {
-      const title = task.title.trim()
-      const notes = task.notes.trim()
-      if (!title || !notes || !user || !task.supabaseTaskId) return
-
+      if (!title || !notes) return
       const tags = extractTagsOnly(title, notes)
       updateTask(task.id, { tags })
     }
-
     const timeout = setTimeout(syncTags, 1200)
     return () => clearTimeout(timeout)
   }, [task.title, task.notes])
 
-
+  // Augšupielādē attēlus TIKAI tad, kad ir supabaseTaskId
   useEffect(() => {
     const uploadImages = async () => {
       if (!user || !task.supabaseTaskId) return
@@ -168,16 +133,21 @@ export default function TaskCard({
     }
 
     setSavingTasks((prev) => ({ ...prev, [task.id]: true }))
-      const endTime = new Date()
-      updateTask(task.id, { status: 'finished', endTime })
+    const endTime = new Date()
+    updateTask(task.id, { status: 'finished', endTime })
 
-      // ✅ Šeit tagi tiek izvilkti un skaitīti tikai tagad
-      const tags = extractTagsOnly(task.title, task.notes)
+    // Marķē tagus un skaiti lietojumu tikai pabeigšanas brīdī
+    const tags = extractTagsOnly(task.title, task.notes)
     if (user) await saveTagUsage(user.id, tags)
     updateTask(task.id, { tags })
 
+    // Ja tas ir izsaukums — nodrošini persistenci (insert notiek page.tsx)
+    if (user && task.isCall) {
+      await saveTaskToDB({ ...task, endTime, status: 'finished' }, tags)
+    }
+
     setSavingTasks((prev) => ({ ...prev, [task.id]: false }))
-}
+  }
 
   if (task.status === 'starting') {
     return (
