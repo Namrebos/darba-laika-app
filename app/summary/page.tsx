@@ -4,11 +4,20 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import Calendar from './Calendar'
 import DayModal from './DayModal'
-import { calculateWorkHours, calculateCallHours } from './utils'
+import MonthlySummary from './MonthlySummary'
+import { calculateWorkHours, calculateTaskHoursByDate } from './utils'
 import { format } from 'date-fns'
 
+type DayEntry = {
+  baseHours: number
+  overtimeHours: number
+  // Calendar var ignorēt papildu laukus, bet uzturam API stabilu:
+  callHours: number     // = 0 (izsaukumi netiek skaitīti)
+  taskHours?: number    // tikai kopsavilkumam; Calendar var neizmantot
+}
+
 export default function SummaryPage() {
-  const [entries, setEntries] = useState<{ [date: string]: any }>({})
+  const [entries, setEntries] = useState<{ [date: string]: DayEntry }>({})
   const [availableMonths, setAvailableMonths] = useState<{ year: number; month: number }[]>([])
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth())
@@ -26,17 +35,24 @@ export default function SummaryPage() {
   }, [selectedYear, selectedMonth, availableMonths])
 
   async function loadAvailableMonths() {
+    // Work logi (visi)
     const { data: workLogs } = await supabase
       .from('work_logs')
       .select('start_time')
 
+    // Task logi, kas NAV izsaukumi (isCall != true)
     const { data: taskLogs } = await supabase
       .from('task_logs')
-      .select('start_time, session_id')
+      .select('start_time, isCall')
 
-    const allDates = [...(workLogs || []), ...(taskLogs || []).filter(t => !t.session_id)].map((entry: any) => new Date(entry.start_time))
+    const allDates = [
+      ...(workLogs || []).map((w: any) => new Date(w.start_time)),
+      ...((taskLogs || [])
+          .filter((t: any) => !t.isCall)
+          .map((t: any) => new Date(t.start_time))),
+    ]
+
     const monthSet = new Set<string>()
-
     allDates.forEach(date => {
       const y = date.getFullYear()
       const m = date.getMonth()
@@ -69,47 +85,43 @@ export default function SummaryPage() {
     const from = new Date(selectedYear, selectedMonth, 1)
     const to = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59)
 
+    // Work logi izvēlētajā periodā
     const { data: workLogs } = await supabase
       .from('work_logs')
       .select('*')
       .gte('start_time', from.toISOString())
       .lte('end_time', to.toISOString())
 
+    // Task logi izvēlētajā periodā (ņemam arī end_time aprēķiniem)
     const { data: taskLogs } = await supabase
       .from('task_logs')
-      .select('*')
+      .select('start_time, end_time, isCall')
       .gte('start_time', from.toISOString())
       .lte('end_time', to.toISOString())
 
-    const dataMap: { [date: string]: { baseHours: number; overtimeHours: number; callHours: number } } = {}
+    const dataMap: { [date: string]: DayEntry } = {}
 
-    // Darbadienas
-    workLogs?.forEach(log => {
-      const date = format(new Date(log.start_time), 'yyyy-MM-dd')
-      const { baseHours, overtimeHours } = calculateWorkHours(new Date(log.start_time), new Date(log.end_time))
+    // 1) Darbadienas (base + over no work_logs)
+    workLogs?.forEach((log: any) => {
+      const start = new Date(log.start_time)
+      const end = new Date(log.end_time)
+      const date = format(start, 'yyyy-MM-dd')
+      const { baseHours, overtimeHours } = calculateWorkHours(start, end)
+
       if (!dataMap[date]) dataMap[date] = { baseHours: 0, overtimeHours: 0, callHours: 0 }
       dataMap[date].baseHours += baseHours
       dataMap[date].overtimeHours += overtimeHours
+      // callHours paliek 0 — izsaukumi netiek skaitīti
     })
 
-    // Izsaukumi: session_id === null
-    const callTasks = (taskLogs || []).filter((t) => !t.session_id)
-    const callsByDate: { [date: string]: { start_time: string; end_time: string }[] } = {}
+    // 2) Tasku stundas (NE call) no task_logs
+    const nonCallTasks = (taskLogs || []).filter((t: any) => !t.isCall)
+    const taskByDate = calculateTaskHoursByDate(nonCallTasks) // { 'YYYY-MM-DD': hours }
 
-    callTasks.forEach(task => {
-      const date = format(new Date(task.start_time), 'yyyy-MM-dd')
-      if (!callsByDate[date]) callsByDate[date] = []
-      callsByDate[date].push({
-        start_time: task.start_time,
-        end_time: task.end_time,
-      })
-    })
-
-    for (const date in callsByDate) {
-      const callHours = calculateCallHours(callsByDate[date])
+    Object.entries(taskByDate).forEach(([date, hours]) => {
       if (!dataMap[date]) dataMap[date] = { baseHours: 0, overtimeHours: 0, callHours: 0 }
-      dataMap[date].callHours += callHours
-    }
+      dataMap[date].taskHours = (dataMap[date].taskHours || 0) + (hours as number)
+    })
 
     setEntries(dataMap)
     setLoading(false)
@@ -123,10 +135,10 @@ export default function SummaryPage() {
         </div>
         <div className="flex gap-2">
           <select
-            className="border rounded px-2 py-1"
+            className="border rounded px-2 py-1 bg-white text-black dark:bg-zinc-800 dark:text-white"
             value={`${selectedYear}-${selectedMonth}`}
             onChange={(e) => {
-              const [y, m] = e.target.value.split('-').map(Number)
+             const [y, m] = e.target.value.split('-').map(Number)
               setSelectedYear(y)
               setSelectedMonth(m)
             }}
@@ -139,6 +151,9 @@ export default function SummaryPage() {
           </select>
         </div>
       </div>
+
+      {/* Mēneša kopsavilkuma tabula */}
+      <MonthlySummary data={entries} />
 
       {loading ? (
         <div>Ielādē kalendāru...</div>
