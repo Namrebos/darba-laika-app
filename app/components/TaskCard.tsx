@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -14,6 +14,8 @@ type Task = {
   status: 'starting' | 'active' | 'finished' | 'review'
   startTime?: Date
   endTime?: Date
+  supabaseTaskId?: number
+  isCall: boolean
 }
 
 type Props = {
@@ -28,8 +30,9 @@ type Props = {
   activeInput: 'title' | 'notes' | null
   setActiveInput: (input: 'title' | 'notes' | null) => void
   loadTags: (userId: string) => Promise<void>
-  extractAndSaveTags: (title: string, notes: string) => Promise<string[]>
   saveTaskToDB: (task: Task, tags: string[]) => Promise<void>
+  extractTagsOnly: (title: string, notes: string) => string[]
+  saveTagUsage: (userId: string, tags: string[]) => Promise<void>
 }
 
 export default function TaskCard({
@@ -44,10 +47,71 @@ export default function TaskCard({
   activeInput,
   setActiveInput,
   loadTags,
-  extractAndSaveTags,
   saveTaskToDB,
+  extractTagsOnly,
+  saveTagUsage
 }: Props) {
   const isSaving = savingTasks[task.id] === true
+
+  // Tikai lokālā tagu sinhronizācija (DB insert/update notiek page.tsx)
+  useEffect(() => {
+    const syncTags = () => {
+      const title = task.title.trim()
+      const notes = task.notes.trim()
+      if (!title || !notes) return
+      const tags = extractTagsOnly(title, notes)
+      updateTask(task.id, { tags })
+    }
+    const timeout = setTimeout(syncTags, 1200)
+    return () => clearTimeout(timeout)
+  }, [task.title, task.notes])
+
+  // Attēlu augšupielāde tikai pēc supabaseTaskId
+  useEffect(() => {
+    const uploadImages = async () => {
+      if (!user || !task.supabaseTaskId) return
+
+      const newImages = task.images.filter(
+        (file) => !task.uploadedImageUrls.some((url) => url.includes(file.name))
+      )
+      if (newImages.length === 0) return
+
+      const uploadedUrls: string[] = [...task.uploadedImageUrls]
+
+      for (const image of newImages) {
+        const filePath = `task-images/${sessionId}/${task.supabaseTaskId}/${image.name}`
+        const { error: uploadError } = await supabase.storage.from('task-images').upload(filePath, image)
+        if (uploadError) {
+          console.error('Kļūda augšupielādējot attēlu:', uploadError.message)
+          continue
+        }
+        const { data: publicUrlData } = supabase.storage.from('task-images').getPublicUrl(filePath)
+        const publicUrl = publicUrlData?.publicUrl
+        if (publicUrl) {
+          uploadedUrls.push(publicUrl)
+          await supabase.from('task_images').insert({
+            task_log_id: task.supabaseTaskId,
+            user_id: user.id,
+            url: publicUrl,
+          })
+        }
+      }
+
+      updateTask(task.id, { uploadedImageUrls: uploadedUrls, images: [] })
+    }
+
+    uploadImages()
+  }, [task.images])
+
+  const handleRemoveUploadedImage = async (urlToDelete: string) => {
+    if (!user) return
+    const fileName = urlToDelete.split('/').pop()
+    if (fileName) {
+      await supabase.storage.from('task-images').remove([`${user.id}/${fileName}`])
+    }
+    const updated = task.uploadedImageUrls.filter((url) => url !== urlToDelete)
+    updateTask(task.id, { uploadedImageUrls: updated })
+  }
 
   const handleFinish = async () => {
     const titleFilled = task.title.trim().length > 0
@@ -58,7 +122,6 @@ export default function TaskCard({
       if (shouldDelete) deleteTask(task.id)
       return
     }
-
     if (!titleFilled || !notesFilled) {
       alert('Lūdzu aizpildi gan uzdevuma nosaukumu, gan piezīmes!')
       return
@@ -68,60 +131,13 @@ export default function TaskCard({
     const endTime = new Date()
     updateTask(task.id, { status: 'finished', endTime })
 
-    const tags = await extractAndSaveTags(task.title, task.notes)
+    const tags = extractTagsOnly(task.title, task.notes)
+    if (user) await saveTagUsage(user.id, tags)
+    updateTask(task.id, { tags })
 
-    const { data: insertedTask, error: insertError } = await supabase
-      .from('task_logs')
-      .insert({
-        title: task.title,
-        note: task.notes,
-        user_id: user?.id,
-        session_id: sessionId,
-        start_time: task.startTime?.toISOString(),
-        end_time: endTime.toISOString(),
-      })
-      .select()
-      .single()
-
-    if (insertError) {
-      console.error('Kļūda saglabājot uzdevumu:', insertError.message)
-      setSavingTasks((prev) => ({ ...prev, [task.id]: false }))
-      return
-    }
-
-    const taskLogId = insertedTask.id
-    const uploadedUrls: string[] = []
-
-    for (const image of task.images) {
-      const filePath = `${user?.id}/${Date.now()}_${image.name}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('task-images')
-        .upload(filePath, image)
-
-      if (uploadError) {
-        console.error('Kļūda augšupielādējot attēlu:', uploadError.message)
-        continue
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('task-images')
-        .getPublicUrl(filePath)
-
-      const publicUrl = publicUrlData?.publicUrl
-
-      if (publicUrl) {
-        uploadedUrls.push(publicUrl)
-        await supabase.from('task_images').insert({
-          task_log_id: taskLogId,
-          user_id: user?.id,
-          url: publicUrl,
-        })
-      }
-    }
-
-    if (uploadedUrls.length > 0) {
-      updateTask(task.id, { uploadedImageUrls: uploadedUrls })
+    // isCall gadījumā nodrošinām persistenci
+    if (user && task.isCall) {
+      await saveTaskToDB({ ...task, endTime, status: 'finished' }, tags)
     }
 
     setSavingTasks((prev) => ({ ...prev, [task.id]: false }))
@@ -151,13 +167,21 @@ export default function TaskCard({
           readOnly={readonly}
         />
         {!readonly && (
-          <button
-            disabled={isSaving}
-            onClick={handleFinish}
-            className={`px-4 py-2 rounded text-white ${isSaving ? 'bg-gray-500' : 'bg-red-600 hover:bg-red-700'}`}
-          >
-            {isSaving ? 'Saglabājas...' : 'Pabeigt'}
-          </button>
+          <>
+            <button
+              disabled={isSaving}
+              onClick={handleFinish}
+              className={`px-4 py-2 rounded text-white ${isSaving ? 'bg-gray-500' : 'bg-red-600 hover:bg-red-700'}`}
+            >
+              {isSaving ? 'Saglabājas...' : 'Pabeigt'}
+            </button>
+            <button
+              className="px-4 py-2 rounded bg-gray-200 text-black hover:bg-gray-300"
+              onClick={() => deleteTask(task.id)}
+            >
+              Dzēst
+            </button>
+          </>
         )}
       </div>
 
@@ -240,13 +264,23 @@ export default function TaskCard({
               </div>
             ))}
           {task.uploadedImageUrls.map((url, idx) => (
-            <img
-              key={idx}
-              src={url}
-              alt="Attēls"
-              className="w-16 h-16 object-cover rounded cursor-pointer"
-              onClick={() => window.open(url, '_blank')}
-            />
+            <div key={idx} className="relative w-16 h-16">
+              <img
+                src={url}
+                alt="Attēls"
+                className="w-16 h-16 object-cover rounded cursor-pointer"
+                onClick={() => window.open(url, '_blank')}
+              />
+              {!readonly && (
+                <button
+                  className="absolute top-0 right-0 bg-black bg-opacity-70 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                  onClick={() => handleRemoveUploadedImage(url)}
+                  title="Dzēst augšupielādēto attēlu"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </div>

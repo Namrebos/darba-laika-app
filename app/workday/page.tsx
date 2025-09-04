@@ -16,7 +16,8 @@ type Task = {
   status: 'starting' | 'active' | 'finished' | 'review'
   startTime?: Date
   endTime?: Date
-  isCall?: boolean
+  isCall: boolean          // <- OBLIGĀTS (nevis ?)
+  supabaseTaskId?: number
 }
 
 export default function WorkdayPage() {
@@ -51,6 +52,64 @@ export default function WorkdayPage() {
     getUser()
   }, [])
 
+  useEffect(() => {
+    if (user && sessionId) loadSavedTasks(user.id, sessionId)
+  }, [user, sessionId])
+
+  // Vienīgais automātiskais INSERT notiek šeit (nevis TaskCard)
+  useEffect(() => {
+    const autoSave = async () => {
+      for (const t of tasks) {
+        const title = t.title.trim()
+        const notes = t.notes.trim()
+        if (!title || !notes || t.supabaseTaskId) continue
+        await saveTaskToDB(t, extractTagsOnly(title, notes))
+      }
+    }
+    const timeout = setTimeout(autoSave, 1000)
+    return () => clearTimeout(timeout)
+  }, [tasks])
+
+  const loadSavedTasks = async (userId: string, sessionId: number) => {
+    const { data: logs } = await supabase
+      .from('task_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .or(`session_id.eq.${sessionId},isCall.eq.true`)
+      .order('start_time', { ascending: true })
+
+    if (!logs) return
+
+    const { data: images } = await supabase
+      .from('task_images')
+      .select('*')
+      .eq('user_id', userId)
+
+    const restoredTasks: Task[] = logs.map((log: any) => {
+      const uploaded = images?.filter((img: any) => img.task_log_id === log.id).map((img: any) => img.url) || []
+
+      const status: Task['status'] = log.end_time
+        ? 'finished'
+        : (log.start_time ? 'active' : 'starting')
+
+      return {
+        id: crypto.randomUUID(),
+        title: log.title ?? '',
+        notes: log.note ?? '',
+        tags: [],
+        images: [],
+        uploadedImageUrls: uploaded,
+        status,
+        startTime: log.start_time ? new Date(log.start_time) : undefined,
+        endTime: log.end_time ? new Date(log.end_time) : undefined,
+        supabaseTaskId: log.id,
+        isCall: !!log.isCall, // vienmēr boolean
+      }
+    })
+
+    setTasks(restoredTasks)
+  }
+
   const checkSession = async (user: User) => {
     const { data } = await supabase
       .from('work_logs')
@@ -63,6 +122,8 @@ export default function WorkdayPage() {
     if (data && data.length > 0) {
       setIsSessionActive(true)
       setSessionId(data[0].id)
+      setWorkdayState('active')
+      addNewTask()
     } else {
       setIsSessionActive(false)
     }
@@ -81,47 +142,40 @@ export default function WorkdayPage() {
     }
   }
 
-  const extractTags = (text: string): string[] => {
-    const matches = text.match(/#([A-Za-zĀ-ž0-9]+)/g)
-    return matches ? [...new Set(matches.map(t => t.slice(1)))] : []
+  const extractTagsOnly = (title: string, notes: string): string[] => {
+    const matches = [...(title.match(/#([A-Za-zĀ-ž0-9]+)/g) || []), ...(notes.match(/#([A-Za-zĀ-ž0-9]+)/g) || [])]
+    return [...new Set(matches.map(t => t.slice(1)))]
   }
 
-  const extractAndSaveTags = async (title: string, notes: string): Promise<string[]> => {
-    if (!user) return []
-    const rawTags = [...extractTags(title), ...extractTags(notes)]
-    const cleanTags = [...new Set(rawTags)].filter(t => t.trim() !== '')
-
-    for (const tag of cleanTags) {
+  const saveTagUsage = async (userId: string, tags: string[]) => {
+    for (const tag of tags) {
       const { data } = await supabase
         .from('tags')
-        .select('usage_count')
+        .select('id, usage_count')
         .eq('name', tag)
-        .eq('user_id', user.id)
-        .single()
+        .eq('user_id', userId)
+        .maybeSingle()
 
       if (data) {
         await supabase
           .from('tags')
-          .update({ usage_count: data.usage_count + 1 })
-          .eq('name', tag)
-          .eq('user_id', user.id)
+          .update({ usage_count: (data.usage_count ?? 0) + 1 })
+          .eq('id', data.id)
       } else {
         await supabase
           .from('tags')
-          .insert({ name: tag, usage_count: 1, user_id: user.id })
+          .insert({ name: tag, usage_count: 1, user_id: userId })
       }
     }
-
-    await loadTags(user.id)
-    return cleanTags
+    await loadTags(userId)
   }
 
-  const uploadImages = async (task: Task, taskLogId: string): Promise<string[]> => {
+  const uploadImages = async (task: Task, taskLogId: number): Promise<string[]> => {
     if (!user) return []
     const urls: string[] = []
 
     for (const image of task.images) {
-      const fileName = `${user.id}/${taskLogId}/${Date.now()}-${image.name}`
+      const fileName = `${task.isCall ? `isCall/${taskLogId}` : `${user.id}/${taskLogId}`}/${Date.now()}-${image.name}`
       const { error: uploadError } = await supabase.storage
         .from('task-images')
         .upload(fileName, image)
@@ -144,42 +198,52 @@ export default function WorkdayPage() {
     return urls
   }
 
-  const saveTaskToDB = async (task: Task, tags: string[]) => {
-    if (!user || !sessionId) return
+  const saveTaskToDB = async (task: Task, _tags: string[]) => {
+    if (!user) return
+    if (!task.isCall && !sessionId) return
 
-    const { data } = await supabase.from('task_logs').insert([
-      {
-        session_id: sessionId,
-        title: task.title,
-        note: task.notes,
-        start_time: task.startTime,
-        end_time: new Date(),
-        user_id: user.id,
-      },
-    ]).select().single()
+    const startISO = (task.startTime ? new Date(task.startTime) : new Date()).toISOString()
+    const endISO = task.status === 'finished'
+      ? (task.endTime ? new Date(task.endTime) : new Date()).toISOString()
+      : null
+
+    const { data, error } = await supabase.from('task_logs').insert([{
+      session_id: task.isCall ? null : sessionId,
+      title: task.title,
+      note: task.notes,
+      start_time: startISO,
+      end_time: endISO,
+      user_id: user.id,
+      isCall: task.isCall || false,
+    }]).select().single()
+
+    if (error) {
+      console.error('Saglabāšanas kļūda:', error.message)
+      return
+    }
 
     if (data) {
       const uploadedUrls = await uploadImages(task, data.id)
-      updateTask(task.id, { uploadedImageUrls: uploadedUrls })
+      updateTask(task.id, {
+        uploadedImageUrls: uploadedUrls,
+        supabaseTaskId: data.id,
+      })
     }
   }
 
   const startWorkday = async () => {
     if (!user) return
-    const { data } = await supabase.from('work_logs').insert([
-      {
-        user_id: user.id,
-        project: 'Darba diena',
-        start_time: new Date(),
-        description: '',
-      },
-    ]).select().single()
+    const { data } = await supabase.from('work_logs').insert([{
+      user_id: user.id,
+      project: 'Darba diena',
+      start_time: new Date().toISOString(),
+      description: '',
+    }]).select().single()
 
     if (data) {
       setIsSessionActive(true)
       setWorkdayState('active')
       setSessionId(data.id)
-      addNewTask()
     }
   }
 
@@ -209,7 +273,7 @@ export default function WorkdayPage() {
       const id = data[0].id
       await supabase
         .from('work_logs')
-        .update({ end_time: new Date() })
+        .update({ end_time: new Date().toISOString() })
         .eq('id', id)
 
       setIsSessionActive(false)
@@ -228,19 +292,43 @@ export default function WorkdayPage() {
       images: [],
       uploadedImageUrls: [],
       status: 'starting',
-      isCall,
+      isCall, // vienmēr boolean
     }
     setTasks((prev) => [...prev, newTask])
   }
 
-  const updateTask = (id: string, updated: Partial<Task>) => {
+  // DB UPDATE pēc state izmaiņām (title/notes/end_time)
+  const updateTask = async (id: string, updated: Partial<Task>) => {
+    const existing = tasks.find(t => t.id === id)
+
     setTasks((prev) =>
       prev.map((task) => (task.id === id ? { ...task, ...updated } : task))
     )
+
+    if (!existing?.supabaseTaskId) return
+
+    const updates: any = {}
+    if (typeof updated.title === 'string') updates.title = updated.title.trim()
+    if (typeof updated.notes === 'string') updates.note = updated.notes.trim()
+    if (updated.status === 'finished' && updated.endTime) {
+      updates.end_time = new Date(updated.endTime).toISOString()
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await supabase
+        .from('task_logs')
+        .update(updates)
+        .eq('id', existing.supabaseTaskId)
+    }
   }
 
-  const deleteTask = (id: string) => {
-    setTasks(prev => prev.filter(task => task.id !== id))
+  const deleteTask = async (id: string) => {
+    const taskToDelete = tasks.find((t) => t.id === id)
+    if (taskToDelete?.supabaseTaskId) {
+      await supabase.from('task_logs').delete().eq('id', taskToDelete.supabaseTaskId)
+      await supabase.from('task_images').delete().eq('task_log_id', taskToDelete.supabaseTaskId)
+    }
+    setTasks((prev) => prev.filter((t) => t.id !== id))
   }
 
   if (loading) return <div className="text-center p-10">Notiek ielāde...</div>
@@ -285,8 +373,9 @@ export default function WorkdayPage() {
               activeInput={activeInput}
               setActiveInput={setActiveInput}
               loadTags={loadTags}
-              extractAndSaveTags={extractAndSaveTags}
               saveTaskToDB={saveTaskToDB}
+              extractTagsOnly={extractTagsOnly}
+              saveTagUsage={saveTagUsage}
             />
           ))}
           {(() => {
@@ -330,8 +419,9 @@ export default function WorkdayPage() {
               activeInput={activeInput}
               setActiveInput={setActiveInput}
               loadTags={loadTags}
-              extractAndSaveTags={extractAndSaveTags}
               saveTaskToDB={saveTaskToDB}
+              extractTagsOnly={extractTagsOnly}
+              saveTagUsage={saveTagUsage}
             />
           ))}
         </div>
