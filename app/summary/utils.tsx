@@ -1,35 +1,29 @@
-export type TimeBreakdown = {
-  baseHours: number
-  overtimeHours: number
-  callHours: number
-}
-
-// Palīgfunkcija – noapaļo uz tuvāko 0.25h (15 min)
-function roundToQuarterHour(minutes: number): number {
+export function roundToQuarterHour(minutes: number): number {
   return Math.round((minutes / 60) * 4) / 4
 }
 
-// Stundu sadalīšana darba dienai
-export function calculateWorkHours(start: Date, end: Date): {
-  baseHours: number
-  overtimeHours: number
-} {
+export function calculateWorkHours(
+  start: Date,
+  end: Date
+): { baseHours: number; overtimeHours: number } {
   const BASE_START = 9
   const BASE_END = 18
 
   let baseMinutes = 0
   let overtimeMinutes = 0
-
   const cur = new Date(start)
 
   while (cur < end) {
     const hour = cur.getHours()
-    const next = new Date(cur.getTime() + 15 * 60 * 1000) // +15min
+    const next = new Date(cur.getTime() + 15 * 60 * 1000)
 
     if (next > end) break
 
-    if (hour >= BASE_START && hour < BASE_END) baseMinutes += 15
-    else overtimeMinutes += 15
+    if (hour >= BASE_START && hour < BASE_END) {
+      baseMinutes += 15
+    } else {
+      overtimeMinutes += 15
+    }
 
     cur.setMinutes(cur.getMinutes() + 15)
   }
@@ -40,19 +34,47 @@ export function calculateWorkHours(start: Date, end: Date): {
   }
 }
 
-// Izsaukumu laika aprēķins
-export function calculateCallHours(callTasks: {
-  start_time: string
-  end_time: string
-}[]): number {
+export function calculateCallHours(
+  callTasks: Array<{ start_time: string; end_time: string }>
+): number {
   let totalMinutes = 0
 
   for (const task of callTasks) {
     const start = new Date(task.start_time)
     const end = new Date(task.end_time)
-    const diff = (end.getTime() - start.getTime()) / (1000 * 60) // minūtes
+    const diff = (end.getTime() - start.getTime()) / (1000 * 60)
     totalMinutes += diff
   }
 
   return roundToQuarterHour(totalMinutes)
+}
+
+export function calculateTaskHoursByDate(
+  taskLogs: Array<{
+    start_time: string
+    end_time: string | null
+    isCall?: boolean | null
+    session_id?: string | null
+  }>
+): Record<string, number> {
+  const byDate: Record<string, number> = {}
+
+  for (const t of taskLogs) {
+    const explicitIsCall = typeof t.isCall === 'boolean' ? t.isCall : undefined
+    const derivedIsCall = explicitIsCall ?? !t.session_id
+
+    if (derivedIsCall) continue
+    if (!t.start_time) continue
+
+    const start = new Date(t.start_time)
+    const end = new Date(t.end_time ?? t.start_time)
+
+    const dayKey = start.toISOString().slice(0, 10)
+    const minutes = Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60))
+    const hours = roundToQuarterHour(minutes)
+
+    byDate[dayKey] = (byDate[dayKey] ?? 0) + hours
+  }
+
+  return byDate
 }
