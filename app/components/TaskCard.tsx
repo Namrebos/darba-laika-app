@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import imageCompression from 'browser-image-compression'
 import { supabase } from '@/lib/supabaseClient'
@@ -54,6 +54,43 @@ export default function TaskCard({
 }: Props) {
   const isSaving = savingTasks[task.id] === true
 
+  const [selectedImages, setSelectedImages] = useState<string[] | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [touchStartX, setTouchStartX] = useState<number | null>(null)
+  const [touchEndX, setTouchEndX] = useState<number | null>(null)
+  const [localPreviewUrls, setLocalPreviewUrls] = useState<string[]>([])
+
+  useEffect(() => {
+    const urls = task.images.map((file) => URL.createObjectURL(file))
+    setLocalPreviewUrls(urls)
+
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [task.images])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedImages) return
+
+      if (e.key === 'Escape') {
+        closeImageModal()
+        return
+      }
+
+      if (e.key === 'ArrowRight' && selectedIndex < selectedImages.length - 1) {
+        setSelectedIndex((prev) => prev + 1)
+      }
+
+      if (e.key === 'ArrowLeft' && selectedIndex > 0) {
+        setSelectedIndex((prev) => prev - 1)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedImages, selectedIndex])
+
   // Tikai lokālā tagu sinhronizācija (DB insert/update notiek page.tsx)
   useEffect(() => {
     const syncTags = () => {
@@ -70,7 +107,8 @@ export default function TaskCard({
   // Attēlu augšupielāde tikai pēc supabaseTaskId
   useEffect(() => {
     const uploadImages = async () => {
-      if (!user || !task.supabaseTaskId || !sessionId) return
+      if (!user || !task.supabaseTaskId) return
+      if (!task.isCall && !sessionId) return
 
       const newImages = task.images.filter(
         (file) => !task.uploadedImageUrls.some((url) => url.includes(file.name))
@@ -80,7 +118,11 @@ export default function TaskCard({
       const uploadedUrls: string[] = [...task.uploadedImageUrls]
 
       for (const image of newImages) {
-        const filePath = `${sessionId}/${task.supabaseTaskId}/${image.name}`
+        const basePath = task.isCall
+          ? `isCall/${task.supabaseTaskId}`
+          : `${sessionId}/${task.supabaseTaskId}`
+
+        const filePath = `${basePath}/${image.name}`
 
         let fileToUpload: File = image
 
@@ -125,14 +167,76 @@ export default function TaskCard({
     }
 
     uploadImages()
-  }, [task.images, task.supabaseTaskId, user, sessionId])
+  }, [task.images, task.supabaseTaskId, user, sessionId, task.isCall])
+
+  const closeImageModal = () => {
+    setSelectedImages(null)
+    setSelectedIndex(0)
+    setTouchStartX(null)
+    setTouchEndX(null)
+  }
+
+  const goPrev = () => {
+    if (!selectedImages) return
+    if (selectedIndex === 0) return
+    setSelectedIndex((prev) => prev - 1)
+  }
+
+  const goNext = () => {
+    if (!selectedImages) return
+    if (selectedIndex >= selectedImages.length - 1) return
+    setSelectedIndex((prev) => prev + 1)
+  }
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    setTouchEndX(null)
+    setTouchStartX(e.targetTouches[0].clientX)
+  }
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    setTouchEndX(e.targetTouches[0].clientX)
+  }
+
+  const handleTouchEnd = () => {
+    if (touchStartX === null || touchEndX === null) return
+
+    const distance = touchStartX - touchEndX
+    const minSwipeDistance = 50
+
+    if (distance > minSwipeDistance) {
+      goNext()
+    } else if (distance < -minSwipeDistance) {
+      goPrev()
+    }
+
+    setTouchStartX(null)
+    setTouchEndX(null)
+  }
+
+  const openLocalGallery = (index: number) => {
+    if (localPreviewUrls.length === 0) return
+    setSelectedImages(localPreviewUrls)
+    setSelectedIndex(index)
+  }
+
+  const openUploadedGallery = (index: number) => {
+    if (task.uploadedImageUrls.length === 0) return
+    setSelectedImages(task.uploadedImageUrls)
+    setSelectedIndex(index)
+  }
 
   const handleRemoveUploadedImage = async (urlToDelete: string) => {
-    if (!user || !task.supabaseTaskId || !sessionId) return
+    if (!user || !task.supabaseTaskId) return
+    if (!task.isCall && !sessionId) return
 
     const fileName = urlToDelete.split('/').pop()?.split('?')[0]
+
     if (fileName) {
-      const storagePath = `${sessionId}/${task.supabaseTaskId}/${fileName}`
+      const basePath = task.isCall
+        ? `isCall/${task.supabaseTaskId}`
+        : `${sessionId}/${task.supabaseTaskId}`
+
+      const storagePath = `${basePath}/${fileName}`
 
       const { error: storageError } = await supabase.storage.from('task-images').remove([storagePath])
       if (storageError) {
@@ -176,7 +280,6 @@ export default function TaskCard({
     if (user) await saveTagUsage(user.id, tags)
     updateTask(task.id, { tags })
 
-    // isCall gadījumā nodrošinām persistenci
     if (user && task.isCall) {
       await saveTaskToDB({ ...task, endTime, status: 'finished' }, tags)
     }
@@ -196,151 +299,211 @@ export default function TaskCard({
   }
 
   const renderTaskForm = (readonly: boolean) => (
-    <div className="space-y-4 border p-4 rounded">
-      <div className="flex gap-4">
-        <input
-          type="text"
-          placeholder="Uzdevuma nosaukums"
-          className="flex-1 border p-2 rounded bg-white dark:bg-zinc-800 text-black dark:text-white"
-          value={task.title}
-          onChange={(e) => !readonly && updateTask(task.id, { title: e.target.value })}
-          onFocus={() => setActiveInput('title')}
-          readOnly={readonly}
-        />
-        {!readonly && (
-          <>
-            <button
-              disabled={isSaving}
-              onClick={handleFinish}
-              className={`px-4 py-2 rounded text-white ${isSaving ? 'bg-gray-500' : 'bg-red-600 hover:bg-red-700'}`}
-            >
-              {isSaving ? 'Saglabājas...' : 'Pabeigt'}
-            </button>
-            <button
-              className="px-4 py-2 rounded bg-gray-200 text-black hover:bg-gray-300"
-              onClick={() => deleteTask(task.id)}
-            >
-              Dzēst
-            </button>
-          </>
-        )}
-      </div>
-
-      <div className="flex gap-4">
-        <textarea
-          placeholder="Piezīmes"
-          className="w-1/2 border p-2 rounded h-28 resize-none bg-white dark:bg-zinc-800 text-black dark:text-white"
-          value={task.notes}
-          onFocus={() => setActiveInput('notes')}
-          onChange={(e) => !readonly && updateTask(task.id, { notes: e.target.value })}
-          readOnly={readonly}
-        />
-        <div className="w-1/2 border p-2 rounded min-h-[7rem] bg-black text-white">
-          {!readonly && tagLibrary.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {tagLibrary.map((tag, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    if (activeInput === 'title') {
-                      updateTask(task.id, { title: task.title + ' #' + tag })
-                    } else if (activeInput === 'notes') {
-                      updateTask(task.id, { notes: task.notes + ' #' + tag })
-                    }
-                  }}
-                  className="bg-cyan-700 text-white text-sm px-2 py-1 rounded hover:bg-cyan-500"
-                >
-                  #{tag}
-                </button>
-              ))}
-            </div>
+    <>
+      <div className="space-y-4 border p-4 rounded">
+        <div className="flex gap-4">
+          <input
+            type="text"
+            placeholder="Uzdevuma nosaukums"
+            className="flex-1 border p-2 rounded bg-white dark:bg-zinc-800 text-black dark:text-white"
+            value={task.title}
+            onChange={(e) => !readonly && updateTask(task.id, { title: e.target.value })}
+            onFocus={() => setActiveInput('title')}
+            readOnly={readonly}
+          />
+          {!readonly && (
+            <>
+              <button
+                disabled={isSaving}
+                onClick={handleFinish}
+                className={`px-4 py-2 rounded text-white ${isSaving ? 'bg-gray-500' : 'bg-red-600 hover:bg-red-700'}`}
+              >
+                {isSaving ? 'Saglabājas...' : 'Pabeigt'}
+              </button>
+              <button
+                className="px-4 py-2 rounded bg-gray-200 text-black hover:bg-gray-300"
+                onClick={() => deleteTask(task.id)}
+              >
+                Dzēst
+              </button>
+            </>
           )}
         </div>
-      </div>
 
-      <div className="flex items-center gap-4">
-        {!readonly && (
-          <label className="bg-cyan-500 text-white px-4 py-2 rounded cursor-pointer">
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files) {
-                  const newFiles = Array.from(e.target.files)
-                  const total = task.images.length + task.uploadedImageUrls.length
-                  const available = 5 - total
+        <div className="flex gap-4">
+          <textarea
+            placeholder="Piezīmes"
+            className="w-1/2 border p-2 rounded h-28 resize-none bg-white dark:bg-zinc-800 text-black dark:text-white"
+            value={task.notes}
+            onFocus={() => setActiveInput('notes')}
+            onChange={(e) => !readonly && updateTask(task.id, { notes: e.target.value })}
+            readOnly={readonly}
+          />
+          <div className="w-1/2 border p-2 rounded min-h-[7rem] bg-black text-white">
+            {!readonly && tagLibrary.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {tagLibrary.map((tag, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      if (activeInput === 'title') {
+                        updateTask(task.id, { title: task.title + ' #' + tag })
+                      } else if (activeInput === 'notes') {
+                        updateTask(task.id, { notes: task.notes + ' #' + tag })
+                      }
+                    }}
+                    className="bg-cyan-700 text-white text-sm px-2 py-1 rounded hover:bg-cyan-500"
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
-                  if (available <= 0) {
-                    alert('Maksimālais attēlu skaits ir 5!')
-                    return
+        <div className="flex items-center gap-4">
+          {!readonly && (
+            <label className="bg-cyan-500 text-white px-4 py-2 rounded cursor-pointer">
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) {
+                    const newFiles = Array.from(e.target.files)
+                    const total = task.images.length + task.uploadedImageUrls.length
+                    const available = 5 - total
+
+                    if (available <= 0) {
+                      alert('Maksimālais attēlu skaits ir 5!')
+                      return
+                    }
+
+                    const allowed = newFiles.slice(0, available)
+
+                    if (allowed.length < newFiles.length) {
+                      alert(`Var pievienot tikai vēl ${available} attēlu(s)!`)
+                    }
+
+                    updateTask(task.id, { images: [...task.images, ...allowed] })
                   }
+                }}
+              />
+              Pievienot attēlus
+            </label>
+          )}
 
-                  const allowed = newFiles.slice(0, available)
+          <div className="flex gap-2 flex-wrap">
+            {!readonly &&
+              localPreviewUrls.map((previewUrl, idx) => (
+                <div key={idx} className="relative w-16 h-16">
+                  <img
+                    src={previewUrl}
+                    alt="Jauns attēls"
+                    className="w-16 h-16 object-cover rounded cursor-pointer"
+                    onClick={() => openLocalGallery(idx)}
+                  />
+                  <button
+                    className="absolute top-0 right-0 bg-black bg-opacity-70 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                    onClick={() => {
+                      const updated = [...task.images]
+                      updated.splice(idx, 1)
+                      updateTask(task.id, { images: updated })
+                    }}
+                    title="Dzēst attēlu"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
 
-                  if (allowed.length < newFiles.length) {
-                    alert(`Var pievienot tikai vēl ${available} attēlu(s)!`)
-                  }
-
-                  updateTask(task.id, { images: [...task.images, ...allowed] })
-                }
-              }}
-            />
-            Pievienot attēlus
-          </label>
-        )}
-
-        <div className="flex gap-2 flex-wrap">
-          {!readonly &&
-            task.images.map((file, idx) => (
+            {task.uploadedImageUrls.map((url, idx) => (
               <div key={idx} className="relative w-16 h-16">
-                <img src={URL.createObjectURL(file)} alt="Jauns attēls" className="w-16 h-16 object-cover rounded" />
-                <button
-                  className="absolute top-0 right-0 bg-black bg-opacity-70 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
-                  onClick={() => {
-                    const updated = [...task.images]
-                    updated.splice(idx, 1)
-                    updateTask(task.id, { images: updated })
-                  }}
-                  title="Dzēst attēlu"
-                >
-                  ×
-                </button>
+                <img
+                  src={url}
+                  alt="Attēls"
+                  className="w-16 h-16 object-cover rounded cursor-pointer"
+                  onClick={() => openUploadedGallery(idx)}
+                />
+                {!readonly && (
+                  <button
+                    className="absolute top-0 right-0 bg-black bg-opacity-70 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                    onClick={() => handleRemoveUploadedImage(url)}
+                    title="Dzēst augšupielādēto attēlu"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             ))}
-
-          {task.uploadedImageUrls.map((url, idx) => (
-            <div key={idx} className="relative w-16 h-16">
-              <img
-                src={url}
-                alt="Attēls"
-                className="w-16 h-16 object-cover rounded cursor-pointer"
-                onClick={() => window.open(url, '_blank')}
-              />
-              {!readonly && (
-                <button
-                  className="absolute top-0 right-0 bg-black bg-opacity-70 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
-                  onClick={() => handleRemoveUploadedImage(url)}
-                  title="Dzēst augšupielādēto attēlu"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
+          </div>
         </div>
+
+        {readonly && (
+          <button
+            className="text-sm text-gray-600 underline"
+            onClick={() => updateTask(task.id, { status: 'finished' })}
+          >
+            Aizvērt
+          </button>
+        )}
       </div>
 
-      {readonly && (
-        <button
-          className="text-sm text-gray-600 underline"
-          onClick={() => updateTask(task.id, { status: 'finished' })}
+      {selectedImages && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+          onClick={closeImageModal}
         >
-          Aizvērt
-        </button>
+          <div
+            className="relative flex max-h-[90vh] max-w-[95vw] items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <button
+              type="button"
+              onClick={closeImageModal}
+              className="absolute right-2 top-2 z-20 rounded-full bg-black/70 px-3 py-1 text-sm text-white hover:bg-black"
+            >
+              Aizvērt
+            </button>
+
+            <div className="absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-sm text-white">
+              {selectedIndex + 1} / {selectedImages.length}
+            </div>
+
+            <button
+              type="button"
+              onClick={goPrev}
+              disabled={selectedIndex === 0}
+              className="absolute left-2 z-20 rounded-full bg-black/70 px-3 py-2 text-2xl text-white disabled:opacity-25"
+            >
+              ←
+            </button>
+
+            <img
+              src={selectedImages[selectedIndex]}
+              alt="Pilns attēls"
+              loading="eager"
+              decoding="async"
+              className="max-h-[90vh] max-w-[95vw] rounded-xl object-contain shadow-2xl"
+            />
+
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={selectedIndex === selectedImages.length - 1}
+              className="absolute right-2 z-20 rounded-full bg-black/70 px-3 py-2 text-2xl text-white disabled:opacity-25"
+            >
+              →
+            </button>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   )
 
   if (task.status === 'active') return renderTaskForm(false)
@@ -359,31 +522,86 @@ export default function TaskCard({
     }
 
     return (
-      <div className="border p-4 rounded bg-gray-100 dark:bg-zinc-800 space-y-2">
-        <h3 className="font-bold text-black dark:text-white">{task.title}</h3>
-        {start && end && (
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            no {start.toLocaleTimeString('lv-LV')} līdz {end.toLocaleTimeString('lv-LV')} ({durationText})
-          </p>
-        )}
-        <div className="flex gap-2 flex-wrap">
-          {task.uploadedImageUrls.map((url, idx) => (
-            <img
-              key={idx}
-              src={url}
-              alt="Attēls"
-              className="w-16 h-16 object-cover rounded cursor-pointer"
-              onClick={() => window.open(url, '_blank')}
-            />
-          ))}
+      <>
+        <div className="border p-4 rounded bg-gray-100 dark:bg-zinc-800 space-y-2">
+          <h3 className="font-bold text-black dark:text-white">{task.title}</h3>
+          {start && end && (
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              no {start.toLocaleTimeString('lv-LV')} līdz {end.toLocaleTimeString('lv-LV')} ({durationText})
+            </p>
+          )}
+          <div className="flex gap-2 flex-wrap">
+            {task.uploadedImageUrls.map((url, idx) => (
+              <img
+                key={idx}
+                src={url}
+                alt="Attēls"
+                className="w-16 h-16 object-cover rounded cursor-pointer"
+                onClick={() => openUploadedGallery(idx)}
+              />
+            ))}
+          </div>
+          <button
+            className="text-blue-600 underline text-sm"
+            onClick={() => updateTask(task.id, { status: 'review' })}
+          >
+            Apskats
+          </button>
         </div>
-        <button
-          className="text-blue-600 underline text-sm"
-          onClick={() => updateTask(task.id, { status: 'review' })}
-        >
-          Apskats
-        </button>
-      </div>
+
+        {selectedImages && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+            onClick={closeImageModal}
+          >
+            <div
+              className="relative flex max-h-[90vh] max-w-[95vw] items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <button
+                type="button"
+                onClick={closeImageModal}
+                className="absolute right-2 top-2 z-20 rounded-full bg-black/70 px-3 py-1 text-sm text-white hover:bg-black"
+              >
+                Aizvērt
+              </button>
+
+              <div className="absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-sm text-white">
+                {selectedIndex + 1} / {selectedImages.length}
+              </div>
+
+              <button
+                type="button"
+                onClick={goPrev}
+                disabled={selectedIndex === 0}
+                className="absolute left-2 z-20 rounded-full bg-black/70 px-3 py-2 text-2xl text-white disabled:opacity-25"
+              >
+                ←
+              </button>
+
+              <img
+                src={selectedImages[selectedIndex]}
+                alt="Pilns attēls"
+                loading="eager"
+                decoding="async"
+                className="max-h-[90vh] max-w-[95vw] rounded-xl object-contain shadow-2xl"
+              />
+
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={selectedIndex === selectedImages.length - 1}
+                className="absolute right-2 z-20 rounded-full bg-black/70 px-3 py-2 text-2xl text-white disabled:opacity-25"
+              >
+                →
+              </button>
+            </div>
+          </div>
+        )}
+      </>
     )
   }
 

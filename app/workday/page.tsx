@@ -16,8 +16,12 @@ type Task = {
   status: 'starting' | 'active' | 'finished' | 'review'
   startTime?: Date
   endTime?: Date
-  isCall: boolean          // <- OBLIGĀTS (nevis ?)
+  isCall: boolean
   supabaseTaskId?: number
+}
+
+function makeLocalId() {
+  return `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
 export default function WorkdayPage() {
@@ -40,15 +44,20 @@ export default function WorkdayPage() {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) router.push('/login')
-      else {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.push('/login')
+      } else {
         setUser(user)
         checkSession(user)
         loadTags(user.id)
         setLoading(false)
       }
     }
+
     getUser()
   }, [])
 
@@ -62,10 +71,13 @@ export default function WorkdayPage() {
       for (const t of tasks) {
         const title = t.title.trim()
         const notes = t.notes.trim()
+
         if (!title || !notes || t.supabaseTaskId) continue
+
         await saveTaskToDB(t, extractTagsOnly(title, notes))
       }
     }
+
     const timeout = setTimeout(autoSave, 1000)
     return () => clearTimeout(timeout)
   }, [tasks])
@@ -86,14 +98,19 @@ export default function WorkdayPage() {
       .eq('user_id', userId)
 
     const restoredTasks: Task[] = logs.map((log: any) => {
-      const uploaded = images?.filter((img: any) => img.task_log_id === log.id).map((img: any) => img.url) || []
+      const uploaded =
+        images
+          ?.filter((img: any) => img.task_log_id === log.id)
+          .map((img: any) => img.url) || []
 
       const status: Task['status'] = log.end_time
         ? 'finished'
-        : (log.start_time ? 'active' : 'starting')
+        : log.start_time
+          ? 'active'
+          : 'starting'
 
       return {
-        id: crypto.randomUUID(),
+        id: makeLocalId(),
         title: log.title ?? '',
         notes: log.note ?? '',
         tags: [],
@@ -103,7 +120,7 @@ export default function WorkdayPage() {
         startTime: log.start_time ? new Date(log.start_time) : undefined,
         endTime: log.end_time ? new Date(log.end_time) : undefined,
         supabaseTaskId: log.id,
-        isCall: !!log.isCall, // vienmēr boolean
+        isCall: !!log.isCall,
       }
     })
 
@@ -137,14 +154,18 @@ export default function WorkdayPage() {
       .order('usage_count', { ascending: false })
 
     if (data) {
-      const names = data.map(row => row.name)
+      const names = data.map((row) => row.name)
       setTagLibrary(names)
     }
   }
 
   const extractTagsOnly = (title: string, notes: string): string[] => {
-    const matches = [...(title.match(/#([A-Za-zĀ-ž0-9]+)/g) || []), ...(notes.match(/#([A-Za-zĀ-ž0-9]+)/g) || [])]
-    return [...new Set(matches.map(t => t.slice(1)))]
+    const matches = [
+      ...(title.match(/#([A-Za-zĀ-ž0-9]+)/g) || []),
+      ...(notes.match(/#([A-Za-zĀ-ž0-9]+)/g) || []),
+    ]
+
+    return [...new Set(matches.map((t) => t.slice(1)))]
   }
 
   const saveTagUsage = async (userId: string, tags: string[]) => {
@@ -162,28 +183,31 @@ export default function WorkdayPage() {
           .update({ usage_count: (data.usage_count ?? 0) + 1 })
           .eq('id', data.id)
       } else {
-        await supabase
-          .from('tags')
-          .insert({ name: tag, usage_count: 1, user_id: userId })
+        await supabase.from('tags').insert({
+          name: tag,
+          usage_count: 1,
+          user_id: userId,
+        })
       }
     }
+
     await loadTags(userId)
   }
 
   const uploadImages = async (task: Task, taskLogId: number): Promise<string[]> => {
     if (!user) return []
+
     const urls: string[] = []
 
     for (const image of task.images) {
       const fileName = `${task.isCall ? `isCall/${taskLogId}` : `${user.id}/${taskLogId}`}/${Date.now()}-${image.name}`
+
       const { error: uploadError } = await supabase.storage
         .from('task-images')
         .upload(fileName, image)
 
       if (!uploadError) {
-        const publicUrl = supabase.storage
-          .from('task-images')
-          .getPublicUrl(fileName).data.publicUrl
+        const publicUrl = supabase.storage.from('task-images').getPublicUrl(fileName).data.publicUrl
 
         urls.push(publicUrl)
 
@@ -203,19 +227,26 @@ export default function WorkdayPage() {
     if (!task.isCall && !sessionId) return
 
     const startISO = (task.startTime ? new Date(task.startTime) : new Date()).toISOString()
-    const endISO = task.status === 'finished'
-      ? (task.endTime ? new Date(task.endTime) : new Date()).toISOString()
-      : null
+    const endISO =
+      task.status === 'finished'
+        ? (task.endTime ? new Date(task.endTime) : new Date()).toISOString()
+        : null
 
-    const { data, error } = await supabase.from('task_logs').insert([{
-      session_id: task.isCall ? null : sessionId,
-      title: task.title,
-      note: task.notes,
-      start_time: startISO,
-      end_time: endISO,
-      user_id: user.id,
-      isCall: task.isCall || false,
-    }]).select().single()
+    const { data, error } = await supabase
+      .from('task_logs')
+      .insert([
+        {
+          session_id: task.isCall ? null : sessionId,
+          title: task.title,
+          note: task.notes,
+          start_time: startISO,
+          end_time: endISO,
+          user_id: user.id,
+          isCall: task.isCall || false,
+        },
+      ])
+      .select()
+      .single()
 
     if (error) {
       console.error('Saglabāšanas kļūda:', error.message)
@@ -233,12 +264,19 @@ export default function WorkdayPage() {
 
   const startWorkday = async () => {
     if (!user) return
-    const { data } = await supabase.from('work_logs').insert([{
-      user_id: user.id,
-      project: 'Darba diena',
-      start_time: new Date().toISOString(),
-      description: '',
-    }]).select().single()
+
+    const { data } = await supabase
+      .from('work_logs')
+      .insert([
+        {
+          user_id: user.id,
+          project: 'Darba diena',
+          start_time: new Date().toISOString(),
+          description: '',
+        },
+      ])
+      .select()
+      .single()
 
     if (data) {
       setIsSessionActive(true)
@@ -271,10 +309,8 @@ export default function WorkdayPage() {
 
     if (data && data.length > 0) {
       const id = data[0].id
-      await supabase
-        .from('work_logs')
-        .update({ end_time: new Date().toISOString() })
-        .eq('id', id)
+
+      await supabase.from('work_logs').update({ end_time: new Date().toISOString() }).eq('id', id)
 
       setIsSessionActive(false)
       setWorkdayState('inactive')
@@ -285,21 +321,22 @@ export default function WorkdayPage() {
 
   const addNewTask = (isCall = false) => {
     const newTask: Task = {
-      id: crypto.randomUUID(),
+      id: makeLocalId(),
       title: '',
       notes: '',
       tags: [],
       images: [],
       uploadedImageUrls: [],
       status: 'starting',
-      isCall, // vienmēr boolean
+      isCall,
     }
+
     setTasks((prev) => [...prev, newTask])
   }
 
   // DB UPDATE pēc state izmaiņām (title/notes/end_time)
   const updateTask = async (id: string, updated: Partial<Task>) => {
-    const existing = tasks.find(t => t.id === id)
+    const existing = tasks.find((t) => t.id === id)
 
     setTasks((prev) =>
       prev.map((task) => (task.id === id ? { ...task, ...updated } : task))
@@ -308,26 +345,27 @@ export default function WorkdayPage() {
     if (!existing?.supabaseTaskId) return
 
     const updates: any = {}
+
     if (typeof updated.title === 'string') updates.title = updated.title.trim()
     if (typeof updated.notes === 'string') updates.note = updated.notes.trim()
+
     if (updated.status === 'finished' && updated.endTime) {
       updates.end_time = new Date(updated.endTime).toISOString()
     }
 
     if (Object.keys(updates).length > 0) {
-      await supabase
-        .from('task_logs')
-        .update(updates)
-        .eq('id', existing.supabaseTaskId)
+      await supabase.from('task_logs').update(updates).eq('id', existing.supabaseTaskId)
     }
   }
 
   const deleteTask = async (id: string) => {
     const taskToDelete = tasks.find((t) => t.id === id)
+
     if (taskToDelete?.supabaseTaskId) {
       await supabase.from('task_logs').delete().eq('id', taskToDelete.supabaseTaskId)
       await supabase.from('task_images').delete().eq('task_log_id', taskToDelete.supabaseTaskId)
     }
+
     setTasks((prev) => prev.filter((t) => t.id !== id))
   }
 
@@ -337,20 +375,21 @@ export default function WorkdayPage() {
   const callTasks = tasks.filter((t) => t.isCall)
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl mx-auto">
-      <div className="border rounded p-4 space-y-4">
+    <div className="mx-auto max-w-2xl space-y-4 p-4">
+      <div className="space-y-4 rounded border p-4">
         <div className="flex justify-between">
           <button
             onClick={startWorkday}
             disabled={workdayState === 'active'}
-            className={`px-4 py-2 rounded text-white ${workdayState === 'active' ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
+            className={`rounded px-4 py-2 text-white ${workdayState === 'active' ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
           >
             Sākt darbadienu
           </button>
+
           <button
             onClick={endWorkday}
             disabled={workdayState === 'inactive'}
-            className={`px-4 py-2 rounded text-white ${workdayState === 'inactive' ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}
+            className={`rounded px-4 py-2 text-white ${workdayState === 'inactive' ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}
           >
             Pabeigt darbadienu
           </button>
@@ -359,41 +398,44 @@ export default function WorkdayPage() {
 
       {workdayState === 'active' && (
         <div className="space-y-6">
-          {tasks.filter(t => !t.isCall).map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              user={user}
-              sessionId={sessionId}
-              updateTask={updateTask}
-              deleteTask={deleteTask}
-              tagLibrary={tagLibrary}
-              setSavingTasks={setSavingTasks}
-              savingTasks={savingTasks}
-              activeInput={activeInput}
-              setActiveInput={setActiveInput}
-              loadTags={loadTags}
-              saveTaskToDB={saveTaskToDB}
-              extractTagsOnly={extractTagsOnly}
-              saveTagUsage={saveTagUsage}
-            />
-          ))}
+          {tasks
+            .filter((t) => !t.isCall)
+            .map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                user={user}
+                sessionId={sessionId}
+                updateTask={updateTask}
+                deleteTask={deleteTask}
+                tagLibrary={tagLibrary}
+                setSavingTasks={setSavingTasks}
+                savingTasks={savingTasks}
+                activeInput={activeInput}
+                setActiveInput={setActiveInput}
+                loadTags={loadTags}
+                saveTaskToDB={saveTaskToDB}
+                extractTagsOnly={extractTagsOnly}
+                saveTagUsage={saveTagUsage}
+              />
+            ))}
+
           {(() => {
-            const nonCallTasks = tasks.filter(t => !t.isCall)
+            const nonCallTasks = tasks.filter((t) => !t.isCall)
             const last = nonCallTasks[nonCallTasks.length - 1]
+
             const canAdd =
-              nonCallTasks.length === 0 || (
-                last &&
+              nonCallTasks.length === 0 ||
+              (last &&
                 (last.status === 'active' || last.status === 'finished') &&
                 last.title.trim().length > 0 &&
-                last.notes.trim().length > 0
-              )
+                last.notes.trim().length > 0)
 
             return canAdd ? (
               <div>
                 <button
                   onClick={() => addNewTask(false)}
-                  className="bg-green-600 text-white px-4 py-2 rounded"
+                  className="rounded bg-green-600 px-4 py-2 text-white"
                 >
                   Sākt uzdevumu
                 </button>
@@ -404,7 +446,7 @@ export default function WorkdayPage() {
       )}
 
       {callTasks.length > 0 && (
-        <div className="border-t pt-4 space-y-6">
+        <div className="space-y-6 border-t pt-4">
           {callTasks.map((task) => (
             <TaskCard
               key={task.id}
@@ -427,21 +469,21 @@ export default function WorkdayPage() {
         </div>
       )}
 
-      <div className="pt-6 border-t">
+      <div className="border-t pt-6">
         {(() => {
           const lastCall = callTasks[callTasks.length - 1]
+
           const canAddCall =
-            callTasks.length === 0 || (
-              lastCall &&
+            callTasks.length === 0 ||
+            (lastCall &&
               lastCall.status === 'finished' &&
               lastCall.title.trim().length > 0 &&
-              lastCall.notes.trim().length > 0
-            )
+              lastCall.notes.trim().length > 0)
 
           return canAddCall ? (
             <button
               onClick={() => addNewTask(true)}
-              className="bg-red-400 text-black px-6 py-2 rounded font-semibold"
+              className="rounded bg-red-400 px-6 py-2 font-semibold text-black"
             >
               Izsaukums
             </button>
