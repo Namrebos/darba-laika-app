@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import type { User } from '@supabase/supabase-js'
+import imageCompression from 'browser-image-compression'
 import { supabase } from '@/lib/supabaseClient'
 
 type Task = {
@@ -69,7 +70,7 @@ export default function TaskCard({
   // Attēlu augšupielāde tikai pēc supabaseTaskId
   useEffect(() => {
     const uploadImages = async () => {
-      if (!user || !task.supabaseTaskId) return
+      if (!user || !task.supabaseTaskId || !sessionId) return
 
       const newImages = task.images.filter(
         (file) => !task.uploadedImageUrls.some((url) => url.includes(file.name))
@@ -79,16 +80,39 @@ export default function TaskCard({
       const uploadedUrls: string[] = [...task.uploadedImageUrls]
 
       for (const image of newImages) {
-        const filePath = `task-images/${sessionId}/${task.supabaseTaskId}/${image.name}`
-        const { error: uploadError } = await supabase.storage.from('task-images').upload(filePath, image)
+        const filePath = `${sessionId}/${task.supabaseTaskId}/${image.name}`
+
+        let fileToUpload: File = image
+
+        try {
+          fileToUpload = await imageCompression(image, {
+            maxSizeMB: 1.5,
+            maxWidthOrHeight: 1600,
+            initialQuality: 0.9,
+            useWebWorker: true,
+          })
+        } catch (compressionError) {
+          console.error('Kļūda kompresējot attēlu:', compressionError)
+        }
+
+        const { error: uploadError } = await supabase.storage
+          .from('task-images')
+          .upload(filePath, fileToUpload, {
+            contentType: fileToUpload.type,
+            upsert: false,
+          })
+
         if (uploadError) {
           console.error('Kļūda augšupielādējot attēlu:', uploadError.message)
           continue
         }
+
         const { data: publicUrlData } = supabase.storage.from('task-images').getPublicUrl(filePath)
         const publicUrl = publicUrlData?.publicUrl
+
         if (publicUrl) {
           uploadedUrls.push(publicUrl)
+
           await supabase.from('task_images').insert({
             task_log_id: task.supabaseTaskId,
             user_id: user.id,
@@ -101,14 +125,31 @@ export default function TaskCard({
     }
 
     uploadImages()
-  }, [task.images])
+  }, [task.images, task.supabaseTaskId, user, sessionId])
 
   const handleRemoveUploadedImage = async (urlToDelete: string) => {
-    if (!user) return
-    const fileName = urlToDelete.split('/').pop()
+    if (!user || !task.supabaseTaskId || !sessionId) return
+
+    const fileName = urlToDelete.split('/').pop()?.split('?')[0]
     if (fileName) {
-      await supabase.storage.from('task-images').remove([`${user.id}/${fileName}`])
+      const storagePath = `${sessionId}/${task.supabaseTaskId}/${fileName}`
+
+      const { error: storageError } = await supabase.storage.from('task-images').remove([storagePath])
+      if (storageError) {
+        console.error('Kļūda dzēšot attēlu no storage:', storageError.message)
+      }
     }
+
+    const { error: dbError } = await supabase
+      .from('task_images')
+      .delete()
+      .eq('task_log_id', task.supabaseTaskId)
+      .eq('url', urlToDelete)
+
+    if (dbError) {
+      console.error('Kļūda dzēšot attēlu no DB:', dbError.message)
+    }
+
     const updated = task.uploadedImageUrls.filter((url) => url !== urlToDelete)
     updateTask(task.id, { uploadedImageUrls: updated })
   }
@@ -230,14 +271,18 @@ export default function TaskCard({
                   const newFiles = Array.from(e.target.files)
                   const total = task.images.length + task.uploadedImageUrls.length
                   const available = 5 - total
+
                   if (available <= 0) {
                     alert('Maksimālais attēlu skaits ir 5!')
                     return
                   }
+
                   const allowed = newFiles.slice(0, available)
+
                   if (allowed.length < newFiles.length) {
                     alert(`Var pievienot tikai vēl ${available} attēlu(s)!`)
                   }
+
                   updateTask(task.id, { images: [...task.images, ...allowed] })
                 }
               }}
@@ -245,6 +290,7 @@ export default function TaskCard({
             Pievienot attēlus
           </label>
         )}
+
         <div className="flex gap-2 flex-wrap">
           {!readonly &&
             task.images.map((file, idx) => (
@@ -263,6 +309,7 @@ export default function TaskCard({
                 </button>
               </div>
             ))}
+
           {task.uploadedImageUrls.map((url, idx) => (
             <div key={idx} className="relative w-16 h-16">
               <img
@@ -303,6 +350,7 @@ export default function TaskCard({
     const start = task.startTime ? new Date(task.startTime) : null
     const end = task.endTime ? new Date(task.endTime) : null
     let durationText = ''
+
     if (start && end) {
       const duration = Math.floor((end.getTime() - start.getTime()) / 60000)
       const hours = Math.floor(duration / 60)
