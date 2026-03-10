@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { supabase } from '@/lib/supabaseClient'
 import { calculateWorkHours, calculateCallHours } from './utils'
+import ImageGalleryModal from '@/app/components/ImageGalleryModal'
 
 type DayModalProps = {
   date: string
@@ -49,9 +50,6 @@ export default function DayModal({ date, onClose }: DayModalProps) {
   const [imagesByTask, setImagesByTask] = useState<Record<string, string[]>>({})
   const [selectedImages, setSelectedImages] = useState<string[] | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [touchStartX, setTouchStartX] = useState<number | null>(null)
-  const [touchEndX, setTouchEndX] = useState<number | null>(null)
-
   const [hours, setHours] = useState({
     baseHours: 0,
     overtimeHours: 0,
@@ -61,28 +59,6 @@ export default function DayModal({ date, onClose }: DayModalProps) {
   useEffect(() => {
     loadData()
   }, [date])
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!selectedImages) return
-
-      if (e.key === 'Escape') {
-        setSelectedImages(null)
-        return
-      }
-
-      if (e.key === 'ArrowRight' && selectedIndex < selectedImages.length - 1) {
-        setSelectedIndex((prev) => prev + 1)
-      }
-
-      if (e.key === 'ArrowLeft' && selectedIndex > 0) {
-        setSelectedIndex((prev) => prev - 1)
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedImages, selectedIndex])
 
   async function loadData() {
     setLoading(true)
@@ -160,48 +136,16 @@ export default function DayModal({ date, onClose }: DayModalProps) {
     setLoading(false)
   }
 
-  function closeImageModal() {
+  const closeImageModal = () => {
     setSelectedImages(null)
     setSelectedIndex(0)
-    setTouchStartX(null)
-    setTouchEndX(null)
   }
 
-  function goPrev() {
-    if (!selectedImages) return
-    if (selectedIndex === 0) return
-    setSelectedIndex((prev) => prev - 1)
-  }
-
-  function goNext() {
-    if (!selectedImages) return
-    if (selectedIndex >= selectedImages.length - 1) return
-    setSelectedIndex((prev) => prev + 1)
-  }
-
-  function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
-    setTouchEndX(null)
-    setTouchStartX(e.targetTouches[0].clientX)
-  }
-
-  function handleTouchMove(e: React.TouchEvent<HTMLDivElement>) {
-    setTouchEndX(e.targetTouches[0].clientX)
-  }
-
-  function handleTouchEnd() {
-    if (touchStartX === null || touchEndX === null) return
-
-    const distance = touchStartX - touchEndX
-    const minSwipeDistance = 50
-
-    if (distance > minSwipeDistance) {
-      goNext()
-    } else if (distance < -minSwipeDistance) {
-      goPrev()
-    }
-
-    setTouchStartX(null)
-    setTouchEndX(null)
+  const openTaskGallery = (taskId: string, index: number) => {
+    const taskImages = imagesByTask[taskId]
+    if (!taskImages || taskImages.length === 0) return
+    setSelectedImages(taskImages)
+    setSelectedIndex(index)
   }
 
   return (
@@ -296,10 +240,7 @@ export default function DayModal({ date, onClose }: DayModalProps) {
                                   <button
                                     key={`${task.id}-${idx}`}
                                     type="button"
-                                    onClick={() => {
-                                      setSelectedImages(imagesByTask[task.id])
-                                      setSelectedIndex(idx)
-                                    }}
+                                    onClick={() => openTaskGallery(task.id, idx)}
                                     className="group overflow-hidden rounded-lg border border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"
                                   >
                                     <img
@@ -327,58 +268,12 @@ export default function DayModal({ date, onClose }: DayModalProps) {
         </div>
       </div>
 
-      {selectedImages && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
-          onClick={closeImageModal}
-        >
-          <div
-            className="relative flex max-h-[90vh] max-w-[95vw] items-center justify-center"
-            onClick={(e) => e.stopPropagation()}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-          >
-            <button
-              type="button"
-              onClick={closeImageModal}
-              className="absolute right-2 top-2 z-20 rounded-full bg-black/70 px-3 py-1 text-sm text-white hover:bg-black"
-            >
-              Aizvērt
-            </button>
-
-            <div className="absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-sm text-white">
-              {selectedIndex + 1} / {selectedImages.length}
-            </div>
-
-            <button
-              type="button"
-              onClick={goPrev}
-              disabled={selectedIndex === 0}
-              className="absolute left-2 z-20 rounded-full bg-black/70 px-3 py-2 text-2xl text-white disabled:opacity-25"
-            >
-              ←
-            </button>
-
-            <img
-              src={selectedImages[selectedIndex]}
-              alt="Pilns attēls"
-              loading="eager"
-              decoding="async"
-              className="max-h-[90vh] max-w-[95vw] rounded-xl object-contain shadow-2xl"
-            />
-
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={selectedIndex === selectedImages.length - 1}
-              className="absolute right-2 z-20 rounded-full bg-black/70 px-3 py-2 text-2xl text-white disabled:opacity-25"
-            >
-              →
-            </button>
-          </div>
-        </div>
-      )}
+      <ImageGalleryModal
+        images={selectedImages}
+        selectedIndex={selectedIndex}
+        setSelectedIndex={setSelectedIndex}
+        onClose={closeImageModal}
+      />
     </>
   )
 }
