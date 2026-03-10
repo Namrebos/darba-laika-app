@@ -40,6 +40,19 @@ export default function ImageGalleryModal({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [images, selectedIndex, setSelectedIndex, onClose])
 
+  useEffect(() => {
+    if (!images || images.length === 0) return
+
+    const preloadIndexes = [selectedIndex - 1, selectedIndex + 1].filter(
+      (i) => i >= 0 && i < images.length
+    )
+
+    preloadIndexes.forEach((i) => {
+      const img = new window.Image()
+      img.src = images[i]
+    })
+  }, [images, selectedIndex])
+
   if (!images || images.length === 0) return null
 
   const goPrev = () => {
@@ -83,7 +96,7 @@ export default function ImageGalleryModal({
       onClick={onClose}
     >
       <div
-        className="relative flex max-h-[90vh] max-w-[95vw] items-center justify-center"
+        className="relative flex max-h-[90vh] max-w-[95vw] items-center justify-center touch-pan-y"
         onClick={(e) => e.stopPropagation()}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -115,7 +128,8 @@ export default function ImageGalleryModal({
           alt="Pilns attēls"
           loading="eager"
           decoding="async"
-          className="max-h-[90vh] max-w-[95vw] rounded-xl object-contain shadow-2xl"
+          draggable={false}
+          className="max-h-[90vh] max-w-[95vw] rounded-xl object-contain shadow-2xl select-none"
         />
 
         <button

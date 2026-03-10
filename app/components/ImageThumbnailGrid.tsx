@@ -34,7 +34,7 @@ export default function ImageThumbnailGrid({
           className="overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700"
         >
           <img
-            src={url}
+            src={`${url}?width=320&quality=70`}
             alt={`image-${idx}`}
             loading="lazy"
             decoding="async"
