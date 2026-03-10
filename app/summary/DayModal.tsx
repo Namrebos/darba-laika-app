@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns'
 import { supabase } from '@/lib/supabaseClient'
 import { calculateWorkHours, calculateCallHours } from './utils'
 import ImageGalleryModal from '@/app/components/ImageGalleryModal'
+import ImageThumbnailGrid from '@/app/components/ImageThumbnailGrid'
 
 type DayModalProps = {
   date: string
@@ -63,8 +64,14 @@ export default function DayModal({ date, onClose }: DayModalProps) {
   async function loadData() {
     setLoading(true)
 
-    const from = `${date}T00:00:00`
-    const to = `${date}T23:59:59`
+    const start = new Date(date)
+    start.setHours(0, 0, 0, 0)
+
+const end = new Date(date)
+end.setHours(23, 59, 59, 999)
+
+const from = start.toISOString()
+const to = end.toISOString()
 
     const { data: workLogs, error: workError } = await supabase
       .from('work_logs')
@@ -235,26 +242,11 @@ export default function DayModal({ date, onClose }: DayModalProps) {
                             </p>
 
                             {imagesByTask[task.id]?.length > 0 && (
-                              <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3">
-                                {imagesByTask[task.id].map((url, idx) => (
-                                  <button
-                                    key={`${task.id}-${idx}`}
-                                    type="button"
-                                    onClick={() => openTaskGallery(task.id, idx)}
-                                    className="group overflow-hidden rounded-lg border border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"
-                                  >
-                                    <img
-                                      src={url}
-                                      alt={`task-${task.id}-${idx}`}
-                                      loading="lazy"
-                                      decoding="async"
-                                      width={320}
-                                      height={220}
-                                      className="h-28 w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-                                    />
-                                  </button>
-                                ))}
-                              </div>
+                              <ImageThumbnailGrid
+                                  images={imagesByTask[task.id]}
+                                  onOpen={(index) => openTaskGallery(task.id, index)}
+                                  size="medium"
+                              />
                             )}
                           </div>
                         </div>

@@ -5,6 +5,7 @@ import type { User } from '@supabase/supabase-js'
 import imageCompression from 'browser-image-compression'
 import { supabase } from '@/lib/supabaseClient'
 import ImageGalleryModal from '@/app/components/ImageGalleryModal'
+import ImageThumbnailGrid from '@/app/components/ImageThumbnailGrid'
 
 type Task = {
   id: string
@@ -422,17 +423,11 @@ export default function TaskCard({
               no {start.toLocaleTimeString('lv-LV')} līdz {end.toLocaleTimeString('lv-LV')} ({durationText})
             </p>
           )}
-          <div className="flex gap-2 flex-wrap">
-            {task.uploadedImageUrls.map((url, idx) => (
-              <img
-                key={idx}
-                src={url}
-                alt="Attēls"
-                className="w-16 h-16 object-cover rounded cursor-pointer"
-                onClick={() => openUploadedGallery(idx)}
-              />
-            ))}
-          </div>
+          <ImageThumbnailGrid
+            images={task.uploadedImageUrls}
+            onOpen={(index) => openUploadedGallery(index)}
+            size="small"
+          />
           <button
             className="text-blue-600 underline text-sm"
             onClick={() => updateTask(task.id, { status: 'review' })}
