@@ -23,6 +23,31 @@ function hoursToHM(hours: number) {
   return `${hh}h ${mm}m`
 }
 
+type SummaryCardProps = {
+  label: string
+  value: string | number
+  emphasize?: boolean
+}
+
+function SummaryCard({
+  label,
+  value,
+  emphasize = false,
+}: SummaryCardProps) {
+  return (
+    <div className="rounded-xl border border-border bg-background/60 p-3 shadow-sm">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div
+        className={`mt-2 text-lg leading-none sm:text-xl ${
+          emphasize ? 'font-bold' : 'font-semibold'
+        }`}
+      >
+        {value}
+      </div>
+    </div>
+  )
+}
+
 export default function MonthlySummary({ data }: Props) {
   const safeData = data ?? {}
 
@@ -51,25 +76,15 @@ export default function MonthlySummary({ data }: Props) {
     <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <h2 className="mb-4 text-lg font-semibold">Mēneša kopsavilkums</h2>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[700px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-border text-left">
-              <th className="px-3 py-2 font-medium">Darba dienas</th>
-              <th className="px-3 py-2 font-medium">Darba stundas</th>
-              <th className="px-3 py-2 font-medium">Virsstundas</th>
-              <th className="px-3 py-2 font-medium">Grand Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-border/60">
-              <td className="px-3 py-3">{totals.workDays}</td>
-              <td className="px-3 py-3">{hoursToHM(totals.baseHours)}</td>
-              <td className="px-3 py-3">{hoursToHM(totals.overtimeHours)}</td>
-              <td className="px-3 py-3 font-semibold">{hoursToHM(grandTotal)}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <SummaryCard label="Darba dienas" value={totals.workDays} />
+        <SummaryCard label="Darba stundas" value={hoursToHM(totals.baseHours)} />
+        <SummaryCard label="Virsstundas" value={hoursToHM(totals.overtimeHours)} />
+        <SummaryCard
+          label="Grand Total"
+          value={hoursToHM(grandTotal)}
+          emphasize
+        />
       </div>
     </div>
   )

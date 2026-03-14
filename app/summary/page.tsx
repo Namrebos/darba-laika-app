@@ -6,13 +6,23 @@ import { format } from 'date-fns'
 import Calendar from './Calendar'
 import DayModal from './DayModal'
 import MonthlySummary from './MonthlySummary'
-import { calculateWorkHours, calculateTaskHoursByDate } from './utils'
+import {
+  calculateWorkHours,
+  calculateTaskHoursByDate,
+  roundToQuarterHour,
+} from './utils'
+
+type WorkSegment = {
+  startHour: number
+  endHour: number
+}
 
 type DayEntry = {
   baseHours: number
   overtimeHours: number
   callHours: number
   taskHours?: number
+  workSegments: WorkSegment[]
 }
 
 type MonthOption = {
@@ -35,6 +45,85 @@ type TaskLogRow = {
 function isCallTask(task: TaskLogRow) {
   if (typeof task.isCall === 'boolean') return task.isCall
   return !task.session_id
+}
+
+function ensureDayEntry(
+  map: Record<string, DayEntry>,
+  date: string
+): DayEntry {
+  if (!map[date]) {
+    map[date] = {
+      baseHours: 0,
+      overtimeHours: 0,
+      callHours: 0,
+      workSegments: [],
+    }
+  }
+
+  return map[date]
+}
+
+function getHourDecimal(date: Date) {
+  return (
+    date.getHours() +
+    date.getMinutes() / 60 +
+    date.getSeconds() / 3600 +
+    date.getMilliseconds() / 3600000
+  )
+}
+
+function addWorkSegmentsByDate(
+  map: Record<string, DayEntry>,
+  start: Date,
+  end: Date
+) {
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return
+  if (end <= start) return
+
+  let currentStart = new Date(start)
+
+  while (currentStart < end) {
+    const dayKey = format(currentStart, 'yyyy-MM-dd')
+
+    const nextDayStart = new Date(currentStart)
+    nextDayStart.setHours(0, 0, 0, 0)
+    nextDayStart.setDate(nextDayStart.getDate() + 1)
+
+    const currentEnd = end < nextDayStart ? end : nextDayStart
+
+    const startHour = getHourDecimal(currentStart)
+    const endHour =
+      currentEnd.getTime() === nextDayStart.getTime()
+        ? 24
+        : getHourDecimal(currentEnd)
+
+    ensureDayEntry(map, dayKey).workSegments.push({
+      startHour,
+      endHour,
+    })
+
+    currentStart = currentEnd
+  }
+}
+
+function addCallHoursByDate(
+  map: Record<string, DayEntry>,
+  tasks: TaskLogRow[]
+) {
+  for (const task of tasks) {
+    if (!task.start_time) continue
+
+    const start = new Date(task.start_time)
+    const end = new Date(task.end_time ?? task.start_time)
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue
+
+    const date = format(start, 'yyyy-MM-dd')
+    const minutes = Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60))
+    const hours = roundToQuarterHour(minutes)
+
+    ensureDayEntry(map, date).callHours += hours
+  }
 }
 
 export default function SummaryPage() {
@@ -72,7 +161,9 @@ export default function SummaryPage() {
     }
 
     const allDates = [
-      ...((workLogs || []) as { start_time: string }[]).map((w) => new Date(w.start_time)),
+      ...((workLogs || []) as { start_time: string }[]).map(
+        (w) => new Date(w.start_time)
+      ),
       ...((taskLogs || []) as TaskLogRow[])
         .filter((t) => !isCallTask(t))
         .map((t) => new Date(t.start_time)),
@@ -90,7 +181,7 @@ export default function SummaryPage() {
         const [year, month] = key.split('-').map(Number)
         return { year, month }
       })
-      .sort((a, b) => (a.year - b.year) || (a.month - b.month))
+      .sort((a, b) => a.year - b.year || a.month - b.month)
 
     setAvailableMonths(sorted)
 
@@ -116,19 +207,19 @@ export default function SummaryPage() {
     setLoading(true)
 
     const from = new Date(selectedYear, selectedMonth, 1)
-    const to = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999)
+    const nextMonthStart = new Date(selectedYear, selectedMonth + 1, 1)
 
     const { data: workLogs, error: workError } = await supabase
       .from('work_logs')
-      .select('*')
+      .select('start_time, end_time')
       .gte('start_time', from.toISOString())
-      .lte('end_time', to.toISOString())
+      .lt('start_time', nextMonthStart.toISOString())
 
     const { data: taskLogs, error: taskError } = await supabase
       .from('task_logs')
       .select('start_time, end_time, isCall, session_id')
       .gte('start_time', from.toISOString())
-      .lte('start_time', to.toISOString())
+      .lt('start_time', nextMonthStart.toISOString())
 
     if (workError || taskError) {
       console.error('Summary data load error:', { workError, taskError })
@@ -147,32 +238,33 @@ export default function SummaryPage() {
       const date = format(start, 'yyyy-MM-dd')
 
       const { baseHours, overtimeHours } = calculateWorkHours(start, end)
+      const entry = ensureDayEntry(dataMap, date)
 
-      if (!dataMap[date]) {
-        dataMap[date] = { baseHours: 0, overtimeHours: 0, callHours: 0 }
-      }
+      entry.baseHours += baseHours
+      entry.overtimeHours += overtimeHours
 
-      dataMap[date].baseHours += baseHours
-      dataMap[date].overtimeHours += overtimeHours
+      addWorkSegmentsByDate(dataMap, start, end)
     })
 
-    const nonCallTasks = ((taskLogs || []) as TaskLogRow[]).filter((t) => !isCallTask(t))
+    const allTasks = (taskLogs || []) as TaskLogRow[]
+    const nonCallTasks = allTasks.filter((t) => !isCallTask(t))
+    const callTasks = allTasks.filter((t) => isCallTask(t))
+
     const taskByDate = calculateTaskHoursByDate(nonCallTasks)
 
     Object.entries(taskByDate).forEach(([date, hours]) => {
-      if (!dataMap[date]) {
-        dataMap[date] = { baseHours: 0, overtimeHours: 0, callHours: 0 }
-      }
-
-      dataMap[date].taskHours = (dataMap[date].taskHours || 0) + hours
+      const entry = ensureDayEntry(dataMap, date)
+      entry.taskHours = (entry.taskHours || 0) + hours
     })
+
+    addCallHoursByDate(dataMap, callTasks)
 
     setEntries(dataMap)
     setLoading(false)
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground px-4 py-6">
+    <div className="min-h-screen bg-background px-4 py-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold">
