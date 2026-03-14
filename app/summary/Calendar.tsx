@@ -95,22 +95,22 @@ function splitSegmentByWorkHours(segment: WorkSegment): ColoredPart[] {
   if (end <= start) return []
 
   return [
-    {
-      startHour: start,
-      endHour: Math.min(end, 9),
-      color: 'red',
-    },
-    {
-      startHour: Math.max(start, 9),
-      endHour: Math.min(end, 18),
-      color: 'blue',
-    },
-    {
-      startHour: Math.max(start, 18),
-      endHour: end,
-      color: 'red',
-    },
-  ].filter((part) => part.endHour > part.startHour)
+  {
+    startHour: start,
+    endHour: Math.min(end, 9),
+    color: 'red' as const,
+  },
+  {
+    startHour: Math.max(start, 9),
+    endHour: Math.min(end, 18),
+    color: 'blue' as const,
+  },
+  {
+    startHour: Math.max(start, 18),
+    endHour: end,
+    color: 'red' as const,
+  },
+].filter((part) => part.endHour > part.startHour)
 }
 
 function resolveColoredParts(
@@ -123,7 +123,7 @@ function resolveColoredParts(
       {
         startHour: segment.startHour,
         endHour: segment.endHour,
-        color: 'red',
+        color: 'red' as const,
       },
     ]
   }
