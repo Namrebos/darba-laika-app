@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import imageCompression from 'browser-image-compression'
-import { CirclePlay, OctagonX } from 'lucide-react'
+import { CirclePlay, OctagonX, AlarmClockCheck, Circle } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ImageGalleryModal from '@/app/components/ImageGalleryModal'
-import ImageThumbnailGrid from '@/app/components/ImageThumbnailGrid'
+import TaskPreviewCard from '@/app/components/TaskPreviewCard'
+import TaskDetailsCard from '@/app/components/TaskDetailsCard'
 
 type Task = {
   id: string
@@ -149,7 +150,6 @@ export default function TaskCard({
     loadTaskTimers()
   }, [task.supabaseTaskId])
 
-  // Tikai lokālā tagu sinhronizācija (DB insert/update notiek page.tsx)
   useEffect(() => {
     const syncTags = () => {
       const title = task.title.trim()
@@ -162,7 +162,6 @@ export default function TaskCard({
     return () => clearTimeout(timeout)
   }, [task.title, task.notes])
 
-  // Attēlu augšupielāde tikai pēc supabaseTaskId
   useEffect(() => {
     const uploadImages = async () => {
       if (!user || !task.supabaseTaskId) return
@@ -267,6 +266,33 @@ export default function TaskCard({
     return [...timerEntries].sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime())
   }, [timerEntries])
 
+  const buildTimeRangeText = () => {
+    const start = task.startTime ? new Date(task.startTime) : null
+    const end = task.endTime ? new Date(task.endTime) : null
+
+    if (!start || !end) return 'Nav pilna laika informācija'
+
+    const duration = Math.floor((end.getTime() - start.getTime()) / 60000)
+    const hours = Math.floor(duration / 60)
+    const minutes = duration % 60
+    const durationText = `${hours}h ${minutes}min`
+
+    return `${start.toLocaleTimeString('lv-LV', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })}-${end.toLocaleTimeString('lv-LV', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })} (${durationText})`
+  }
+
+  const buildTimerItems = () =>
+    sortedTimerEntries.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      durationText: formatSavedTimer(entry.durationSeconds),
+    }))
+
   const handleStartTimer = async () => {
     const cleanLabel = timerLabel.trim()
 
@@ -319,7 +345,6 @@ export default function TaskCard({
       durationSeconds,
     }
 
-    // optimistic UI update
     setTimerEntries((prev) => [...prev, newEntry])
     setActiveTimerStartedAt(null)
     setElapsedSeconds(0)
@@ -336,8 +361,6 @@ export default function TaskCard({
 
     if (error) {
       console.error('Timer stop error:', error.message)
-
-      // rollback, ja DB update neizdodas
       setTimerEntries((prev) => prev.filter((entry) => entry.id !== newEntry.id))
       setTimerLabel(currentLabel)
       setActiveTimerStartedAt(currentStartedAt)
@@ -465,19 +488,22 @@ export default function TaskCard({
       )}
 
       {sortedTimerEntries.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-black dark:text-white">Saglabātie posmi</p>
+        <div className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+          <div className="flex items-center gap-2 font-semibold">
+            <AlarmClockCheck size={16} />
+            Taimeri
+          </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1 pl-1">
             {sortedTimerEntries.map((entry) => (
-              <div
-                key={entry.id}
-                className="border rounded p-2 bg-gray-50 dark:bg-zinc-900 text-sm text-black dark:text-white"
-              >
-                <div className="font-medium">{entry.label}</div>
-                <div className="text-gray-600 dark:text-gray-300">
+              <div key={entry.id} className="flex items-center gap-2">
+                <Circle size={10} />
+                <span className="font-mono">
                   {formatSavedTimer(entry.durationSeconds)}
-                </div>
+                </span>
+                <span className="text-gray-500 dark:text-gray-400">
+                  {entry.label}
+                </span>
               </div>
             ))}
           </div>
@@ -635,15 +661,6 @@ export default function TaskCard({
             ))}
           </div>
         </div>
-
-        {readonly && (
-          <button
-            className="text-sm text-gray-600 underline"
-            onClick={() => updateTask(task.id, { status: 'finished' })}
-          >
-            Aizvērt
-          </button>
-        )}
       </div>
 
       <ImageGalleryModal
@@ -656,59 +673,42 @@ export default function TaskCard({
   )
 
   if (task.status === 'active') return renderTaskForm(false)
-  if (task.status === 'review') return renderTaskForm(true)
 
-  if (task.status === 'finished') {
-    const start = task.startTime ? new Date(task.startTime) : null
-    const end = task.endTime ? new Date(task.endTime) : null
-    let durationText = ''
-
-    if (start && end) {
-      const duration = Math.floor((end.getTime() - start.getTime()) / 60000)
-      const hours = Math.floor(duration / 60)
-      const minutes = duration % 60
-      durationText = `${hours}h ${minutes}min`
-    }
-
+  if (task.status === 'review') {
     return (
       <>
-        <div className="border p-4 rounded bg-gray-100 dark:bg-zinc-800 space-y-2">
-          <h3 className="font-bold text-black dark:text-white">{task.title}</h3>
-          {start && end && (
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              no {start.toLocaleTimeString('lv-LV')} līdz {end.toLocaleTimeString('lv-LV')} ({durationText})
-            </p>
-          )}
+        <TaskDetailsCard
+          title={task.title}
+          notes={task.notes}
+          timeRangeText={buildTimeRangeText()}
+          timers={buildTimerItems()}
+          imageUrls={task.uploadedImageUrls}
+          onOpenImage={openUploadedGallery}
+          onClose={() => updateTask(task.id, { status: 'finished' })}
+          badgeText={task.isCall ? 'izsaukums' : undefined}
+        />
 
-          {sortedTimerEntries.length > 0 && (
-            <div className="space-y-2 pt-2">
-              <p className="text-sm font-semibold text-black dark:text-white">Darba posmi</p>
-              {sortedTimerEntries.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="border rounded p-2 bg-white dark:bg-zinc-900 text-sm text-black dark:text-white"
-                >
-                  <div className="font-medium">{entry.label}</div>
-                  <div className="text-gray-600 dark:text-gray-300">
-                    {formatSavedTimer(entry.durationSeconds)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <ImageGalleryModal
+          images={selectedImages}
+          selectedIndex={selectedIndex}
+          setSelectedIndex={setSelectedIndex}
+          onClose={closeImageModal}
+        />
+      </>
+    )
+  }
 
-          <ImageThumbnailGrid
-            images={task.uploadedImageUrls}
-            onOpen={(index) => openUploadedGallery(index)}
-            size="small"
-          />
-          <button
-            className="text-blue-600 underline text-sm"
-            onClick={() => updateTask(task.id, { status: 'review' })}
-          >
-            Apskats
-          </button>
-        </div>
+  if (task.status === 'finished') {
+    return (
+      <>
+        <TaskPreviewCard
+          title={task.title}
+          timeRangeText={buildTimeRangeText()}
+          imageUrls={task.uploadedImageUrls}
+          onOpenImage={openUploadedGallery}
+          onOpenDetails={() => updateTask(task.id, { status: 'review' })}
+          badgeText={task.isCall ? 'izsaukums' : undefined}
+        />
 
         <ImageGalleryModal
           images={selectedImages}

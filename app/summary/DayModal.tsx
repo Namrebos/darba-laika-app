@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { supabase } from '@/lib/supabaseClient'
 import { calculateWorkHours, calculateCallHours } from './utils'
 import ImageGalleryModal from '@/app/components/ImageGalleryModal'
-import ImageThumbnailGrid from '@/app/components/ImageThumbnailGrid'
+import TaskPreviewCard from '@/app/components/TaskPreviewCard'
+import TaskDetailsCard from '@/app/components/TaskDetailsCard'
 
 type DayModalProps = {
   date: string
@@ -41,6 +42,16 @@ type TaskTimerRow = {
   duration_seconds: number | null
 }
 
+type SelectedTask = {
+  id: number
+  title: string
+  notes: string | null
+  timeRangeText: string
+  timers: { id: string; label: string; durationText: string }[]
+  imageUrls: string[]
+  badgeText?: string
+}
+
 function isCallTask(task: Task) {
   if (typeof task.isCall === 'boolean') return task.isCall
   return !task.session_id
@@ -60,16 +71,19 @@ function formatDurationFromSeconds(totalSeconds: number) {
   return `${hh}h ${mm}m`
 }
 
-function formatTaskDuration(start: string, end: string | null) {
-  if (!end) return 'Nav pabeigts'
+function buildTimeRangeText(start: string, end: string | null) {
+  if (!end) return 'Nav pilna laika informācija'
 
   const startDate = new Date(start)
   const endDate = new Date(end)
 
   const diffMs = endDate.getTime() - startDate.getTime()
-  const diffSeconds = Math.max(0, Math.floor(diffMs / 1000))
+  const totalMin = Math.floor(diffMs / 60000)
+  const hh = Math.floor(totalMin / 60)
+  const mm = totalMin % 60
+  const durationText = `${hh}h ${mm}min`
 
-  return formatDurationFromSeconds(diffSeconds)
+  return `${format(startDate, 'HH:mm')}-${format(endDate, 'HH:mm')} (${durationText})`
 }
 
 export default function DayModal({ date, onClose }: DayModalProps) {
@@ -80,6 +94,7 @@ export default function DayModal({ date, onClose }: DayModalProps) {
   const [timersByTask, setTimersByTask] = useState<Record<number, TaskTimerRow[]>>({})
   const [selectedImages, setSelectedImages] = useState<string[] | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [selectedTask, setSelectedTask] = useState<SelectedTask | null>(null)
   const [hours, setHours] = useState({
     baseHours: 0,
     overtimeHours: 0,
@@ -207,6 +222,38 @@ export default function DayModal({ date, onClose }: DayModalProps) {
     setSelectedIndex(index)
   }
 
+  const openTaskDetails = (task: Task) => {
+    const timers = (timersByTask[task.id] || []).map((timer) => ({
+      id: timer.id,
+      label: timer.label,
+      durationText:
+        timer.duration_seconds !== null
+          ? formatDurationFromSeconds(timer.duration_seconds)
+          : 'Aktīvs taimeris',
+    }))
+
+    setSelectedTask({
+      id: task.id,
+      title: task.title || 'Bez nosaukuma',
+      notes: task.note,
+      timeRangeText: buildTimeRangeText(task.start_time, task.end_time),
+      timers,
+      imageUrls: imagesByTask[task.id] || [],
+      badgeText: isCallTask(task) ? 'izsaukums' : undefined,
+    })
+  }
+
+  const previewCards = useMemo(() => {
+    return tasks.map((task) => ({
+      id: task.id,
+      title: task.title || 'Bez nosaukuma',
+      timeRangeText: buildTimeRangeText(task.start_time, task.end_time),
+      imageUrls: imagesByTask[task.id] || [],
+      badgeText: isCallTask(task) ? 'izsaukums' : undefined,
+      raw: task,
+    }))
+  }, [tasks, imagesByTask])
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -252,88 +299,23 @@ export default function DayModal({ date, onClose }: DayModalProps) {
                 <div className="rounded-xl bg-white dark:bg-zinc-950">
                   <h3 className="mb-3 text-base font-semibold">Uzdevumi</h3>
 
-                  {tasks.length === 0 ? (
+                  {previewCards.length === 0 ? (
                     <div className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
                       Nav uzdevumu
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {tasks.map((task) => {
-                        const taskTimers = timersByTask[task.id] || []
-
-                        return (
-                          <div
-                            key={task.id}
-                            className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900"
-                          >
-                            <div className="space-y-3">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h4 className="text-base font-semibold">
-                                  {task.title || 'Bez nosaukuma'}
-                                </h4>
-
-                                {isCallTask(task) && (
-                                  <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs text-zinc-700 dark:border-zinc-600 dark:text-zinc-200">
-                                    izsaukums
-                                  </span>
-                                )}
-                              </div>
-
-                              {task.note && (
-                                <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-                                  {task.note}
-                                </p>
-                              )}
-
-                              <div className="space-y-1 text-sm text-zinc-700 dark:text-zinc-200">
-                                <p>
-                                  <span className="font-medium">Laiks:</span>{' '}
-                                  {format(new Date(task.start_time), 'HH:mm')}
-                                  {' – '}
-                                  {task.end_time ? format(new Date(task.end_time), 'HH:mm') : '---'}
-                                </p>
-
-                                <p>
-                                  <span className="font-medium">Ilgums:</span>{' '}
-                                  {formatTaskDuration(task.start_time, task.end_time)}
-                                </p>
-                              </div>
-
-                              {taskTimers.length > 0 && (
-                                <div className="space-y-2">
-                                  <p className="text-sm font-medium text-zinc-900 dark:text-white">
-                                    Taimeri
-                                  </p>
-
-                                  <div className="space-y-2">
-                                    {taskTimers.map((timer) => (
-                                      <div
-                                        key={timer.id}
-                                        className="rounded-lg border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-                                      >
-                                        <div className="font-medium">{timer.label}</div>
-                                        <div className="text-zinc-600 dark:text-zinc-300">
-                                          {timer.duration_seconds !== null
-                                            ? formatDurationFromSeconds(timer.duration_seconds)
-                                            : 'Aktīvs taimeris'}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {imagesByTask[task.id]?.length > 0 && (
-                                <ImageThumbnailGrid
-                                  images={imagesByTask[task.id]}
-                                  onOpen={(index) => openTaskGallery(task.id, index)}
-                                  size="medium"
-                                />
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
+                      {previewCards.map((task) => (
+                        <TaskPreviewCard
+                          key={task.id}
+                          title={task.title}
+                          timeRangeText={task.timeRangeText}
+                          imageUrls={task.imageUrls}
+                          onOpenImage={(index) => openTaskGallery(task.id, index)}
+                          onOpenDetails={() => openTaskDetails(task.raw)}
+                          badgeText={task.badgeText}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
@@ -342,6 +324,23 @@ export default function DayModal({ date, onClose }: DayModalProps) {
           </div>
         </div>
       </div>
+
+      {selectedTask && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-2xl">
+            <TaskDetailsCard
+              title={selectedTask.title}
+              notes={selectedTask.notes}
+              timeRangeText={selectedTask.timeRangeText}
+              timers={selectedTask.timers}
+              imageUrls={selectedTask.imageUrls}
+              onOpenImage={(index) => openTaskGallery(selectedTask.id, index)}
+              onClose={() => setSelectedTask(null)}
+              badgeText={selectedTask.badgeText}
+            />
+          </div>
+        </div>
+      )}
 
       <ImageGalleryModal
         images={selectedImages}
