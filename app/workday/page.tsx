@@ -20,6 +20,11 @@ type Task = {
   supabaseTaskId?: number
 }
 
+type DictionaryWord = {
+  name: string
+  usageCount: number
+}
+
 function makeLocalId() {
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
@@ -28,19 +33,11 @@ export default function WorkdayPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isSessionActive, setIsSessionActive] = useState(false)
-  const [currentTime, setCurrentTime] = useState(new Date())
   const [workdayState, setWorkdayState] = useState<'inactive' | 'active'>('inactive')
   const [tasks, setTasks] = useState<Task[]>([])
-  const [tagLibrary, setTagLibrary] = useState<string[]>([])
-  const [activeInput, setActiveInput] = useState<'title' | 'notes' | null>(null)
+  const [dictionaryWords, setDictionaryWords] = useState<DictionaryWord[]>([])
   const [sessionId, setSessionId] = useState<number | null>(null)
   const [savingTasks, setSavingTasks] = useState<Record<string, boolean>>({})
-
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000)
-    return () => clearInterval(interval)
-  }, [])
 
   useEffect(() => {
     const getUser = async () => {
@@ -50,31 +47,33 @@ export default function WorkdayPage() {
 
       if (!user) {
         router.push('/login')
-      } else {
-        setUser(user)
-        checkSession(user)
-        loadTags(user.id)
-        setLoading(false)
+        return
       }
+
+      setUser(user)
+      await checkSession(user)
+      await loadDictionary(user.id)
+      setLoading(false)
     }
 
     getUser()
-  }, [])
+  }, [router])
 
   useEffect(() => {
-    if (user && sessionId) loadSavedTasks(user.id, sessionId)
+    if (user && sessionId) {
+      loadSavedTasks(user.id, sessionId)
+    }
   }, [user, sessionId])
 
-  // Vienīgais automātiskais INSERT notiek šeit (nevis TaskCard)
   useEffect(() => {
     const autoSave = async () => {
-      for (const t of tasks) {
-        const title = t.title.trim()
-        const notes = t.notes.trim()
+      for (const task of tasks) {
+        const title = task.title.trim()
+        const notes = task.notes.trim()
 
-        if (!title || !notes || t.supabaseTaskId) continue
+        if (!title || !notes || task.supabaseTaskId) continue
 
-        await saveTaskToDB(t, extractTagsOnly(title, notes))
+        await saveTaskToDB(task)
       }
     }
 
@@ -82,12 +81,16 @@ export default function WorkdayPage() {
     return () => clearTimeout(timeout)
   }, [tasks])
 
-  const loadSavedTasks = async (userId: string, sessionId: number) => {
+  const normalizeDictionaryWord = (value: string) => {
+    return value.trim().replace(/^#+/, '')
+  }
+
+  const loadSavedTasks = async (userId: string, activeSessionId: number) => {
     const { data: logs } = await supabase
       .from('task_logs')
       .select('*')
       .eq('user_id', userId)
-      .or(`session_id.eq.${sessionId},isCall.eq.true`)
+      .or(`session_id.eq.${activeSessionId},isCall.eq.true`)
       .order('start_time', { ascending: true })
 
     if (!logs) return
@@ -127,71 +130,111 @@ export default function WorkdayPage() {
     setTasks(restoredTasks)
   }
 
-  const checkSession = async (user: User) => {
+  const checkSession = async (currentUser: User) => {
     const { data } = await supabase
       .from('work_logs')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', currentUser.id)
       .is('end_time', null)
       .order('start_time', { ascending: false })
       .limit(1)
 
     if (data && data.length > 0) {
-      setIsSessionActive(true)
       setSessionId(data[0].id)
       setWorkdayState('active')
       addNewTask()
-    } else {
-      setIsSessionActive(false)
     }
   }
 
-  const loadTags = async (userId: string) => {
+  const loadDictionary = async (userId: string) => {
     const { data } = await supabase
       .from('tags')
-      .select('name')
+      .select('name, usage_count')
       .eq('user_id', userId)
-      .order('usage_count', { ascending: false })
 
-    if (data) {
-      const names = data.map((row) => row.name)
-      setTagLibrary(names)
+    if (!data) {
+      setDictionaryWords([])
+      return
     }
+
+    const mapped: DictionaryWord[] = data.map((row: any) => ({
+      name: row.name,
+      usageCount: row.usage_count ?? 0,
+    }))
+
+    setDictionaryWords(mapped)
   }
 
-  const extractTagsOnly = (title: string, notes: string): string[] => {
-    const matches = [
-      ...(title.match(/#([A-Za-zĀ-ž0-9]+)/g) || []),
-      ...(notes.match(/#([A-Za-zĀ-ž0-9]+)/g) || []),
-    ]
+  const saveDictionaryWord = async (userId: string, rawWord: string) => {
+    const cleanWord = normalizeDictionaryWord(rawWord)
+    if (!cleanWord) return
 
-    return [...new Set(matches.map((t) => t.slice(1)))]
-  }
+    const { data: existingWords } = await supabase
+      .from('tags')
+      .select('id, name, usage_count')
+      .eq('user_id', userId)
 
-  const saveTagUsage = async (userId: string, tags: string[]) => {
-    for (const tag of tags) {
-      const { data } = await supabase
+    const existing = existingWords?.find(
+      (row: any) => String(row.name).toLowerCase() === cleanWord.toLowerCase()
+    )
+
+    if (existing) {
+      await supabase
         .from('tags')
-        .select('id, usage_count')
-        .eq('name', tag)
-        .eq('user_id', userId)
-        .maybeSingle()
+        .update({ usage_count: (existing.usage_count ?? 0) + 1 })
+        .eq('id', existing.id)
+    } else {
+      await supabase.from('tags').insert({
+        name: cleanWord,
+        usage_count: 1,
+        user_id: userId,
+      })
+    }
 
-      if (data) {
+    await loadDictionary(userId)
+  }
+
+  const saveDictionaryWords = async (userId: string, rawWords: string[]) => {
+    const uniqueWords = [...new Set(rawWords.map(normalizeDictionaryWord).filter(Boolean))]
+    if (uniqueWords.length === 0) return
+
+    const { data: existingWords } = await supabase
+      .from('tags')
+      .select('id, name, usage_count')
+      .eq('user_id', userId)
+
+    for (const cleanWord of uniqueWords) {
+      const existing = existingWords?.find(
+        (row: any) => String(row.name).toLowerCase() === cleanWord.toLowerCase()
+      )
+
+      if (existing) {
         await supabase
           .from('tags')
-          .update({ usage_count: (data.usage_count ?? 0) + 1 })
-          .eq('id', data.id)
+          .update({ usage_count: (existing.usage_count ?? 0) + 1 })
+          .eq('id', existing.id)
       } else {
         await supabase.from('tags').insert({
-          name: tag,
+          name: cleanWord,
           usage_count: 1,
           user_id: userId,
         })
       }
     }
 
-    await loadTags(userId)
+    await loadDictionary(userId)
+  }
+
+  const deleteDictionaryWords = async (userId: string, wordsToDelete: string[]) => {
+    if (wordsToDelete.length === 0) return
+
+    await supabase
+      .from('tags')
+      .delete()
+      .eq('user_id', userId)
+      .in('name', wordsToDelete)
+
+    await loadDictionary(userId)
   }
 
   const uploadImages = async (task: Task, taskLogId: number): Promise<string[]> => {
@@ -222,7 +265,7 @@ export default function WorkdayPage() {
     return urls
   }
 
-  const saveTaskToDB = async (task: Task, _tags: string[]) => {
+  const saveTaskToDB = async (task: Task) => {
     if (!user) return
     if (!task.isCall && !sessionId) return
 
@@ -279,7 +322,6 @@ export default function WorkdayPage() {
       .single()
 
     if (data) {
-      setIsSessionActive(true)
       setWorkdayState('active')
       setSessionId(data.id)
     }
@@ -310,9 +352,11 @@ export default function WorkdayPage() {
     if (data && data.length > 0) {
       const id = data[0].id
 
-      await supabase.from('work_logs').update({ end_time: new Date().toISOString() }).eq('id', id)
+      await supabase
+        .from('work_logs')
+        .update({ end_time: new Date().toISOString() })
+        .eq('id', id)
 
-      setIsSessionActive(false)
       setWorkdayState('inactive')
       setTasks([])
       setSessionId(null)
@@ -334,9 +378,8 @@ export default function WorkdayPage() {
     setTasks((prev) => [...prev, newTask])
   }
 
-  // DB UPDATE pēc state izmaiņām (title/notes/end_time)
   const updateTask = async (id: string, updated: Partial<Task>) => {
-    const existing = tasks.find((t) => t.id === id)
+    const existing = tasks.find((task) => task.id === id)
 
     setTasks((prev) =>
       prev.map((task) => (task.id === id ? { ...task, ...updated } : task))
@@ -359,20 +402,21 @@ export default function WorkdayPage() {
   }
 
   const deleteTask = async (id: string) => {
-    const taskToDelete = tasks.find((t) => t.id === id)
+    const taskToDelete = tasks.find((task) => task.id === id)
 
     if (taskToDelete?.supabaseTaskId) {
       await supabase.from('task_logs').delete().eq('id', taskToDelete.supabaseTaskId)
       await supabase.from('task_images').delete().eq('task_log_id', taskToDelete.supabaseTaskId)
     }
 
-    setTasks((prev) => prev.filter((t) => t.id !== id))
+    setTasks((prev) => prev.filter((task) => task.id !== id))
   }
 
-  if (loading) return <div className="text-center p-10">Notiek ielāde...</div>
+  if (loading) {
+    return <div className="p-10 text-center">Notiek ielāde...</div>
+  }
 
-  const finishedTasks = tasks.filter((t) => t.status === 'finished' && !t.isCall)
-  const callTasks = tasks.filter((t) => t.isCall)
+  const callTasks = tasks.filter((task) => task.isCall)
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4">
@@ -399,7 +443,7 @@ export default function WorkdayPage() {
       {workdayState === 'active' && (
         <div className="space-y-6">
           {tasks
-            .filter((t) => !t.isCall)
+            .filter((task) => !task.isCall)
             .map((task) => (
               <TaskCard
                 key={task.id}
@@ -408,20 +452,27 @@ export default function WorkdayPage() {
                 sessionId={sessionId}
                 updateTask={updateTask}
                 deleteTask={deleteTask}
-                tagLibrary={tagLibrary}
+                dictionaryWords={dictionaryWords}
+                onAddDictionaryWord={async (word) => {
+                  if (!user) return
+                  await saveDictionaryWord(user.id, word)
+                }}
+                onSaveDictionaryWords={async (words) => {
+                  if (!user) return
+                  await saveDictionaryWords(user.id, words)
+                }}
+                onDeleteDictionaryWords={async (words) => {
+                  if (!user) return
+                  await deleteDictionaryWords(user.id, words)
+                }}
                 setSavingTasks={setSavingTasks}
                 savingTasks={savingTasks}
-                activeInput={activeInput}
-                setActiveInput={setActiveInput}
-                loadTags={loadTags}
                 saveTaskToDB={saveTaskToDB}
-                extractTagsOnly={extractTagsOnly}
-                saveTagUsage={saveTagUsage}
               />
             ))}
 
           {(() => {
-            const nonCallTasks = tasks.filter((t) => !t.isCall)
+            const nonCallTasks = tasks.filter((task) => !task.isCall)
             const last = nonCallTasks[nonCallTasks.length - 1]
 
             const canAdd =
@@ -455,15 +506,22 @@ export default function WorkdayPage() {
               sessionId={sessionId}
               updateTask={updateTask}
               deleteTask={deleteTask}
-              tagLibrary={tagLibrary}
+              dictionaryWords={dictionaryWords}
+              onAddDictionaryWord={async (word) => {
+                if (!user) return
+                await saveDictionaryWord(user.id, word)
+              }}
+              onSaveDictionaryWords={async (words) => {
+                if (!user) return
+                await saveDictionaryWords(user.id, words)
+              }}
+              onDeleteDictionaryWords={async (words) => {
+                if (!user) return
+                await deleteDictionaryWords(user.id, words)
+              }}
               setSavingTasks={setSavingTasks}
               savingTasks={savingTasks}
-              activeInput={activeInput}
-              setActiveInput={setActiveInput}
-              loadTags={loadTags}
               saveTaskToDB={saveTaskToDB}
-              extractTagsOnly={extractTagsOnly}
-              saveTagUsage={saveTagUsage}
             />
           ))}
         </div>
