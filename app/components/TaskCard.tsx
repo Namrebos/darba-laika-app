@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import imageCompression from 'browser-image-compression'
+import { CirclePlay, OctagonX } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ImageGalleryModal from '@/app/components/ImageGalleryModal'
 import ImageThumbnailGrid from '@/app/components/ImageThumbnailGrid'
@@ -19,6 +20,14 @@ type Task = {
   endTime?: Date
   supabaseTaskId?: number
   isCall: boolean
+}
+
+type TimerEntry = {
+  id: string
+  label: string
+  startedAt: Date
+  endedAt: Date
+  durationSeconds: number
 }
 
 type Props = {
@@ -52,13 +61,20 @@ export default function TaskCard({
   loadTags,
   saveTaskToDB,
   extractTagsOnly,
-  saveTagUsage
+  saveTagUsage,
 }: Props) {
   const isSaving = savingTasks[task.id] === true
 
   const [selectedImages, setSelectedImages] = useState<string[] | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [localPreviewUrls, setLocalPreviewUrls] = useState<string[]>([])
+
+  const [timerLabel, setTimerLabel] = useState('')
+  const [activeTimerStartedAt, setActiveTimerStartedAt] = useState<Date | null>(null)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [timerEntries, setTimerEntries] = useState<TimerEntry[]>([])
+
+  const isTimerRunning = activeTimerStartedAt !== null
 
   useEffect(() => {
     const urls = task.images.map((file) => URL.createObjectURL(file))
@@ -68,6 +84,70 @@ export default function TaskCard({
       urls.forEach((url) => URL.revokeObjectURL(url))
     }
   }, [task.images])
+
+  useEffect(() => {
+    if (!activeTimerStartedAt) {
+      setElapsedSeconds(0)
+      return
+    }
+
+    const updateElapsed = () => {
+      const diffSeconds = Math.max(
+        0,
+        Math.floor((Date.now() - activeTimerStartedAt.getTime()) / 1000)
+      )
+      setElapsedSeconds(diffSeconds)
+    }
+
+    updateElapsed()
+    const interval = setInterval(updateElapsed, 1000)
+
+    return () => clearInterval(interval)
+  }, [activeTimerStartedAt])
+
+  useEffect(() => {
+    const loadTaskTimers = async () => {
+      if (!task.supabaseTaskId) return
+
+      const { data, error } = await supabase
+        .from('task_timers')
+        .select('*')
+        .eq('task_log_id', task.supabaseTaskId)
+        .order('started_at', { ascending: true })
+
+      if (error) {
+        console.error('Kļūda ielādējot taimerus:', error.message)
+        return
+      }
+
+      if (!data) return
+
+      const finishedEntries: TimerEntry[] = data
+        .filter((row: any) => row.ended_at && row.duration_seconds !== null)
+        .map((row: any) => ({
+          id: String(row.id),
+          label: row.label,
+          startedAt: new Date(row.started_at),
+          endedAt: new Date(row.ended_at),
+          durationSeconds: row.duration_seconds,
+        }))
+
+      setTimerEntries(finishedEntries)
+
+      const activeEntry = data.find((row: any) => row.ended_at === null)
+
+      if (activeEntry) {
+        setTimerLabel(activeEntry.label)
+        setActiveTimerStartedAt(new Date(activeEntry.started_at))
+      } else {
+        setTimerLabel('')
+        setActiveTimerStartedAt(null)
+        setElapsedSeconds(0)
+      }
+    }
+
+    loadTaskTimers()
+  }, [task.supabaseTaskId])
 
   // Tikai lokālā tagu sinhronizācija (DB insert/update notiek page.tsx)
   useEffect(() => {
@@ -164,6 +244,109 @@ export default function TaskCard({
     setSelectedIndex(index)
   }
 
+  const formatRunningTimer = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }
+
+  const formatSavedTimer = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+  }
+
+  const createLocalTimerId = () => {
+    return `timer_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+  }
+
+  const sortedTimerEntries = useMemo(() => {
+    return [...timerEntries].sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime())
+  }, [timerEntries])
+
+  const handleStartTimer = async () => {
+    const cleanLabel = timerLabel.trim()
+
+    if (!cleanLabel) {
+      alert('Lūdzu ievadi taimera nosaukumu!')
+      return
+    }
+
+    if (!task.supabaseTaskId) {
+      alert('Vispirms aizpildi uzdevuma nosaukumu un piezīmes, lai uzdevums tiktu saglabāts.')
+      return
+    }
+
+    if (isTimerRunning) return
+
+    const now = new Date()
+
+    const { error } = await supabase.from('task_timers').insert({
+      task_log_id: task.supabaseTaskId,
+      label: cleanLabel,
+      started_at: now.toISOString(),
+    })
+
+    if (error) {
+      console.error('Timer start error:', error.message)
+      return
+    }
+
+    setActiveTimerStartedAt(now)
+    setElapsedSeconds(0)
+  }
+
+  const handleStopTimer = async () => {
+    if (!activeTimerStartedAt || !task.supabaseTaskId) return
+
+    const endedAt = new Date()
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((endedAt.getTime() - activeTimerStartedAt.getTime()) / 1000)
+    )
+
+    const currentLabel = timerLabel.trim()
+    const currentStartedAt = activeTimerStartedAt
+
+    const newEntry: TimerEntry = {
+      id: createLocalTimerId(),
+      label: currentLabel,
+      startedAt: currentStartedAt,
+      endedAt,
+      durationSeconds,
+    }
+
+    // optimistic UI update
+    setTimerEntries((prev) => [...prev, newEntry])
+    setActiveTimerStartedAt(null)
+    setElapsedSeconds(0)
+    setTimerLabel('')
+
+    const { error } = await supabase
+      .from('task_timers')
+      .update({
+        ended_at: endedAt.toISOString(),
+        duration_seconds: durationSeconds,
+      })
+      .eq('task_log_id', task.supabaseTaskId)
+      .is('ended_at', null)
+
+    if (error) {
+      console.error('Timer stop error:', error.message)
+
+      // rollback, ja DB update neizdodas
+      setTimerEntries((prev) => prev.filter((entry) => entry.id !== newEntry.id))
+      setTimerLabel(currentLabel)
+      setActiveTimerStartedAt(currentStartedAt)
+      setElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - currentStartedAt.getTime()) / 1000))
+      )
+    }
+  }
+
   const handleRemoveUploadedImage = async (urlToDelete: string) => {
     if (!user || !task.supabaseTaskId) return
     if (!task.isCall && !sessionId) return
@@ -206,8 +389,14 @@ export default function TaskCard({
       if (shouldDelete) deleteTask(task.id)
       return
     }
+
     if (!titleFilled || !notesFilled) {
       alert('Lūdzu aizpildi gan uzdevuma nosaukumu, gan piezīmes!')
+      return
+    }
+
+    if (isTimerRunning) {
+      alert('Vispirms apturi aktīvo taimeri!')
       return
     }
 
@@ -237,6 +426,66 @@ export default function TaskCard({
     )
   }
 
+  const renderTimerBlock = (readonly: boolean) => (
+    <div className="space-y-3">
+      <div>
+        <div className="text-3xl font-semibold text-black dark:text-white">
+          {formatRunningTimer(elapsedSeconds)}
+        </div>
+        {isTimerRunning && (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Aktīvs taimeris: {timerLabel}
+          </p>
+        )}
+      </div>
+
+      {!readonly && (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={isTimerRunning ? handleStopTimer : handleStartTimer}
+            disabled={!task.supabaseTaskId}
+            className={`shrink-0 min-w-12 min-h-12 w-12 h-12 rounded-full flex items-center justify-center text-white touch-manipulation ${
+              isTimerRunning ? 'bg-red-600 hover:bg-red-700' : 'bg-green-500 hover:bg-green-600'
+            } ${!task.supabaseTaskId ? 'opacity-40 cursor-not-allowed' : ''}`}
+            title={!task.supabaseTaskId ? 'Vispirms aizpildi nosaukumu un piezīmes' : ''}
+          >
+            {isTimerRunning ? <OctagonX size={22} /> : <CirclePlay size={22} />}
+          </button>
+
+          <input
+            type="text"
+            placeholder="Taimera nosaukums"
+            value={timerLabel}
+            onChange={(e) => setTimerLabel(e.target.value)}
+            readOnly={isTimerRunning}
+            className="flex-1 border p-2 rounded bg-white dark:bg-zinc-800 text-black dark:text-white"
+          />
+        </div>
+      )}
+
+      {sortedTimerEntries.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-black dark:text-white">Saglabātie posmi</p>
+
+          <div className="space-y-2">
+            {sortedTimerEntries.map((entry) => (
+              <div
+                key={entry.id}
+                className="border rounded p-2 bg-gray-50 dark:bg-zinc-900 text-sm text-black dark:text-white"
+              >
+                <div className="font-medium">{entry.label}</div>
+                <div className="text-gray-600 dark:text-gray-300">
+                  {formatSavedTimer(entry.durationSeconds)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
   const renderTaskForm = (readonly: boolean) => (
     <>
       <div className="space-y-4 border p-4 rounded">
@@ -255,7 +504,9 @@ export default function TaskCard({
               <button
                 disabled={isSaving}
                 onClick={handleFinish}
-                className={`px-4 py-2 rounded text-white ${isSaving ? 'bg-gray-500' : 'bg-red-600 hover:bg-red-700'}`}
+                className={`px-4 py-2 rounded text-white ${
+                  isSaving ? 'bg-gray-500' : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
                 {isSaving ? 'Saglabājas...' : 'Pabeigt'}
               </button>
@@ -270,14 +521,19 @@ export default function TaskCard({
         </div>
 
         <div className="flex gap-4">
-          <textarea
-            placeholder="Piezīmes"
-            className="w-1/2 border p-2 rounded h-28 resize-none bg-white dark:bg-zinc-800 text-black dark:text-white"
-            value={task.notes}
-            onFocus={() => setActiveInput('notes')}
-            onChange={(e) => !readonly && updateTask(task.id, { notes: e.target.value })}
-            readOnly={readonly}
-          />
+          <div className="w-1/2 space-y-4">
+            <textarea
+              placeholder="Piezīmes"
+              className="w-full border p-2 rounded h-28 resize-none bg-white dark:bg-zinc-800 text-black dark:text-white"
+              value={task.notes}
+              onFocus={() => setActiveInput('notes')}
+              onChange={(e) => !readonly && updateTask(task.id, { notes: e.target.value })}
+              readOnly={readonly}
+            />
+
+            {renderTimerBlock(readonly)}
+          </div>
+
           <div className="w-1/2 border p-2 rounded min-h-[7rem] bg-black text-white">
             {!readonly && tagLibrary.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -423,6 +679,24 @@ export default function TaskCard({
               no {start.toLocaleTimeString('lv-LV')} līdz {end.toLocaleTimeString('lv-LV')} ({durationText})
             </p>
           )}
+
+          {sortedTimerEntries.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <p className="text-sm font-semibold text-black dark:text-white">Darba posmi</p>
+              {sortedTimerEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="border rounded p-2 bg-white dark:bg-zinc-900 text-sm text-black dark:text-white"
+                >
+                  <div className="font-medium">{entry.label}</div>
+                  <div className="text-gray-600 dark:text-gray-300">
+                    {formatSavedTimer(entry.durationSeconds)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <ImageThumbnailGrid
             images={task.uploadedImageUrls}
             onOpen={(index) => openUploadedGallery(index)}

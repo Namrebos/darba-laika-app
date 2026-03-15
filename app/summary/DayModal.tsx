@@ -18,7 +18,7 @@ type WorkLog = {
 }
 
 type Task = {
-  id: string
+  id: number
   title: string | null
   note: string | null
   start_time: string
@@ -29,7 +29,16 @@ type Task = {
 
 type TaskImageRow = {
   url: string
-  task_log_id: string
+  task_log_id: number
+}
+
+type TaskTimerRow = {
+  id: string
+  task_log_id: number
+  label: string
+  started_at: string
+  ended_at: string | null
+  duration_seconds: number | null
 }
 
 function isCallTask(task: Task) {
@@ -44,11 +53,31 @@ function formatHours(hours: number) {
   return `${hh}h ${mm}m`
 }
 
+function formatDurationFromSeconds(totalSeconds: number) {
+  const totalMin = Math.floor(totalSeconds / 60)
+  const hh = Math.floor(totalMin / 60)
+  const mm = totalMin % 60
+  return `${hh}h ${mm}m`
+}
+
+function formatTaskDuration(start: string, end: string | null) {
+  if (!end) return 'Nav pabeigts'
+
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+
+  const diffMs = endDate.getTime() - startDate.getTime()
+  const diffSeconds = Math.max(0, Math.floor(diffMs / 1000))
+
+  return formatDurationFromSeconds(diffSeconds)
+}
+
 export default function DayModal({ date, onClose }: DayModalProps) {
   const [workLog, setWorkLog] = useState<WorkLog | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
-  const [imagesByTask, setImagesByTask] = useState<Record<string, string[]>>({})
+  const [imagesByTask, setImagesByTask] = useState<Record<number, string[]>>({})
+  const [timersByTask, setTimersByTask] = useState<Record<number, TaskTimerRow[]>>({})
   const [selectedImages, setSelectedImages] = useState<string[] | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [hours, setHours] = useState({
@@ -67,11 +96,11 @@ export default function DayModal({ date, onClose }: DayModalProps) {
     const start = new Date(date)
     start.setHours(0, 0, 0, 0)
 
-const end = new Date(date)
-end.setHours(23, 59, 59, 999)
+    const end = new Date(date)
+    end.setHours(23, 59, 59, 999)
 
-const from = start.toISOString()
-const to = end.toISOString()
+    const from = start.toISOString()
+    const to = end.toISOString()
 
     const { data: workLogs, error: workError } = await supabase
       .from('work_logs')
@@ -92,6 +121,7 @@ const to = end.toISOString()
       setWorkLog(null)
       setTasks([])
       setImagesByTask({})
+      setTimersByTask({})
       setHours({ baseHours: 0, overtimeHours: 0, callHours: 0 })
       setLoading(false)
       return
@@ -104,16 +134,23 @@ const to = end.toISOString()
     setTasks(taskRows)
 
     if (taskRows.length > 0) {
-      const { data: imageData, error: imageError } = await supabase
-        .from('task_images')
-        .select('url, task_log_id')
-        .in('task_log_id', taskRows.map((t) => t.id))
+      const taskIds = taskRows.map((t) => t.id)
+
+      const [{ data: imageData, error: imageError }, { data: timerData, error: timerError }] =
+        await Promise.all([
+          supabase.from('task_images').select('url, task_log_id').in('task_log_id', taskIds),
+          supabase
+            .from('task_timers')
+            .select('id, task_log_id, label, started_at, ended_at, duration_seconds')
+            .in('task_log_id', taskIds)
+            .order('started_at', { ascending: true }),
+        ])
 
       if (imageError) {
         console.error('Task images load error:', imageError)
         setImagesByTask({})
       } else {
-        const groupedImages: Record<string, string[]> = {}
+        const groupedImages: Record<number, string[]> = {}
 
         ;((imageData || []) as TaskImageRow[]).forEach((img) => {
           if (!groupedImages[img.task_log_id]) groupedImages[img.task_log_id] = []
@@ -122,8 +159,23 @@ const to = end.toISOString()
 
         setImagesByTask(groupedImages)
       }
+
+      if (timerError) {
+        console.error('Task timers load error:', timerError)
+        setTimersByTask({})
+      } else {
+        const groupedTimers: Record<number, TaskTimerRow[]> = {}
+
+        ;((timerData || []) as TaskTimerRow[]).forEach((timer) => {
+          if (!groupedTimers[timer.task_log_id]) groupedTimers[timer.task_log_id] = []
+          groupedTimers[timer.task_log_id].push(timer)
+        })
+
+        setTimersByTask(groupedTimers)
+      }
     } else {
       setImagesByTask({})
+      setTimersByTask({})
     }
 
     const { baseHours, overtimeHours } = work
@@ -148,7 +200,7 @@ const to = end.toISOString()
     setSelectedIndex(0)
   }
 
-  const openTaskGallery = (taskId: string, index: number) => {
+  const openTaskGallery = (taskId: number, index: number) => {
     const taskImages = imagesByTask[taskId]
     if (!taskImages || taskImages.length === 0) return
     setSelectedImages(taskImages)
@@ -160,9 +212,7 @@ const to = end.toISOString()
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
         <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-zinc-300 bg-white text-zinc-900 shadow-2xl dark:border-zinc-700 dark:bg-zinc-950 dark:text-white">
           <div className="flex items-center justify-between border-b border-zinc-300 bg-white px-5 py-4 dark:border-zinc-700 dark:bg-zinc-950">
-            <h2 className="text-lg font-semibold">
-              {format(parseISO(date), 'yyyy-MM-dd')}
-            </h2>
+            <h2 className="text-lg font-semibold">{format(parseISO(date), 'yyyy-MM-dd')}</h2>
 
             <button
               onClick={onClose}
@@ -192,8 +242,7 @@ const to = end.toISOString()
                     <p>
                       <span className="font-medium">Pamata:</span> {formatHours(hours.baseHours)}
                       {' • '}
-                      <span className="font-medium">Virsstundas:</span>{' '}
-                      {formatHours(hours.overtimeHours)}
+                      <span className="font-medium">Virsstundas:</span> {formatHours(hours.overtimeHours)}
                       {' • '}
                       <span className="font-medium">Izsaukumi:</span> {formatHours(hours.callHours)}
                     </p>
@@ -209,48 +258,82 @@ const to = end.toISOString()
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {tasks.map((task) => (
-                        <div
-                          key={task.id}
-                          className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900"
-                        >
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h4 className="text-base font-semibold">
-                                {task.title || 'Bez nosaukuma'}
-                              </h4>
+                      {tasks.map((task) => {
+                        const taskTimers = timersByTask[task.id] || []
 
-                              {isCallTask(task) && (
-                                <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs text-zinc-700 dark:border-zinc-600 dark:text-zinc-200">
-                                  izsaukums
-                                </span>
+                        return (
+                          <div
+                            key={task.id}
+                            className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900"
+                          >
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="text-base font-semibold">
+                                  {task.title || 'Bez nosaukuma'}
+                                </h4>
+
+                                {isCallTask(task) && (
+                                  <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs text-zinc-700 dark:border-zinc-600 dark:text-zinc-200">
+                                    izsaukums
+                                  </span>
+                                )}
+                              </div>
+
+                              {task.note && (
+                                <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+                                  {task.note}
+                                </p>
                               )}
-                            </div>
 
-                            {task.note && (
-                              <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-                                {task.note}
-                              </p>
-                            )}
+                              <div className="space-y-1 text-sm text-zinc-700 dark:text-zinc-200">
+                                <p>
+                                  <span className="font-medium">Laiks:</span>{' '}
+                                  {format(new Date(task.start_time), 'HH:mm')}
+                                  {' – '}
+                                  {task.end_time ? format(new Date(task.end_time), 'HH:mm') : '---'}
+                                </p>
 
-                            <p className="text-sm text-zinc-700 dark:text-zinc-200">
-                              {format(new Date(task.start_time), 'HH:mm')}
-                              {' – '}
-                              {task.end_time
-                                ? format(new Date(task.end_time), 'HH:mm')
-                                : '---'}
-                            </p>
+                                <p>
+                                  <span className="font-medium">Ilgums:</span>{' '}
+                                  {formatTaskDuration(task.start_time, task.end_time)}
+                                </p>
+                              </div>
 
-                            {imagesByTask[task.id]?.length > 0 && (
-                              <ImageThumbnailGrid
+                              {taskTimers.length > 0 && (
+                                <div className="space-y-2">
+                                  <p className="text-sm font-medium text-zinc-900 dark:text-white">
+                                    Taimeri
+                                  </p>
+
+                                  <div className="space-y-2">
+                                    {taskTimers.map((timer) => (
+                                      <div
+                                        key={timer.id}
+                                        className="rounded-lg border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                                      >
+                                        <div className="font-medium">{timer.label}</div>
+                                        <div className="text-zinc-600 dark:text-zinc-300">
+                                          {timer.duration_seconds !== null
+                                            ? formatDurationFromSeconds(timer.duration_seconds)
+                                            : 'Aktīvs taimeris'}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {imagesByTask[task.id]?.length > 0 && (
+                                <ImageThumbnailGrid
                                   images={imagesByTask[task.id]}
                                   onOpen={(index) => openTaskGallery(task.id, index)}
                                   size="medium"
-                              />
-                            )}
+                                />
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>
