@@ -142,7 +142,6 @@ export default function WorkdayPage() {
     if (data && data.length > 0) {
       setSessionId(data[0].id)
       setWorkdayState('active')
-      addNewTask()
     }
   }
 
