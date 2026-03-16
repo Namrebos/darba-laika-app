@@ -21,7 +21,6 @@ type Task = {
   startTime?: Date;
   endTime?: Date;
   supabaseTaskId?: number;
-  isCall: boolean;
 };
 
 type TimerEntry = {
@@ -51,7 +50,6 @@ type Props = {
     s: (prev: Record<string, boolean>) => Record<string, boolean>,
   ) => void;
   savingTasks: Record<string, boolean>;
-  saveTaskToDB: (task: Task) => Promise<void>;
 };
 
 type ActiveField = "title" | "notes" | "timer" | null;
@@ -68,7 +66,6 @@ export default function TaskCard({
   onDeleteDictionaryWords,
   setSavingTasks,
   savingTasks,
-  saveTaskToDB,
 }: Props) {
   const isSaving = savingTasks[task.id] === true;
   const dictionaryNames = useMemo(
@@ -175,8 +172,7 @@ export default function TaskCard({
 
   useEffect(() => {
     const uploadImages = async () => {
-      if (!user || !task.supabaseTaskId) return;
-      if (!task.isCall && !sessionId) return;
+      if (!user || !task.supabaseTaskId || !sessionId) return;
       if (task.images.length === 0) return;
       if (isUploadingImagesRef.current) return;
 
@@ -187,9 +183,7 @@ export default function TaskCard({
       const successfulImages = new Set<File>();
 
       for (const image of pendingImages) {
-        const basePath = task.isCall
-          ? `isCall/${task.supabaseTaskId}`
-          : `${sessionId}/${task.supabaseTaskId}`;
+        const basePath = `${user.id}/${task.supabaseTaskId}`;
 
         const safeFileName = image.name.replace(/\s+/g, "-");
         const uniqueName =
@@ -266,7 +260,6 @@ export default function TaskCard({
   }, [
     task.images,
     task.supabaseTaskId,
-    task.isCall,
     task.uploadedImageUrls,
     task.id,
     sessionId,
@@ -576,17 +569,12 @@ export default function TaskCard({
   };
 
   const handleRemoveUploadedImage = async (urlToDelete: string) => {
-    if (!user || !task.supabaseTaskId) return;
-    if (!task.isCall && !sessionId) return;
+    if (!user || !task.supabaseTaskId || !sessionId) return;
 
     const fileName = urlToDelete.split("/").pop()?.split("?")[0];
 
     if (fileName) {
-      const basePath = task.isCall
-        ? `isCall/${task.supabaseTaskId}`
-        : `${sessionId}/${task.supabaseTaskId}`;
-
-      const storagePath = `${basePath}/${fileName}`;
+      const storagePath = `${user.id}/${task.supabaseTaskId}/${fileName}`;
 
       const { error: storageError } = await supabase.storage
         .from("task-images")
@@ -650,10 +638,6 @@ export default function TaskCard({
         if (hashtagWords.length > 0) {
           await onSaveDictionaryWords(hashtagWords);
         }
-      }
-
-      if (user && task.isCall) {
-        await saveTaskToDB({ ...task, endTime, status: "finished" });
       }
     } finally {
       setSavingTasks((prev) => ({ ...prev, [task.id]: false }));
@@ -1020,7 +1004,6 @@ export default function TaskCard({
           imageUrls={task.uploadedImageUrls}
           onOpenImage={(index) => openGallery(index)}
           onClose={() => updateTask(task.id, { status: "finished" })}
-          badgeText={task.isCall ? "izsaukums" : undefined}
         />
 
         <ImageGalleryModal
@@ -1042,7 +1025,6 @@ export default function TaskCard({
           imageUrls={task.uploadedImageUrls}
           onOpenImage={(index) => openGallery(index)}
           onOpenDetails={() => updateTask(task.id, { status: "review" })}
-          badgeText={task.isCall ? "izsaukums" : undefined}
         />
 
         <ImageGalleryModal
