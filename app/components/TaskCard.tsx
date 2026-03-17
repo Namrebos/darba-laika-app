@@ -54,6 +54,21 @@ type Props = {
 
 type ActiveField = "title" | "notes" | "timer" | null;
 
+function sanitizeFileName(name: string) {
+  return name.replace(/\s+/g, "-");
+}
+
+function getThumbUrlFromPublicUrl(publicUrl: string) {
+  try {
+    const url = new URL(publicUrl);
+    url.searchParams.set("width", "320");
+    url.searchParams.set("quality", "70");
+    return url.toString();
+  } catch {
+    return publicUrl;
+  }
+}
+
 export default function TaskCard({
   task,
   user,
@@ -185,7 +200,7 @@ export default function TaskCard({
       for (const image of pendingImages) {
         const basePath = `${user.id}/${task.supabaseTaskId}`;
 
-        const safeFileName = image.name.replace(/\s+/g, "-");
+        const safeFileName = sanitizeFileName(image.name);
         const uniqueName =
           typeof crypto !== "undefined" && "randomUUID" in crypto
             ? `${Date.now()}-${crypto.randomUUID()}-${safeFileName}`
@@ -935,6 +950,7 @@ export default function TaskCard({
                     src={previewUrl}
                     alt="Jauns attēls"
                     className="h-16 w-16 cursor-pointer rounded object-cover"
+                    loading="lazy"
                     onClick={() => openGallery(idx)}
                   />
                   <button
@@ -954,9 +970,10 @@ export default function TaskCard({
             {task.uploadedImageUrls.map((url, idx) => (
               <div key={idx} className="relative h-16 w-16">
                 <img
-                  src={url}
+                  src={getThumbUrlFromPublicUrl(url)}
                   alt="Attēls"
                   className="h-16 w-16 cursor-pointer rounded object-cover"
+                  loading="lazy"
                   onClick={() => openGallery(localPreviewUrls.length + idx)}
                 />
                 {!readonly && (
@@ -1004,6 +1021,7 @@ export default function TaskCard({
           imageUrls={task.uploadedImageUrls}
           onOpenImage={(index) => openGallery(index)}
           onClose={() => updateTask(task.id, { status: "finished" })}
+          badgeText={undefined}
         />
 
         <ImageGalleryModal
@@ -1025,6 +1043,7 @@ export default function TaskCard({
           imageUrls={task.uploadedImageUrls}
           onOpenImage={(index) => openGallery(index)}
           onOpenDetails={() => updateTask(task.id, { status: "review" })}
+          badgeText={undefined}
         />
 
         <ImageGalleryModal
