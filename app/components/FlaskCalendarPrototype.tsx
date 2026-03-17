@@ -10,7 +10,6 @@ const dateFont = Zen_Dots({
 type Segment = {
   startHour: number;
   endHour: number;
-  isCall?: boolean;
 };
 
 type FlaskProps = {
@@ -89,7 +88,7 @@ function resolveColoredParts(
   isWeekend: boolean,
   isHoliday: boolean
 ) {
-  if (segment.isCall || isWeekend || isHoliday) {
+  if (isWeekend || isHoliday) {
     return [
       {
         startHour: segment.startHour,
@@ -189,7 +188,7 @@ const monthData: CalendarCellData[] = [
   { day: 3, segments: [{ startHour: 9, endHour: 17 }] },
   { day: 4, segments: [{ startHour: 7, endHour: 19 }] },
   { day: 5, segments: [{ startHour: 9, endHour: 13 }, { startHour: 14, endHour: 18 }] },
-  { day: 6, segments: [{ startHour: 9, endHour: 18 }, { startHour: 21, endHour: 23, isCall: true }] },
+  { day: 6, segments: [{ startHour: 9, endHour: 18 }, { startHour: 21, endHour: 23 }] },
   { day: 7, segments: [] },
 
   { day: 8, isWeekend: true, segments: [{ startHour: 11, endHour: 16 }] },
@@ -203,12 +202,12 @@ const monthData: CalendarCellData[] = [
   { day: 15, isWeekend: true, segments: [] },
   { day: 16, isWeekend: true, segments: [{ startHour: 12, endHour: 18 }] },
   { day: 17, isHoliday: true, segments: [{ startHour: 8, endHour: 12 }] },
-  { day: 18, segments: [{ startHour: 9, endHour: 17 }, { startHour: 18, endHour: 20, isCall: true }] },
+  { day: 18, segments: [{ startHour: 9, endHour: 17 }, { startHour: 18, endHour: 20 }] },
   { day: 19, segments: [{ startHour: 6, endHour: 17 }] },
   { day: 20, segments: [{ startHour: 9, endHour: 18 }] },
   { day: 21, segments: [] },
 
-  { day: 22, isWeekend: true, segments: [{ startHour: 9, endHour: 12, isCall: true }] },
+  { day: 22, isWeekend: true, segments: [{ startHour: 9, endHour: 12 }] },
   { day: 23, isWeekend: true, segments: [] },
   { day: 24, segments: [{ startHour: 9, endHour: 17 }] },
   { day: 25, segments: [{ startHour: 9, endHour: 19 }] },

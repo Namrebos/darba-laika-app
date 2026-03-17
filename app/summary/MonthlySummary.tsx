@@ -3,7 +3,6 @@
 type DayData = {
   baseHours: number
   overtimeHours: number
-  callHours?: number
 }
 
 type Props = {
