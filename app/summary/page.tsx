@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { format } from "date-fns";
+import { Search, X } from "lucide-react";
 import Calendar from "./Calendar";
 import DayModal from "./DayModal";
 import MonthlySummary from "./MonthlySummary";
@@ -35,6 +36,9 @@ type WorkLogRow = {
 };
 
 type TaskLogRow = {
+  id?: number;
+  title?: string | null;
+  note?: string | null;
   start_time: string;
   end_time: string | null;
   session_id?: string | null;
@@ -102,6 +106,8 @@ export default function SummaryPage() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchableTasks, setSearchableTasks] = useState<TaskLogRow[]>([]);
 
   useEffect(() => {
     loadAvailableMonths();
@@ -120,14 +126,18 @@ export default function SummaryPage() {
 
     const { data: taskLogs, error: taskError } = await supabase
       .from("task_logs")
-      .select("start_time, session_id");
+      .select("id, title, note, start_time, end_time, session_id")
+      .order("start_time", { ascending: false });
 
     if (workError || taskError) {
       console.error("Summary month load error:", { workError, taskError });
       setAvailableMonths([]);
+      setSearchableTasks([]);
       setLoading(false);
       return;
     }
+
+    setSearchableTasks((taskLogs || []) as TaskLogRow[]);
 
     const allDates = [
       ...((workLogs || []) as { start_time: string }[]).map(
@@ -169,6 +179,24 @@ export default function SummaryPage() {
       setSelectedMonth(today.getMonth());
     }
   }
+
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase("lv-LV");
+    if (!query) return [];
+
+    return searchableTasks.filter((task) => {
+      const date = new Date(task.start_time);
+      const dateText = Number.isNaN(date.getTime())
+        ? ""
+        : format(date, "yyyy-MM-dd");
+      const searchableText = [task.title, task.note, dateText]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("lv-LV");
+
+      return searchableText.includes(query);
+    });
+  }, [searchQuery, searchableTasks]);
 
   async function loadData() {
     setLoading(true);
@@ -258,6 +286,78 @@ export default function SummaryPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="space-y-3">
+          <div className="relative">
+            <Search
+              aria-hidden="true"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+              size={20}
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Meklēt pēc darba nosaukuma, piezīmēm vai datuma..."
+              aria-label="Meklēt veiktajos darbos"
+              className="w-full rounded-xl border border-zinc-300 bg-white py-3 pl-11 pr-11 text-black shadow-sm outline-none placeholder:text-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                aria-label="Notīrīt meklēšanu"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            )}
+          </div>
+
+          {searchQuery.trim() && (
+            <div className="overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="border-b border-zinc-200 px-4 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+                Atrasti ieraksti: {searchResults.length}
+              </div>
+
+              {searchResults.length === 0 ? (
+                <p className="px-4 py-5 text-sm text-zinc-600 dark:text-zinc-300">
+                  Neviens veiktais darbs neatbilst meklējumam.
+                </p>
+              ) : (
+                <div className="max-h-80 divide-y divide-zinc-200 overflow-y-auto dark:divide-zinc-700">
+                  {searchResults.map((task) => {
+                    const taskDate = new Date(task.start_time);
+                    const dateKey = format(taskDate, "yyyy-MM-dd");
+
+                    return (
+                      <button
+                        key={task.id ?? `${task.start_time}-${task.title}`}
+                        type="button"
+                        onClick={() => setSelectedDate(dateKey)}
+                        className="block w-full px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="font-medium">
+                            {task.title || "Bez nosaukuma"}
+                          </span>
+                          <span className="shrink-0 text-sm text-zinc-500 dark:text-zinc-400">
+                            {dateKey} · {format(taskDate, "HH:mm")}
+                          </span>
+                        </div>
+                        {task.note && (
+                          <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-300">
+                            {task.note}
+                          </p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <MonthlySummary data={entries} />
