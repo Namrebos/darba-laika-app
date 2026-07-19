@@ -34,11 +34,27 @@ function SummaryCard({
   emphasize = false,
 }: SummaryCardProps) {
   return (
-    <div className="rounded-xl border border-border bg-background/60 p-3 shadow-sm">
-      <div className="text-xs text-muted-foreground">{label}</div>
+    <div
+      className={`rounded-xl border p-3 shadow-sm ${
+        emphasize
+          ? 'border-2 border-zinc-500 bg-background/60 shadow-md dark:border-zinc-400'
+          : 'border-border bg-background/60'
+      }`}
+    >
       <div
-        className={`mt-2 text-lg leading-none sm:text-xl ${
-          emphasize ? 'font-bold' : 'font-semibold'
+        className={`${emphasize ? 'text-sm' : 'text-xs'} ${
+          emphasize
+            ? 'font-bold uppercase tracking-wide text-foreground'
+            : 'text-muted-foreground'
+        }`}
+      >
+        {label}
+      </div>
+      <div
+        className={`mt-2 leading-none ${
+          emphasize
+            ? 'text-2xl font-extrabold text-foreground'
+            : 'text-lg font-semibold sm:text-xl'
         }`}
       >
         {value}

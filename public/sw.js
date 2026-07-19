@@ -1,4 +1,4 @@
-const CACHE_NAME = "darba-laiks-static-v2";
+const CACHE_NAME = "darba-laiks-static-v3";
 const STATIC_FILES = [
   "/manifest.webmanifest",
   "/icon-192.png",
