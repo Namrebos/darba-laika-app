@@ -92,14 +92,14 @@ export default function MonthlySummary({ data }: Props) {
       <h2 className="mb-4 text-lg font-semibold">Mēneša kopsavilkums</h2>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard label="Darba dienas" value={totals.workDays} />
-        <SummaryCard label="Darba stundas" value={hoursToHM(totals.baseHours)} />
-        <SummaryCard label="Virsstundas" value={hoursToHM(totals.overtimeHours)} />
         <SummaryCard
           label="Grand Total"
           value={hoursToHM(grandTotal)}
           emphasize
         />
+        <SummaryCard label="Darba stundas" value={hoursToHM(totals.baseHours)} />
+        <SummaryCard label="Virsstundas" value={hoursToHM(totals.overtimeHours)} />
+        <SummaryCard label="Darba dienas" value={totals.workDays} />
       </div>
     </div>
   )
