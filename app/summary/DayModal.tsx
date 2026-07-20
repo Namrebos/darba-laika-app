@@ -41,12 +41,20 @@ type TaskTimerRow = {
   duration_seconds: number | null;
 };
 
+type TaskTimelineRow = {
+  id: string;
+  task_log_id: number;
+  label: string;
+  created_at: string;
+};
+
 type SelectedTask = {
   id: number;
   title: string;
   notes: string | null;
   timeRangeText: string;
   timers: { id: string; label: string; durationText: string }[];
+  timeline: { id: string; label: string; timeText: string; durationFromPrevious?: string }[];
   imageUrls: string[];
   badgeText?: string;
 };
@@ -89,6 +97,9 @@ export default function DayModal({ date, onClose }: DayModalProps) {
   );
   const [timersByTask, setTimersByTask] = useState<
     Record<number, TaskTimerRow[]>
+  >({});
+  const [timelineByTask, setTimelineByTask] = useState<
+    Record<number, TaskTimelineRow[]>
   >({});
   const [selectedImages, setSelectedImages] = useState<string[] | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -151,6 +162,7 @@ export default function DayModal({ date, onClose }: DayModalProps) {
       const [
         { data: imageData, error: imageError },
         { data: timerData, error: timerError },
+        { data: timelineData, error: timelineError },
       ] = await Promise.all([
         supabase
           .from("task_images")
@@ -163,6 +175,11 @@ export default function DayModal({ date, onClose }: DayModalProps) {
           )
           .in("task_log_id", taskIds)
           .order("started_at", { ascending: true }),
+        supabase
+          .from("task_timeline_events")
+          .select("id, task_log_id, label, created_at")
+          .in("task_log_id", taskIds)
+          .order("created_at", { ascending: true }),
       ]);
 
       if (imageError) {
@@ -194,9 +211,22 @@ export default function DayModal({ date, onClose }: DayModalProps) {
 
         setTimersByTask(groupedTimers);
       }
+
+      if (timelineError) {
+        console.error("Task timeline load error:", timelineError);
+        setTimelineByTask({});
+      } else {
+        const groupedTimeline: Record<number, TaskTimelineRow[]> = {};
+        ((timelineData || []) as TaskTimelineRow[]).forEach((entry) => {
+          if (!groupedTimeline[entry.task_log_id]) groupedTimeline[entry.task_log_id] = [];
+          groupedTimeline[entry.task_log_id].push(entry);
+        });
+        setTimelineByTask(groupedTimeline);
+      }
     } else {
       setImagesByTask({});
       setTimersByTask({});
+      setTimelineByTask({});
     }
 
     const { baseHours, overtimeHours } = work
@@ -229,12 +259,37 @@ export default function DayModal({ date, onClose }: DayModalProps) {
           : "Aktīvs taimeris",
     }));
 
+    const formatGap = (from: Date, to: Date) => {
+      const totalSeconds = Math.max(0, Math.floor((to.getTime() - from.getTime()) / 1000));
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      if (hours > 0) return `${hours}h ${minutes}min`;
+      return `${minutes}min`;
+    };
+    const timelinePoints = [
+      { id: "task-start", label: "Uzdevums sākts", at: new Date(task.start_time) },
+      ...(timelineByTask[task.id] || []).map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        at: new Date(entry.created_at),
+      })),
+      ...(task.end_time ? [{ id: "task-end", label: "Uzdevums pabeigts", at: new Date(task.end_time) }] : []),
+    ].sort((a, b) => a.at.getTime() - b.at.getTime());
+
+    const timeline = timelinePoints.map((entry, index) => ({
+      id: entry.id,
+      label: entry.label,
+      timeText: format(entry.at, "HH:mm:ss"),
+      durationFromPrevious: index > 0 ? formatGap(timelinePoints[index - 1].at, entry.at) : undefined,
+    }));
+
     setSelectedTask({
       id: task.id,
       title: task.title || "Bez nosaukuma",
       notes: task.note,
       timeRangeText: buildTimeRangeText(task.start_time, task.end_time),
       timers,
+      timeline,
       imageUrls: imagesByTask[task.id] || [],
       badgeText: undefined,
     });
@@ -336,6 +391,7 @@ export default function DayModal({ date, onClose }: DayModalProps) {
               notes={selectedTask.notes}
               timeRangeText={selectedTask.timeRangeText}
               timers={selectedTask.timers}
+              timeline={selectedTask.timeline}
               imageUrls={selectedTask.imageUrls}
               onOpenImage={(index) => openTaskGallery(selectedTask.id, index)}
               onClose={() => setSelectedTask(null)}

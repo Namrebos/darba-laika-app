@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import imageCompression from "browser-image-compression";
-import { BookOpenText, CirclePlay, OctagonX, Trash2 } from "lucide-react";
+import {
+  BookOpenText,
+  CirclePlay,
+  Clock3,
+  OctagonX,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import ImageGalleryModal from "@/app/components/ImageGalleryModal";
 import TaskPreviewCard from "@/app/components/TaskPreviewCard";
@@ -29,6 +37,12 @@ type TimerEntry = {
   startedAt: Date;
   endedAt: Date;
   durationSeconds: number;
+};
+
+type TimelineEntry = {
+  id: string;
+  label: string;
+  createdAt: Date;
 };
 
 type DictionaryWord = {
@@ -83,6 +97,9 @@ export default function TaskCard({
   );
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [timerEntries, setTimerEntries] = useState<TimerEntry[]>([]);
+  const [timelineLabel, setTimelineLabel] = useState("");
+  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
+  const [isSavingTimeline, setIsSavingTimeline] = useState(false);
 
   const [dictionaryOpen, setDictionaryOpen] = useState(false);
   const [activeField, setActiveField] = useState<ActiveField>(null);
@@ -169,6 +186,33 @@ export default function TaskCard({
   useEffect(() => {
     loadTaskTimers();
   }, [loadTaskTimers]);
+
+  const loadTimelineEntries = useCallback(async () => {
+    if (!task.supabaseTaskId) return;
+
+    const { data, error } = await supabase
+      .from("task_timeline_events")
+      .select("id, label, created_at")
+      .eq("task_log_id", task.supabaseTaskId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Timeline ielādes kļūda:", error.message);
+      return;
+    }
+
+    setTimelineEntries(
+      (data || []).map((row: any) => ({
+        id: String(row.id),
+        label: row.label,
+        createdAt: new Date(row.created_at),
+      })),
+    );
+  }, [task.supabaseTaskId]);
+
+  useEffect(() => {
+    loadTimelineEntries();
+  }, [loadTimelineEntries]);
 
   useEffect(() => {
     const uploadImages = async () => {
@@ -568,6 +612,71 @@ export default function TaskCard({
     }
   };
 
+  const handleAddTimelineEntry = async () => {
+    const cleanLabel = timelineLabel.trim();
+    if (!cleanLabel || !task.supabaseTaskId || !user || isSavingTimeline) return;
+
+    setIsSavingTimeline(true);
+    const createdAt = new Date();
+    const { data, error } = await supabase
+      .from("task_timeline_events")
+      .insert({
+        task_log_id: task.supabaseTaskId,
+        user_id: user.id,
+        label: cleanLabel,
+        created_at: createdAt.toISOString(),
+      })
+      .select("id, label, created_at")
+      .single();
+
+    setIsSavingTimeline(false);
+    if (error) {
+      console.error("Timeline punkta saglabāšanas kļūda:", error.message);
+      alert("Neizdevās saglabāt Timeline punktu.");
+      return;
+    }
+
+    setTimelineEntries((prev) => [
+      ...prev,
+      { id: String(data.id), label: data.label, createdAt: new Date(data.created_at) },
+    ]);
+    setTimelineLabel("");
+  };
+
+  const handleEditTimelineEntry = async (entry: TimelineEntry) => {
+    const nextLabel = window.prompt("Timeline punkta nosaukums", entry.label)?.trim();
+    if (!nextLabel || nextLabel === entry.label) return;
+
+    const { error } = await supabase
+      .from("task_timeline_events")
+      .update({ label: nextLabel })
+      .eq("id", entry.id);
+
+    if (error) {
+      console.error("Timeline punkta labošanas kļūda:", error.message);
+      return;
+    }
+
+    setTimelineEntries((prev) =>
+      prev.map((item) => item.id === entry.id ? { ...item, label: nextLabel } : item),
+    );
+  };
+
+  const handleDeleteTimelineEntry = async (entry: TimelineEntry) => {
+    const previous = timelineEntries;
+    setTimelineEntries((prev) => prev.filter((item) => item.id !== entry.id));
+
+    const { error } = await supabase
+      .from("task_timeline_events")
+      .delete()
+      .eq("id", entry.id);
+
+    if (error) {
+      console.error("Timeline punkta dzēšanas kļūda:", error.message);
+      setTimelineEntries(previous);
+    }
+  };
+
   const handleRemoveUploadedImage = async (urlToDelete: string) => {
     if (!user || !task.supabaseTaskId || !sessionId) return;
 
@@ -629,10 +738,12 @@ export default function TaskCard({
 
       if (user) {
         const timerLabels = timerEntries.map((timer) => timer.label);
+        const timelineLabels = timelineEntries.map((entry) => entry.label);
         const hashtagWords = extractHashtagWords(
           task.title,
           task.notes,
           ...timerLabels,
+          ...timelineLabels,
         );
 
         if (hashtagWords.length > 0) {
@@ -778,6 +889,93 @@ export default function TaskCard({
     </div>
   );
 
+  const formatTimelineGap = (from: Date, to: Date) => {
+    const totalSeconds = Math.max(0, Math.floor((to.getTime() - from.getTime()) / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) return `${hours}h ${minutes}min`;
+    if (minutes > 0) return `${minutes}min ${seconds}s`;
+    return `${seconds}s`;
+  };
+
+  const renderTimelineBlock = (readonly: boolean) => {
+    const start = task.startTime ? new Date(task.startTime) : null;
+    const points = [
+      ...(start ? [{ id: "task-start", label: "Uzdevums sākts", createdAt: start, fixed: true }] : []),
+      ...timelineEntries.map((entry) => ({ ...entry, fixed: false })),
+      ...(task.endTime ? [{ id: "task-end", label: "Uzdevums pabeigts", createdAt: new Date(task.endTime), fixed: true }] : []),
+    ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    return (
+      <div className="space-y-3 border-t pt-4 dark:border-zinc-700">
+        <div className="flex items-center gap-2 font-semibold text-gray-800 dark:text-gray-200">
+          <Clock3 size={17} />
+          Timeline
+        </div>
+
+        {!readonly && (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={timelineLabel}
+              maxLength={120}
+              placeholder="Jauna punkta nosaukums"
+              onChange={(e) => setTimelineLabel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddTimelineEntry();
+                }
+              }}
+              disabled={!task.supabaseTaskId || isSavingTimeline}
+              className="min-w-0 flex-1 rounded border bg-white p-2 text-black dark:bg-zinc-800 dark:text-white"
+            />
+            <button
+              type="button"
+              onClick={handleAddTimelineEntry}
+              disabled={!timelineLabel.trim() || !task.supabaseTaskId || isSavingTimeline}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Pievienot Timeline punktu"
+            >
+              <Plus size={19} />
+            </button>
+          </div>
+        )}
+
+        <div className="pl-1">
+          {points.map((point, index) => {
+            const previous = points[index - 1];
+            return (
+              <div key={point.id}>
+                {previous && (
+                  <div className="ml-[6px] border-l-2 border-zinc-300 py-2 pl-5 text-xs text-gray-500 dark:border-zinc-600 dark:text-gray-400">
+                    {formatTimelineGap(previous.createdAt, point.createdAt)}
+                  </div>
+                )}
+                <div className="flex items-start gap-3">
+                  <span className="mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-cyan-600 bg-white dark:bg-zinc-900" />
+                  <div className="min-w-0 flex-1">
+                    <div className="break-words text-sm text-gray-800 dark:text-gray-200">{point.label}</div>
+                    <div className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                      {point.createdAt.toLocaleTimeString("lv-LV", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    </div>
+                  </div>
+                  {!readonly && !point.fixed && (
+                    <div className="flex shrink-0 gap-1">
+                      <button type="button" onClick={() => handleEditTimelineEntry(point)} className="flex h-8 w-8 items-center justify-center rounded bg-gray-200 hover:bg-gray-300 dark:bg-zinc-700 dark:hover:bg-zinc-600" title="Labot punktu"><Pencil size={14} /></button>
+                      <button type="button" onClick={() => handleDeleteTimelineEntry(point)} className="flex h-8 w-8 items-center justify-center rounded bg-gray-200 hover:bg-gray-300 dark:bg-zinc-700 dark:hover:bg-zinc-600" title="Dzēst punktu"><Trash2 size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const renderTaskForm = (readonly: boolean) => (
     <>
       <div className="space-y-4 overflow-x-hidden rounded border p-4">
@@ -888,6 +1086,7 @@ export default function TaskCard({
             </div>
 
             {renderTimerBlock(readonly)}
+            {renderTimelineBlock(readonly)}
           </div>
         </div>
 
