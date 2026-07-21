@@ -72,6 +72,73 @@ type Props = {
 type ActiveField = "title" | "notes" | "timer" | null;
 type TrackingTab = "timeline" | "timer";
 
+type CaretPosition = {
+  top: number;
+  left: number;
+  lineHeight: number;
+  fieldWidth: number;
+};
+
+const CARET_STYLE_PROPERTIES = [
+  "boxSizing", "width", "height", "overflowX", "overflowY",
+  "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+  "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+  "fontStyle", "fontVariant", "fontWeight", "fontStretch", "fontSize",
+  "fontFamily", "lineHeight", "letterSpacing", "textAlign", "textTransform",
+  "textIndent", "textDecoration", "wordSpacing", "tabSize",
+] as const;
+
+function getCaretPosition(
+  element: HTMLInputElement | HTMLTextAreaElement,
+): CaretPosition {
+  const computedStyle = window.getComputedStyle(element);
+  const mirror = document.createElement("div");
+
+  CARET_STYLE_PROPERTIES.forEach((property) => {
+    mirror.style.setProperty(
+      property.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
+      computedStyle[property],
+    );
+  });
+
+  mirror.style.position = "fixed";
+  mirror.style.top = "0";
+  mirror.style.left = "0";
+  mirror.style.visibility = "hidden";
+  mirror.style.pointerEvents = "none";
+  mirror.style.overflow = "hidden";
+  mirror.style.whiteSpace =
+    element instanceof HTMLInputElement ? "pre" : "pre-wrap";
+  mirror.style.overflowWrap = "break-word";
+  mirror.textContent = element.value.slice(
+    0,
+    element.selectionStart ?? element.value.length,
+  );
+
+  const marker = document.createElement("span");
+  marker.textContent = "\u200b";
+  mirror.appendChild(marker);
+  document.body.appendChild(mirror);
+  mirror.scrollTop = element.scrollTop;
+  mirror.scrollLeft = element.scrollLeft;
+
+  const mirrorRect = mirror.getBoundingClientRect();
+  const markerRect = marker.getBoundingClientRect();
+  const parsedLineHeight = Number.parseFloat(computedStyle.lineHeight);
+  const lineHeight = Number.isFinite(parsedLineHeight)
+    ? parsedLineHeight
+    : Number.parseFloat(computedStyle.fontSize) * 1.2;
+
+  mirror.remove();
+
+  return {
+    top: markerRect.top - mirrorRect.top,
+    left: markerRect.left - mirrorRect.left,
+    lineHeight,
+    fieldWidth: element.clientWidth,
+  };
+}
+
 export default function TaskCard({
   task,
   user,
@@ -112,13 +179,38 @@ export default function TaskCard({
   const [titleCursor, setTitleCursor] = useState(0);
   const [notesCursor, setNotesCursor] = useState(0);
   const [timerCursor, setTimerCursor] = useState(0);
+  const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(null);
 
   const titleRef = useRef<HTMLInputElement | null>(null);
   const notesRef = useRef<HTMLTextAreaElement | null>(null);
   const timerRef = useRef<HTMLInputElement | null>(null);
   const isUploadingImagesRef = useRef(false);
+  const caretAnimationFrameRef = useRef<number | null>(null);
 
   const isTimerRunning = activeTimerStartedAt !== null;
+
+  const updateCaretPosition = (
+    element: HTMLInputElement | HTMLTextAreaElement,
+  ) => {
+    if (caretAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(caretAnimationFrameRef.current);
+    }
+
+    caretAnimationFrameRef.current = requestAnimationFrame(() => {
+      if (document.activeElement === element) {
+        setCaretPosition(getCaretPosition(element));
+      }
+      caretAnimationFrameRef.current = null;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (caretAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(caretAnimationFrameRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const urls = task.images.map((file) => URL.createObjectURL(file));
@@ -782,10 +874,23 @@ export default function TaskCard({
   };
 
   const renderSuggestions = () => {
-    if (suggestions.length === 0 || !activeField) return null;
+    if (suggestions.length === 0 || !activeField || !caretPosition) return null;
+
+    const dropdownWidth = Math.min(256, caretPosition.fieldWidth);
+    const left = Math.min(
+      Math.max(0, caretPosition.left),
+      Math.max(0, caretPosition.fieldWidth - dropdownWidth),
+    );
 
     return (
-      <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded border bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+      <div
+        style={{
+          top: caretPosition.top + caretPosition.lineHeight + 4,
+          left,
+          width: dropdownWidth,
+        }}
+        className="absolute z-[90] max-h-48 overflow-y-auto rounded border bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+      >
         {suggestions.map((word) => (
           <button
             key={word}
@@ -794,7 +899,7 @@ export default function TaskCard({
             onClick={() => applySuggestion(word)}
             className="block w-full px-3 py-2 text-left text-sm text-black hover:bg-cyan-50 dark:text-white dark:hover:bg-zinc-800"
           >
-            {word}
+            {word.replace(/_/g, " ")}
           </button>
         ))}
       </div>
@@ -859,17 +964,23 @@ export default function TaskCard({
             onChange={(e) => {
               setTimerLabel(e.target.value);
               setTimerCursor(e.target.selectionStart ?? e.target.value.length);
+              updateCaretPosition(e.target);
             }}
             onFocus={(e) => {
               setActiveField("timer");
+              setCaretPosition(null);
               setTimerCursor(e.target.selectionStart ?? e.target.value.length);
+              updateCaretPosition(e.target);
             }}
-            onClick={(e) =>
-              setTimerCursor((e.target as HTMLInputElement).selectionStart ?? 0)
-            }
-            onKeyUp={(e) =>
-              setTimerCursor((e.target as HTMLInputElement).selectionStart ?? 0)
-            }
+            onClick={(e) => {
+              setTimerCursor(e.currentTarget.selectionStart ?? 0);
+              updateCaretPosition(e.currentTarget);
+            }}
+            onKeyUp={(e) => {
+              setTimerCursor(e.currentTarget.selectionStart ?? 0);
+              updateCaretPosition(e.currentTarget);
+            }}
+            onScroll={(e) => updateCaretPosition(e.currentTarget)}
             readOnly={isTimerRunning}
             className="w-full rounded border p-2 bg-white text-black dark:bg-zinc-800 dark:text-white"
           />
@@ -1121,24 +1232,26 @@ export default function TaskCard({
                   setTitleCursor(
                     e.target.selectionStart ?? e.target.value.length,
                   );
+                  updateCaretPosition(e.target);
                 }
               }}
               onFocus={(e) => {
                 setActiveField("title");
+                setCaretPosition(null);
                 setTitleCursor(
                   e.target.selectionStart ?? e.target.value.length,
                 );
+                updateCaretPosition(e.target);
               }}
-              onClick={(e) =>
-                setTitleCursor(
-                  (e.target as HTMLInputElement).selectionStart ?? 0,
-                )
-              }
-              onKeyUp={(e) =>
-                setTitleCursor(
-                  (e.target as HTMLInputElement).selectionStart ?? 0,
-                )
-              }
+              onClick={(e) => {
+                setTitleCursor(e.currentTarget.selectionStart ?? 0);
+                updateCaretPosition(e.currentTarget);
+              }}
+              onKeyUp={(e) => {
+                setTitleCursor(e.currentTarget.selectionStart ?? 0);
+                updateCaretPosition(e.currentTarget);
+              }}
+              onScroll={(e) => updateCaretPosition(e.currentTarget)}
               readOnly={readonly}
             />
             {activeField === "title" && renderSuggestions()}
@@ -1187,9 +1300,11 @@ export default function TaskCard({
                 value={task.notes}
                 onFocus={(e) => {
                   setActiveField("notes");
+                  setCaretPosition(null);
                   setNotesCursor(
                     e.target.selectionStart ?? e.target.value.length,
                   );
+                  updateCaretPosition(e.target);
                 }}
                 onChange={(e) => {
                   if (!readonly) {
@@ -1197,18 +1312,18 @@ export default function TaskCard({
                     setNotesCursor(
                       e.target.selectionStart ?? e.target.value.length,
                     );
+                    updateCaretPosition(e.target);
                   }
                 }}
-                onClick={(e) =>
-                  setNotesCursor(
-                    (e.target as HTMLTextAreaElement).selectionStart ?? 0,
-                  )
-                }
-                onKeyUp={(e) =>
-                  setNotesCursor(
-                    (e.target as HTMLTextAreaElement).selectionStart ?? 0,
-                  )
-                }
+                onClick={(e) => {
+                  setNotesCursor(e.currentTarget.selectionStart ?? 0);
+                  updateCaretPosition(e.currentTarget);
+                }}
+                onKeyUp={(e) => {
+                  setNotesCursor(e.currentTarget.selectionStart ?? 0);
+                  updateCaretPosition(e.currentTarget);
+                }}
+                onScroll={(e) => updateCaretPosition(e.currentTarget)}
                 readOnly={readonly}
               />
               {activeField === "notes" && renderSuggestions()}

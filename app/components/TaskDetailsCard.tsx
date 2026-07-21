@@ -71,7 +71,9 @@ export default function TaskDetailsCard({
               <div key={entry.id} className="flex items-center gap-2">
                 <Circle size={10} />
                 <span className="font-mono">{entry.durationText}</span>
-                <span className="text-gray-500 dark:text-gray-400">{entry.label}</span>
+                <span className="text-gray-500 dark:text-gray-400">
+                  {entry.label.replace(/_/g, " ")}
+                </span>
               </div>
             ))}
           </div>

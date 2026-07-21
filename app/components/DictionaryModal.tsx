@@ -220,7 +220,7 @@ export default function DictionaryModal({
                     />
 
                     <span className="truncate text-sm text-black dark:text-white">
-                      {word.name}
+                      {word.name.replace(/_/g, " ")}
                     </span>
                   </div>
 
