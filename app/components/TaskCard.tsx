@@ -1156,74 +1156,74 @@ export default function TaskCard({
               {activeField === "notes" && renderSuggestions()}
             </div>
 
-            {renderTrackingTabs(readonly)}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {!readonly && (
-            <label
-              className="flex h-14 w-14 cursor-pointer items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700"
-              title="Pievienot attēlus"
-              aria-label="Pievienot attēlus"
-            >
-              <MdAddAPhoto size={35} />
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  handleSelectedImages(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            {!readonly &&
-              localPreviewUrls.map((previewUrl, idx) => (
-                <div key={idx} className="relative h-16 w-16">
-                  <img
-                    src={previewUrl}
-                    alt="Jauns attēls"
-                    className="h-16 w-16 cursor-pointer rounded object-cover"
-                    onClick={() => openGallery(idx)}
-                  />
-                  <button
-                    className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-black bg-opacity-70 text-xs text-white"
-                    onClick={() => {
-                      const updated = [...task.images];
-                      updated.splice(idx, 1);
-                      updateTask(task.id, { images: updated });
+            <div className="flex flex-wrap items-center gap-3">
+              {!readonly && (
+                <label
+                  className="flex h-14 w-14 cursor-pointer items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700"
+                  title="Pievienot attēlus"
+                  aria-label="Pievienot attēlus"
+                >
+                  <MdAddAPhoto size={35} />
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      handleSelectedImages(e.target.files);
+                      e.target.value = "";
                     }}
-                    title="Dzēst attēlu"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+                  />
+                </label>
+              )}
 
-            {task.uploadedImageUrls.map((url, idx) => (
-              <div key={idx} className="relative h-16 w-16">
-                <img
-                  src={url}
-                  alt="Attēls"
-                  className="h-16 w-16 cursor-pointer rounded object-cover"
-                  onClick={() => openGallery(localPreviewUrls.length + idx)}
-                />
-                {!readonly && (
-                  <button
-                    className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-black bg-opacity-70 text-xs text-white"
-                    onClick={() => handleRemoveUploadedImage(url)}
-                    title="Dzēst augšupielādēto attēlu"
-                  >
-                    ×
-                  </button>
-                )}
+              <div className="flex flex-wrap gap-2">
+                {!readonly &&
+                  localPreviewUrls.map((previewUrl, idx) => (
+                    <div key={idx} className="relative h-16 w-16">
+                      <img
+                        src={previewUrl}
+                        alt="Jauns attēls"
+                        className="h-16 w-16 cursor-pointer rounded object-cover"
+                        onClick={() => openGallery(idx)}
+                      />
+                      <button
+                        className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-black bg-opacity-70 text-xs text-white"
+                        onClick={() => {
+                          const updated = [...task.images];
+                          updated.splice(idx, 1);
+                          updateTask(task.id, { images: updated });
+                        }}
+                        title="Dzēst attēlu"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+
+                {task.uploadedImageUrls.map((url, idx) => (
+                  <div key={idx} className="relative h-16 w-16">
+                    <img
+                      src={url}
+                      alt="Attēls"
+                      className="h-16 w-16 cursor-pointer rounded object-cover"
+                      onClick={() => openGallery(localPreviewUrls.length + idx)}
+                    />
+                    {!readonly && (
+                      <button
+                        className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-black bg-opacity-70 text-xs text-white"
+                        onClick={() => handleRemoveUploadedImage(url)}
+                        title="Dzēst augšupielādēto attēlu"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+
+            {renderTrackingTabs(readonly)}
           </div>
         </div>
       </div>
