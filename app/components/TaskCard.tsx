@@ -569,11 +569,13 @@ export default function TaskCard({
   const applySuggestion = async (selectedWord: string) => {
     if (!activeField) return;
 
+    const insertionText = selectedWord.replace(/_/g, " ");
+
     if (activeField === "title") {
       const { nextValue, nextCursor } = replaceWordAtCursor(
         task.title,
         titleCursor,
-        selectedWord,
+        insertionText,
       );
       updateTask(task.id, { title: nextValue });
       focusFieldAfterInsert("title", nextCursor);
@@ -583,7 +585,7 @@ export default function TaskCard({
       const { nextValue, nextCursor } = replaceWordAtCursor(
         task.notes,
         notesCursor,
-        selectedWord,
+        insertionText,
       );
       updateTask(task.id, { notes: nextValue });
       focusFieldAfterInsert("notes", nextCursor);
@@ -593,7 +595,7 @@ export default function TaskCard({
       const { nextValue, nextCursor } = replaceWordAtCursor(
         timerLabel,
         timerCursor,
-        selectedWord,
+        insertionText,
       );
       setTimerLabel(nextValue);
       focusFieldAfterInsert("timer", nextCursor);
@@ -906,6 +908,48 @@ export default function TaskCard({
     );
   };
 
+  const renderGhostSuggestion = (field: Exclude<ActiveField, null>) => {
+    if (
+      activeField !== field ||
+      !caretPosition ||
+      suggestions.length === 0 ||
+      !currentPrefix
+    ) {
+      return null;
+    }
+
+    const suggestionText = suggestions[0].replace(/_/g, " ");
+    if (!suggestionText.toLowerCase().startsWith(currentPrefix.toLowerCase())) {
+      return null;
+    }
+
+    const suffix = suggestionText.slice(currentPrefix.length);
+    if (!suffix) return null;
+
+    return (
+      <span
+        aria-hidden="true"
+        style={{
+          top: caretPosition.top,
+          left: caretPosition.left,
+          lineHeight: `${caretPosition.lineHeight}px`,
+          maxWidth: `calc(100% - ${caretPosition.left}px)`,
+        }}
+        className="pointer-events-none absolute z-10 overflow-hidden whitespace-pre text-gray-400 dark:text-gray-500"
+      >
+        {suffix}
+      </span>
+    );
+  };
+
+  const handleSuggestionKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    if (event.key !== "Tab" || suggestions.length === 0) return;
+    event.preventDefault();
+    void applySuggestion(suggestions[0]);
+  };
+
   if (task.status === "starting") {
     return (
       <button
@@ -980,10 +1024,12 @@ export default function TaskCard({
               setTimerCursor(e.currentTarget.selectionStart ?? 0);
               updateCaretPosition(e.currentTarget);
             }}
+            onKeyDown={handleSuggestionKeyDown}
             onScroll={(e) => updateCaretPosition(e.currentTarget)}
             readOnly={isTimerRunning}
             className="w-full rounded border p-2 bg-white text-black dark:bg-zinc-800 dark:text-white"
           />
+          {renderGhostSuggestion("timer")}
           {activeField === "timer" && renderSuggestions()}
         </div>
       )}
@@ -1251,9 +1297,11 @@ export default function TaskCard({
                 setTitleCursor(e.currentTarget.selectionStart ?? 0);
                 updateCaretPosition(e.currentTarget);
               }}
+              onKeyDown={handleSuggestionKeyDown}
               onScroll={(e) => updateCaretPosition(e.currentTarget)}
               readOnly={readonly}
             />
+            {renderGhostSuggestion("title")}
             {activeField === "title" && renderSuggestions()}
           </div>
 
@@ -1323,9 +1371,11 @@ export default function TaskCard({
                   setNotesCursor(e.currentTarget.selectionStart ?? 0);
                   updateCaretPosition(e.currentTarget);
                 }}
+                onKeyDown={handleSuggestionKeyDown}
                 onScroll={(e) => updateCaretPosition(e.currentTarget)}
                 readOnly={readonly}
               />
+              {renderGhostSuggestion("notes")}
               {activeField === "notes" && renderSuggestions()}
             </div>
 
