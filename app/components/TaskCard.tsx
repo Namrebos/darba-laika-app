@@ -934,7 +934,7 @@ export default function TaskCard({
     ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
     return (
-      <div className="space-y-3">
+      <div className="flex h-full min-h-0 flex-col gap-3">
         <div className="flex items-center gap-2 font-semibold text-gray-800 dark:text-gray-200">
           <Clock3 size={17} />
           Timeline
@@ -969,7 +969,7 @@ export default function TaskCard({
           </div>
         )}
 
-        <div className="pl-1">
+        <div className="min-h-0 flex-1 overflow-y-auto pl-1 pr-1">
           {points.map((point, index) => {
             const previous = points[index - 1];
             return (
@@ -1002,7 +1002,20 @@ export default function TaskCard({
     );
   };
 
-  const renderTrackingTabs = (readonly: boolean) => (
+  const renderTrackingTabs = (readonly: boolean) => {
+    const totalTimelinePoints =
+      (task.startTime ? 1 : 0) +
+      timelineEntries.length +
+      (task.endTime ? 1 : 0);
+    const visibleTimelinePoints = Math.max(
+      1,
+      Math.min(3, totalTimelinePoints),
+    );
+    const panelHeight = readonly
+      ? 74 + (visibleTimelinePoints - 1) * 66
+      : 124 + (visibleTimelinePoints - 1) * 66;
+
+    return (
     <div className="border-t pt-4 dark:border-zinc-700">
       <div
         className="mb-3 grid grid-cols-2 rounded-lg bg-gray-100 p-1 dark:bg-zinc-800"
@@ -1039,13 +1052,18 @@ export default function TaskCard({
         </button>
       </div>
 
-      <div className="h-72 overflow-y-auto pr-1" role="tabpanel">
+      <div
+        className="overflow-hidden pr-1 transition-[height] duration-200"
+        style={{ height: `${panelHeight}px` }}
+        role="tabpanel"
+      >
         {activeTrackingTab === "timeline"
           ? renderTimelineBlock(readonly)
-          : renderTimerBlock(readonly)}
+          : <div className="h-full overflow-y-auto">{renderTimerBlock(readonly)}</div>}
       </div>
     </div>
-  );
+    );
+  };
 
   const renderTaskForm = (readonly: boolean) => (
     <>
