@@ -925,6 +925,37 @@ export default function TaskCard({
     return `${seconds}s`;
   };
 
+  const buildTimelineItems = () => {
+    const points = [
+      ...(task.startTime
+        ? [{ id: "task-start", label: "Uzdevums sākts", createdAt: new Date(task.startTime) }]
+        : []),
+      ...timelineEntries,
+      ...(task.endTime
+        ? [{ id: "task-end", label: "Uzdevums pabeigts", createdAt: new Date(task.endTime) }]
+        : []),
+    ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    return points.map((point, index) => ({
+      id: point.id,
+      label: point.label,
+      timeText: point.createdAt.toLocaleTimeString("lv-LV", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
+      durationFromPrevious:
+        index > 0
+          ? formatTimelineGap(points[index - 1].createdAt, point.createdAt)
+          : undefined,
+    }));
+  };
+
+  const handleOpenTaskDetails = async () => {
+    await Promise.all([loadTaskTimers(), loadTimelineEntries()]);
+    updateTask(task.id, { status: "review" });
+  };
+
   const renderTimelineBlock = (readonly: boolean) => {
     const start = task.startTime ? new Date(task.startTime) : null;
     const points = [
@@ -1280,6 +1311,7 @@ export default function TaskCard({
           notes={task.notes}
           timeRangeText={buildTimeRangeText()}
           timers={buildTimerItems()}
+          timeline={buildTimelineItems()}
           imageUrls={task.uploadedImageUrls}
           onOpenImage={(index) => openGallery(index)}
           onClose={() => updateTask(task.id, { status: "finished" })}
@@ -1303,7 +1335,7 @@ export default function TaskCard({
           timeRangeText={buildTimeRangeText()}
           imageUrls={task.uploadedImageUrls}
           onOpenImage={(index) => openGallery(index)}
-          onOpenDetails={() => updateTask(task.id, { status: "review" })}
+          onOpenDetails={handleOpenTaskDetails}
         />
 
         <ImageGalleryModal
