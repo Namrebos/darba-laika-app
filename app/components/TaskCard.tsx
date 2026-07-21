@@ -12,6 +12,8 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
+import { MdAddAPhoto } from "react-icons/md";
+import { FaPhotoFilm } from "react-icons/fa6";
 import { supabase } from "@/lib/supabaseClient";
 import ImageGalleryModal from "@/app/components/ImageGalleryModal";
 import TaskPreviewCard from "@/app/components/TaskPreviewCard";
@@ -708,6 +710,26 @@ export default function TaskCard({
     updateTask(task.id, { uploadedImageUrls: updated });
   };
 
+  const handleSelectedImages = (files: FileList | null) => {
+    if (!files) return;
+
+    const newFiles = Array.from(files);
+    const total = task.images.length + task.uploadedImageUrls.length;
+    const available = 5 - total;
+
+    if (available <= 0) {
+      alert("Maksimālais attēlu skaits ir 5!");
+      return;
+    }
+
+    const allowed = newFiles.slice(0, available);
+    if (allowed.length < newFiles.length) {
+      alert(`Var pievienot tikai vēl ${available} attēlu(s)!`);
+    }
+
+    updateTask(task.id, { images: [...task.images, ...allowed] });
+  };
+
   const handleFinish = async () => {
     const titleFilled = task.title.trim().length > 0;
     const notesFilled = task.notes.trim().length > 0;
@@ -1090,40 +1112,45 @@ export default function TaskCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           {!readonly && (
-            <label className="cursor-pointer rounded bg-cyan-500 px-4 py-2 text-white">
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files) {
-                    const newFiles = Array.from(e.target.files);
-                    const total =
-                      task.images.length + task.uploadedImageUrls.length;
-                    const available = 5 - total;
+            <div className="flex flex-wrap gap-2">
+              <label
+                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700"
+                title="Uzņemt foto"
+                aria-label="Uzņemt foto"
+              >
+                <MdAddAPhoto size={24} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleSelectedImages(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
 
-                    if (available <= 0) {
-                      alert("Maksimālais attēlu skaits ir 5!");
-                      return;
-                    }
-
-                    const allowed = newFiles.slice(0, available);
-
-                    if (allowed.length < newFiles.length) {
-                      alert(`Var pievienot tikai vēl ${available} attēlu(s)!`);
-                    }
-
-                    updateTask(task.id, {
-                      images: [...task.images, ...allowed],
-                    });
-                  }
-                }}
-              />
-              Pievienot attēlus
-            </label>
+              <label
+                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded bg-cyan-500 text-white hover:bg-cyan-600"
+                title="Foto bibliotēka"
+                aria-label="Foto bibliotēka"
+              >
+                <FaPhotoFilm size={23} />
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleSelectedImages(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
           )}
 
           <div className="flex flex-wrap gap-2">
