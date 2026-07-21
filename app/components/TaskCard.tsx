@@ -1182,28 +1182,7 @@ export default function TaskCard({
               {activeField === "notes" && renderSuggestions()}
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {!readonly && (
-                <label
-                  className="flex h-14 w-14 cursor-pointer items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700"
-                  title="Pievienot attēlus"
-                  aria-label="Pievienot attēlus"
-                >
-                  <MdAddAPhoto size={35} />
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      handleSelectedImages(e.target.files);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-              )}
-
-              <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
                 {!readonly &&
                   localPreviewUrls.map((previewUrl, idx) => (
                     <div key={idx} className="relative h-16 w-16">
@@ -1246,7 +1225,26 @@ export default function TaskCard({
                     )}
                   </div>
                 ))}
-              </div>
+
+              {!readonly && (
+                <label
+                  className="ml-auto flex h-16 w-16 cursor-pointer items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700"
+                  title="Pievienot attēlus"
+                  aria-label="Pievienot attēlus"
+                >
+                  <MdAddAPhoto size={39} />
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      handleSelectedImages(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
             </div>
 
             {renderTrackingTabs(readonly)}
