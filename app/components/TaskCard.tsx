@@ -1150,8 +1150,9 @@ export default function TaskCard({
             <div className="relative">
               <textarea
                 ref={notesRef}
+                rows={3}
                 placeholder="Piezīmes"
-                className="h-28 w-full resize-none rounded border p-2 bg-white text-black dark:bg-zinc-800 dark:text-white"
+                className="w-full resize-none rounded border p-2 bg-white text-black dark:bg-zinc-800 dark:text-white"
                 value={task.notes}
                 onFocus={(e) => {
                   setActiveField("notes");
