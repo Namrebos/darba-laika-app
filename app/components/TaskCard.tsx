@@ -815,14 +815,14 @@ export default function TaskCard({
   }
 
   const renderTimerBlock = (readonly: boolean) => (
-    <div className="space-y-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex items-center gap-3">
         {!readonly && (
           <button
             type="button"
             onClick={isTimerRunning ? handleStopTimer : handleStartTimer}
             disabled={!task.supabaseTaskId}
-            className={`flex h-12 w-12 min-h-12 min-w-12 shrink-0 items-center justify-center rounded-full text-white touch-manipulation ${
+            className={`flex h-9 w-9 min-h-9 min-w-9 shrink-0 items-center justify-center rounded-full text-white touch-manipulation ${
               isTimerRunning
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-green-500 hover:bg-green-600"
@@ -833,16 +833,16 @@ export default function TaskCard({
                 : ""
             }
           >
-            {isTimerRunning ? <OctagonX size={22} /> : <CirclePlay size={22} />}
+            {isTimerRunning ? <OctagonX size={17} /> : <CirclePlay size={17} />}
           </button>
         )}
 
         <div className="min-w-0">
-          <div className="text-3xl font-semibold text-black dark:text-white">
+          <div className="font-mono text-xl font-semibold text-black dark:text-white">
             {formatRunningTimer(elapsedSeconds)}
           </div>
           {isTimerRunning && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               Aktīvs taimeris: {timerLabel}
             </p>
           )}
@@ -878,10 +878,10 @@ export default function TaskCard({
       )}
 
       {sortedTimerEntries.length > 0 && (
-        <div className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 text-sm text-gray-800 dark:text-gray-200">
           <div className="font-semibold">Taimeri</div>
 
-          <div className="space-y-1 pl-1">
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pl-1 pr-1">
             {sortedTimerEntries.map((entry) => (
               <div
                 key={entry.id}
@@ -1011,9 +1011,17 @@ export default function TaskCard({
       1,
       Math.min(3, totalTimelinePoints),
     );
-    const panelHeight = readonly
+    const visibleTimerEntries = Math.min(3, sortedTimerEntries.length);
+    const timelinePanelHeight = readonly
       ? 74 + (visibleTimelinePoints - 1) * 66
       : 124 + (visibleTimelinePoints - 1) * 66;
+    const timerPanelHeight = readonly
+      ? Math.max(42, 28 + visibleTimerEntries * 34)
+      : 98 + visibleTimerEntries * 40;
+    const panelHeight =
+      activeTrackingTab === "timeline"
+        ? timelinePanelHeight
+        : timerPanelHeight;
 
     return (
     <div className="border-t pt-4 dark:border-zinc-700">
