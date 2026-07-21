@@ -927,18 +927,22 @@ export default function TaskCard({
     if (!suffix) return null;
 
     return (
-      <span
-        aria-hidden="true"
+      <button
+        type="button"
+        aria-label={`Ievietot ieteikumu “${suggestionText}”`}
+        title="Pieskaries, lai ievietotu ieteikumu"
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={() => void applySuggestion(suggestions[0])}
         style={{
           top: caretPosition.top,
           left: caretPosition.left,
           lineHeight: `${caretPosition.lineHeight}px`,
           maxWidth: `calc(100% - ${caretPosition.left}px)`,
         }}
-        className="pointer-events-none absolute z-10 overflow-hidden whitespace-pre text-gray-400 dark:text-gray-500"
+        className="absolute z-10 cursor-pointer overflow-hidden whitespace-pre border-0 bg-transparent p-0 text-gray-400 hover:underline dark:text-gray-500"
       >
         {suffix}
-      </span>
+      </button>
     );
   };
 
