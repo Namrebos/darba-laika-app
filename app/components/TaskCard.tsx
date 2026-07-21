@@ -13,7 +13,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { MdAddAPhoto } from "react-icons/md";
-import { FaPhotoFilm } from "react-icons/fa6";
+import { FaPhotoFilm, FaTimeline } from "react-icons/fa6";
+import { RxLapTimer } from "react-icons/rx";
 import { supabase } from "@/lib/supabaseClient";
 import ImageGalleryModal from "@/app/components/ImageGalleryModal";
 import TaskPreviewCard from "@/app/components/TaskPreviewCard";
@@ -69,6 +70,7 @@ type Props = {
 };
 
 type ActiveField = "title" | "notes" | "timer" | null;
+type TrackingTab = "timeline" | "timer";
 
 export default function TaskCard({
   task,
@@ -102,6 +104,8 @@ export default function TaskCard({
   const [timelineLabel, setTimelineLabel] = useState("");
   const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
   const [isSavingTimeline, setIsSavingTimeline] = useState(false);
+  const [activeTrackingTab, setActiveTrackingTab] =
+    useState<TrackingTab>("timeline");
 
   const [dictionaryOpen, setDictionaryOpen] = useState(false);
   const [activeField, setActiveField] = useState<ActiveField>(null);
@@ -930,7 +934,7 @@ export default function TaskCard({
     ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
     return (
-      <div className="space-y-3 border-t pt-4 dark:border-zinc-700">
+      <div className="space-y-3">
         <div className="flex items-center gap-2 font-semibold text-gray-800 dark:text-gray-200">
           <Clock3 size={17} />
           Timeline
@@ -997,6 +1001,51 @@ export default function TaskCard({
       </div>
     );
   };
+
+  const renderTrackingTabs = (readonly: boolean) => (
+    <div className="border-t pt-4 dark:border-zinc-700">
+      <div
+        className="mb-3 grid grid-cols-2 rounded-lg bg-gray-100 p-1 dark:bg-zinc-800"
+        role="tablist"
+        aria-label="Laika uzskaite"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTrackingTab === "timeline"}
+          onClick={() => setActiveTrackingTab("timeline")}
+          className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
+            activeTrackingTab === "timeline"
+              ? "bg-white text-black shadow-sm dark:bg-zinc-700 dark:text-white"
+              : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
+          }`}
+        >
+          <FaTimeline size={16} />
+          Timeline
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTrackingTab === "timer"}
+          onClick={() => setActiveTrackingTab("timer")}
+          className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
+            activeTrackingTab === "timer"
+              ? "bg-white text-black shadow-sm dark:bg-zinc-700 dark:text-white"
+              : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
+          }`}
+        >
+          <RxLapTimer size={18} />
+          Timer
+        </button>
+      </div>
+
+      <div className="h-72 overflow-y-auto pr-1" role="tabpanel">
+        {activeTrackingTab === "timeline"
+          ? renderTimelineBlock(readonly)
+          : renderTimerBlock(readonly)}
+      </div>
+    </div>
+  );
 
   const renderTaskForm = (readonly: boolean) => (
     <>
@@ -1107,8 +1156,7 @@ export default function TaskCard({
               {activeField === "notes" && renderSuggestions()}
             </div>
 
-            {renderTimerBlock(readonly)}
-            {renderTimelineBlock(readonly)}
+            {renderTrackingTabs(readonly)}
           </div>
         </div>
 
