@@ -13,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { MdAddAPhoto } from "react-icons/md";
-import { FaPhotoFilm, FaTimeline } from "react-icons/fa6";
+import { FaTimeline } from "react-icons/fa6";
 import { RxLapTimer } from "react-icons/rx";
 import { supabase } from "@/lib/supabaseClient";
 import ImageGalleryModal from "@/app/components/ImageGalleryModal";
@@ -1162,43 +1162,23 @@ export default function TaskCard({
 
         <div className="flex flex-wrap items-center gap-3">
           {!readonly && (
-            <div className="flex flex-wrap gap-2">
-              <label
-                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700"
-                title="Uzņemt foto"
-                aria-label="Uzņemt foto"
-              >
-                <MdAddAPhoto size={24} />
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => {
-                    handleSelectedImages(e.target.files);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-
-              <label
-                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded bg-cyan-500 text-white hover:bg-cyan-600"
-                title="Foto bibliotēka"
-                aria-label="Foto bibliotēka"
-              >
-                <FaPhotoFilm size={23} />
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    handleSelectedImages(e.target.files);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-            </div>
+            <label
+              className="flex h-14 w-14 cursor-pointer items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700"
+              title="Pievienot attēlus"
+              aria-label="Pievienot attēlus"
+            >
+              <MdAddAPhoto size={35} />
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  handleSelectedImages(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
           )}
 
           <div className="flex flex-wrap gap-2">
