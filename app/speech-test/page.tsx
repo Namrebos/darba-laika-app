@@ -2,35 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MdMic, MdMicOff } from "react-icons/md";
-
-type SpeechRecognitionConstructor = new () => {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onresult: ((event: {
-    resultIndex: number;
-    results: ArrayLike<{
-      isFinal: boolean;
-      0: { transcript: string; confidence: number };
-    }>;
-  }) => void) | null;
-};
-
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  }
-}
+import {
+  getSpeechRecognitionConstructor,
+  type SpeechRecognitionInstance,
+} from "@/lib/speechRecognition";
 
 export default function SpeechTestPage() {
-  const recognitionRef = useRef<InstanceType<SpeechRecognitionConstructor> | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [listening, setListening] = useState(false);
   const [text, setText] = useState("");
@@ -39,16 +17,14 @@ export default function SpeechTestPage() {
   const [message, setMessage] = useState("Nospied mikrofonu un sāc runāt.");
 
   useEffect(() => {
-    const Recognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const Recognition = getSpeechRecognitionConstructor();
     setSupported(Boolean(Recognition));
 
     return () => recognitionRef.current?.abort();
   }, []);
 
   const startListening = () => {
-    const Recognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const Recognition = getSpeechRecognitionConstructor();
 
     if (!Recognition) {
       setMessage("Šis pārlūks neatbalsta balss atpazīšanu.");

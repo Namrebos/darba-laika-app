@@ -12,10 +12,14 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { MdAddAPhoto } from "react-icons/md";
+import { MdAddAPhoto, MdMic, MdMicOff } from "react-icons/md";
 import { FaTimeline } from "react-icons/fa6";
 import { RxLapTimer } from "react-icons/rx";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  getSpeechRecognitionConstructor,
+  type SpeechRecognitionInstance,
+} from "@/lib/speechRecognition";
 import ImageGalleryModal from "@/app/components/ImageGalleryModal";
 import TaskPreviewCard from "@/app/components/TaskPreviewCard";
 import TaskDetailsCard from "@/app/components/TaskDetailsCard";
@@ -180,12 +184,17 @@ export default function TaskCard({
   const [notesCursor, setNotesCursor] = useState(0);
   const [timerCursor, setTimerCursor] = useState(0);
   const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(null);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [isListeningToNotes, setIsListeningToNotes] = useState(false);
+  const [speechMessage, setSpeechMessage] = useState("Sākt balss ievadi");
 
   const titleRef = useRef<HTMLInputElement | null>(null);
   const notesRef = useRef<HTMLTextAreaElement | null>(null);
   const timerRef = useRef<HTMLInputElement | null>(null);
   const isUploadingImagesRef = useRef(false);
   const caretAnimationFrameRef = useRef<number | null>(null);
+  const speechRecognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const speechNotesRef = useRef("");
 
   const isTimerRunning = activeTimerStartedAt !== null;
 
@@ -211,6 +220,84 @@ export default function TaskCard({
       }
     };
   }, []);
+
+  useEffect(() => {
+    setSpeechSupported(Boolean(getSpeechRecognitionConstructor()));
+
+    return () => {
+      speechRecognitionRef.current?.abort();
+      speechRecognitionRef.current = null;
+    };
+  }, []);
+
+  const toggleNotesSpeechInput = () => {
+    if (isListeningToNotes) {
+      speechRecognitionRef.current?.stop();
+      return;
+    }
+
+    const Recognition = getSpeechRecognitionConstructor();
+    if (!Recognition) return;
+
+    const recognition = new Recognition();
+    recognition.lang = "lv-LV";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    speechNotesRef.current = task.notes;
+
+    recognition.onstart = () => {
+      setIsListeningToNotes(true);
+      setSpeechMessage("Apturēt balss ievadi");
+    };
+
+    recognition.onresult = (event) => {
+      let finalText = "";
+
+      for (
+        let index = event.resultIndex;
+        index < event.results.length;
+        index += 1
+      ) {
+        if (event.results[index].isFinal) {
+          finalText += event.results[index][0].transcript;
+        }
+      }
+
+      const cleanText = finalText.trim();
+      if (!cleanText) return;
+
+      const nextNotes = `${speechNotesRef.current}${
+        speechNotesRef.current.trim() ? " " : ""
+      }${cleanText}`;
+      speechNotesRef.current = nextNotes;
+      updateTask(task.id, { notes: nextNotes });
+    };
+
+    recognition.onerror = (event) => {
+      const messages: Record<string, string> = {
+        "not-allowed": "Nav dota mikrofona atļauja",
+        "no-speech": "Runa netika sadzirdēta",
+        network: "Balss atpazīšanai nav tīkla savienojuma",
+        "audio-capture": "Mikrofons nav pieejams",
+      };
+      setSpeechMessage(messages[event.error] || "Balss ievades kļūda");
+    };
+
+    recognition.onend = () => {
+      setIsListeningToNotes(false);
+      setSpeechMessage("Sākt balss ievadi");
+      speechRecognitionRef.current = null;
+    };
+
+    speechRecognitionRef.current = recognition;
+
+    try {
+      recognition.start();
+    } catch (error) {
+      console.error("Balss ievades palaišanas kļūda:", error);
+      setSpeechMessage("Neizdevās sākt balss ievadi");
+    }
+  };
 
   useEffect(() => {
     const urls = task.images.map((file) => URL.createObjectURL(file));
@@ -1348,7 +1435,9 @@ export default function TaskCard({
                 ref={notesRef}
                 rows={3}
                 placeholder="Piezīmes"
-                className="w-full resize-none rounded border p-2 bg-white text-black dark:bg-zinc-800 dark:text-white"
+                className={`w-full resize-none rounded border p-2 bg-white text-black dark:bg-zinc-800 dark:text-white ${
+                  !readonly && speechSupported ? "pb-10 pr-12" : ""
+                }`}
                 value={task.notes}
                 onFocus={(e) => {
                   setActiveField("notes");
@@ -1381,6 +1470,25 @@ export default function TaskCard({
               />
               {renderGhostSuggestion("notes")}
               {activeField === "notes" && renderSuggestions()}
+              {!readonly && speechSupported && (
+                <button
+                  type="button"
+                  onClick={toggleNotesSpeechInput}
+                  className={`absolute bottom-4 right-2 z-20 flex h-8 w-8 items-center justify-center rounded-full text-white ${
+                    isListeningToNotes
+                      ? "bg-red-600 hover:bg-red-700"
+                      : "bg-cyan-600 hover:bg-cyan-700"
+                  }`}
+                  title={speechMessage}
+                  aria-label={speechMessage}
+                >
+                  {isListeningToNotes ? (
+                    <MdMicOff size={19} />
+                  ) : (
+                    <MdMic size={19} />
+                  )}
+                </button>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2">
