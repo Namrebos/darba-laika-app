@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Menu, X, Sun, Moon, Laptop, Power } from "lucide-react";
 import "./globals.css";
 import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister";
+import type { AppRole } from "@/lib/access";
 
 export default function RootLayout({
   children,
@@ -16,12 +17,14 @@ export default function RootLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [role, setRole] = useState<AppRole | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
   const isAuthPage =
     pathname === "/login" ||
     pathname === "/signup" ||
+    pathname === "/register" ||
     pathname === "/reset-password";
 
   useEffect(() => {
@@ -56,6 +59,35 @@ export default function RootLayout({
   }, []);
 
   useEffect(() => {
+    if (isAuthPage) return;
+
+    async function checkAccess() {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user.id)
+        .single();
+      const currentRole = (profile?.role || "member") as AppRole;
+      setRole(currentRole);
+
+      if (currentRole === "viewer" && pathname !== "/summary") {
+        router.replace("/summary");
+      }
+      if (pathname === "/users" && currentRole !== "admin") {
+        router.replace("/summary");
+      }
+    }
+
+    checkAccess();
+  }, [isAuthPage, pathname, router]);
+
+  useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
@@ -87,7 +119,8 @@ export default function RootLayout({
     { href: "/workday", label: "Darbadiena" },
     { href: "/summary", label: "Kopsavilkums" },
     { href: "/finance", label: "Finanses" },
-  ];
+    ...(role === "admin" ? [{ href: "/users", label: "Lietotāji" }] : []),
+  ].filter(({ href }) => role !== "viewer" || href === "/summary");
 
   if (isAuthPage) {
     return (

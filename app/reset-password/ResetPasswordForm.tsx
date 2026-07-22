@@ -3,12 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { useSearchParams } from 'next/navigation'
 
 export default function ResetPasswordForm() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const isInvitation = searchParams.get('invite') === '1'
 
   const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -28,7 +31,10 @@ export default function ResetPasswordForm() {
 
   return (
     <form onSubmit={handleResetPassword} className="max-w-sm mx-auto p-4 space-y-4">
-      <h1 className="text-xl font-bold">Jaunas paroles izveide</h1>
+      <h1 className="text-xl font-bold">
+        {isInvitation ? 'Konta aktivizēšana' : 'Jaunas paroles izveide'}
+      </h1>
+      {isInvitation && <p className="text-sm text-zinc-500">Izveido paroli, lai pabeigtu reģistrāciju.</p>}
 
       <input
         type="password"
