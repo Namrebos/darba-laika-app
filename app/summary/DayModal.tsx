@@ -11,10 +11,13 @@ import TaskDetailsCard from "@/app/components/TaskDetailsCard";
 type DayModalProps = {
   date: string;
   ownerId: string;
+  canDelete: boolean;
   onClose: () => void;
+  onDeleted: () => void;
 };
 
 type WorkLog = {
+  id: number;
   start_time: string;
   end_time: string;
 };
@@ -89,10 +92,12 @@ function buildTimeRangeText(start: string, end: string | null) {
   return `${format(startDate, "HH:mm")}-${format(endDate, "HH:mm")} (${durationText})`;
 }
 
-export default function DayModal({ date, ownerId, onClose }: DayModalProps) {
+export default function DayModal({ date, ownerId, canDelete, onClose, onDeleted }: DayModalProps) {
   const [workLog, setWorkLog] = useState<WorkLog | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [imagesByTask, setImagesByTask] = useState<Record<number, string[]>>(
     {},
   );
@@ -298,6 +303,29 @@ export default function DayModal({ date, ownerId, onClose }: DayModalProps) {
     });
   };
 
+  const deleteWorkLog = async () => {
+    if (!workLog || !window.confirm("Vai tiešām dzēst šo darba dienu un visus tās uzdevumus un attēlus?")) return;
+
+    setDeleting(true);
+    setDeleteError("");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch(`/api/work-logs/${workLog.id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
+      },
+    });
+    const result = (await response.json()) as { error?: string };
+    setDeleting(false);
+
+    if (!response.ok) {
+      setDeleteError(result.error || "Darba dienu neizdevās izdzēst.");
+      return;
+    }
+
+    onDeleted();
+  };
+
   const previewCards = useMemo(() => {
     return tasks.map((task) => ({
       id: task.id,
@@ -318,15 +346,27 @@ export default function DayModal({ date, ownerId, onClose }: DayModalProps) {
               {format(parseISO(date), "yyyy-MM-dd")}
             </h2>
 
-            <button
-              onClick={onClose}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-900 hover:bg-zinc-100 dark:border-zinc-600 dark:text-white dark:hover:bg-zinc-800"
-            >
-              Aizvērt
-            </button>
+            <div className="flex gap-2">
+              {canDelete && workLog && (
+                <button
+                  onClick={deleteWorkLog}
+                  disabled={deleting}
+                  className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950"
+                >
+                  {deleting ? "Dzēš..." : "Dzēst dienu"}
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-900 hover:bg-zinc-100 dark:border-zinc-600 dark:text-white dark:hover:bg-zinc-800"
+              >
+                Aizvērt
+              </button>
+            </div>
           </div>
 
           <div className="overflow-y-auto bg-white px-5 py-4 dark:bg-zinc-950">
+            {deleteError && <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">{deleteError}</p>}
             {loading ? (
               <p className="text-sm text-zinc-600 dark:text-zinc-300">
                 Ielādē...

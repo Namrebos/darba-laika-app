@@ -109,9 +109,14 @@ export default function SummaryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchableTasks, setSearchableTasks] = useState<TaskLogRow[]>([]);
   const [ownerId, setOwnerId] = useState("");
+  const [canDelete, setCanDelete] = useState(false);
 
   useEffect(() => {
     async function resolveOwner() {
+      const { data: authData } = await supabase.auth.getUser();
+      const { data: ownProfile } = authData.user
+        ? await supabase.from("profiles").select("role").eq("id", authData.user.id).single()
+        : { data: null };
       const { data } = await supabase.rpc("get_accessible_summary_users");
       const users = (data || []) as { id: string; email: string | null }[];
       const requested = new URLSearchParams(window.location.search).get("user") || "";
@@ -119,6 +124,7 @@ export default function SummaryPage() {
         ? requested
         : users[0]?.id || "";
       setOwnerId(selected);
+      setCanDelete(Boolean(authData.user && (authData.user.id === selected || ownProfile?.role === "admin")));
       if (selected) await loadAvailableMonths(selected);
       else setLoading(false);
     }
@@ -392,7 +398,16 @@ export default function SummaryPage() {
         )}
 
         {selectedDate && ownerId && (
-          <DayModal date={selectedDate} ownerId={ownerId} onClose={() => setSelectedDate(null)} />
+          <DayModal
+            date={selectedDate}
+            ownerId={ownerId}
+            canDelete={canDelete}
+            onClose={() => setSelectedDate(null)}
+            onDeleted={() => {
+              setSelectedDate(null);
+              loadAvailableMonths(ownerId);
+            }}
+          />
         )}
       </div>
     </div>
