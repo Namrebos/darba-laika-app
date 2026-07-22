@@ -14,6 +14,7 @@ const roleLabels: Record<AppRole, string> = {
 export default function UsersPage() {
   const router = useRouter();
   const [profiles, setProfiles] = useState<AccessProfile[]>([]);
+  const [summaryAccess, setSummaryAccess] = useState<Record<string, string[]>>({});
   const [adminId, setAdminId] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -40,14 +41,23 @@ export default function UsersPage() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, email, role, data_owner_id")
-        .order("created_at", { ascending: true });
+      const [{ data, error }, { data: accessRows }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, email, role, data_owner_id")
+          .order("created_at", { ascending: true }),
+        supabase.from("summary_access").select("viewer_id, owner_id"),
+      ]);
 
       if (error) setMessage("Neizdevās ielādēt lietotājus.");
       const rows = (data || []) as AccessProfile[];
       setProfiles(rows);
+      const accessMap: Record<string, string[]> = {};
+      (accessRows || []).forEach(({ viewer_id, owner_id }) => {
+        if (!accessMap[viewer_id]) accessMap[viewer_id] = [];
+        accessMap[viewer_id].push(owner_id);
+      });
+      setSummaryAccess(accessMap);
       setAdminId(rows.find((profile) => profile.role === "admin")?.id || authData.user.id);
       setLoading(false);
     }
@@ -74,7 +84,39 @@ export default function UsersPage() {
           : item,
       ),
     );
+    if (role === "viewer" && !(summaryAccess[profile.id] || []).length) {
+      await supabase.from("summary_access").insert({
+        viewer_id: profile.id,
+        owner_id: adminId,
+      });
+      setSummaryAccess((current) => ({
+        ...current,
+        [profile.id]: [adminId],
+      }));
+    } else if (role !== "viewer") {
+      await supabase.from("summary_access").delete().eq("viewer_id", profile.id);
+      setSummaryAccess((current) => ({ ...current, [profile.id]: [] }));
+    }
     setMessage("Loma saglabāta.");
+  }
+
+  async function toggleSummaryAccess(viewerId: string, ownerId: string, allowed: boolean) {
+    const request = allowed
+      ? supabase.from("summary_access").insert({ viewer_id: viewerId, owner_id: ownerId })
+      : supabase.from("summary_access").delete().eq("viewer_id", viewerId).eq("owner_id", ownerId);
+    const { error } = await request;
+    if (error) {
+      setMessage("Kopsavilkuma piekļuvi neizdevās saglabāt.");
+      return;
+    }
+
+    setSummaryAccess((current) => ({
+      ...current,
+      [viewerId]: allowed
+        ? [...(current[viewerId] || []), ownerId]
+        : (current[viewerId] || []).filter((id) => id !== ownerId),
+    }));
+    setMessage("Kopsavilkuma piekļuve saglabāta.");
   }
 
   async function createInvitation(event: React.FormEvent) {
@@ -151,21 +193,41 @@ export default function UsersPage() {
 
       <div className="space-y-3">
         {profiles.map((profile) => (
-          <div key={profile.id} className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-medium">{profile.email || profile.id}</p>
-              <p className="text-xs text-zinc-500">{roleLabels[profile.role]}</p>
+          <div key={profile.id} className="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium">{profile.email || profile.id}</p>
+                <p className="text-xs text-zinc-500">{roleLabels[profile.role]}</p>
+              </div>
+              <select
+                value={profile.role}
+                disabled={profile.id === adminId}
+                onChange={(event) => changeRole(profile, event.target.value as AppRole)}
+                className="rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+              >
+                <option value="member">Datu ievadītājs</option>
+                <option value="viewer">Tikai kopsavilkums</option>
+                {profile.id === adminId && <option value="admin">Administrators</option>}
+              </select>
             </div>
-            <select
-              value={profile.role}
-              disabled={profile.id === adminId}
-              onChange={(event) => changeRole(profile, event.target.value as AppRole)}
-              className="rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
-            >
-              <option value="member">Datu ievadītājs</option>
-              <option value="viewer">Tikai kopsavilkums</option>
-              {profile.id === adminId && <option value="admin">Administrators</option>}
-            </select>
+
+            {profile.role === "viewer" && (
+              <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                <p className="mb-2 text-sm font-semibold">Drīkst skatīt kopsavilkumus:</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {profiles.filter((owner) => owner.role !== "viewer").map((owner) => (
+                    <label key={owner.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={(summaryAccess[profile.id] || []).includes(owner.id)}
+                        onChange={(event) => toggleSummaryAccess(profile.id, owner.id, event.target.checked)}
+                      />
+                      <span>{owner.email || owner.id}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

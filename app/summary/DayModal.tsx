@@ -10,6 +10,7 @@ import TaskDetailsCard from "@/app/components/TaskDetailsCard";
 
 type DayModalProps = {
   date: string;
+  ownerId: string;
   onClose: () => void;
 };
 
@@ -88,7 +89,7 @@ function buildTimeRangeText(start: string, end: string | null) {
   return `${format(startDate, "HH:mm")}-${format(endDate, "HH:mm")} (${durationText})`;
 }
 
-export default function DayModal({ date, onClose }: DayModalProps) {
+export default function DayModal({ date, ownerId, onClose }: DayModalProps) {
   const [workLog, setWorkLog] = useState<WorkLog | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +112,7 @@ export default function DayModal({ date, onClose }: DayModalProps) {
 
   useEffect(() => {
     loadData();
-  }, [date]);
+  }, [date, ownerId]);
 
   async function loadData() {
     setLoading(true);
@@ -128,6 +129,7 @@ export default function DayModal({ date, onClose }: DayModalProps) {
     const { data: workLogs, error: workError } = await supabase
       .from("work_logs")
       .select("*")
+      .eq("user_id", ownerId)
       .gte("start_time", from)
       .lte("start_time", to)
       .order("start_time", { ascending: true });
@@ -135,6 +137,7 @@ export default function DayModal({ date, onClose }: DayModalProps) {
     const { data: taskLogs, error: taskError } = await supabase
       .from("task_logs")
       .select("*")
+      .eq("user_id", ownerId)
       .gte("start_time", from)
       .lte("start_time", to)
       .order("start_time", { ascending: true });

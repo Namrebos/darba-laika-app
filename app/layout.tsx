@@ -9,6 +9,8 @@ import "./globals.css";
 import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister";
 import type { AppRole } from "@/lib/access";
 
+type SummaryUser = { id: string; email: string | null };
+
 export default function RootLayout({
   children,
 }: {
@@ -18,6 +20,8 @@ export default function RootLayout({
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [role, setRole] = useState<AppRole | null>(null);
+  const [summaryUsers, setSummaryUsers] = useState<SummaryUser[]>([]);
+  const [selectedSummaryUser, setSelectedSummaryUser] = useState("");
   const pathname = usePathname();
   const router = useRouter();
 
@@ -75,6 +79,17 @@ export default function RootLayout({
         .single();
       const currentRole = (profile?.role || "member") as AppRole;
       setRole(currentRole);
+
+      if (currentRole === "viewer") {
+        const { data: allowedUsers } = await supabase.rpc("get_accessible_summary_users");
+        const users = (allowedUsers || []) as SummaryUser[];
+        const requestedUser = new URLSearchParams(window.location.search).get("user") || "";
+        const selected = users.some((item) => item.id === requestedUser)
+          ? requestedUser
+          : users[0]?.id || "";
+        setSummaryUsers(users);
+        setSelectedSummaryUser(selected);
+      }
 
       if (currentRole === "viewer" && pathname !== "/summary") {
         router.replace("/summary");
@@ -175,6 +190,33 @@ export default function RootLayout({
                   {label}
                 </Link>
               ))}
+
+              {role === "viewer" && (
+                <div className="space-y-2 pl-2">
+                  <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                    Skatīt lietotāju
+                  </label>
+                  {summaryUsers.length > 0 ? (
+                    <select
+                      value={selectedSummaryUser}
+                      onChange={(event) => {
+                        const userId = event.target.value;
+                        setSelectedSummaryUser(userId);
+                        window.location.href = `/summary?user=${encodeURIComponent(userId)}`;
+                      }}
+                      className="w-full rounded border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                    >
+                      {summaryUsers.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.email || item.id}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-xs text-zinc-500">Admins vēl nav piešķīris piekļuvi.</p>
+                  )}
+                </div>
+              )}
 
               <hr className="my-4 border-zinc-300 dark:border-zinc-700" />
 

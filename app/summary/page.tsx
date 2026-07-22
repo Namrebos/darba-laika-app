@@ -108,25 +108,39 @@ export default function SummaryPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchableTasks, setSearchableTasks] = useState<TaskLogRow[]>([]);
+  const [ownerId, setOwnerId] = useState("");
 
   useEffect(() => {
-    loadAvailableMonths();
+    async function resolveOwner() {
+      const { data } = await supabase.rpc("get_accessible_summary_users");
+      const users = (data || []) as { id: string; email: string | null }[];
+      const requested = new URLSearchParams(window.location.search).get("user") || "";
+      const selected = users.some((item) => item.id === requested)
+        ? requested
+        : users[0]?.id || "";
+      setOwnerId(selected);
+      if (selected) await loadAvailableMonths(selected);
+      else setLoading(false);
+    }
+    resolveOwner();
   }, []);
 
   useEffect(() => {
     if (availableMonths.length > 0) {
-      loadData();
+      loadData(ownerId);
     }
-  }, [selectedYear, selectedMonth, availableMonths]);
+  }, [selectedYear, selectedMonth, availableMonths, ownerId]);
 
-  async function loadAvailableMonths() {
+  async function loadAvailableMonths(selectedOwnerId: string) {
     const { data: workLogs, error: workError } = await supabase
       .from("work_logs")
-      .select("start_time");
+      .select("start_time")
+      .eq("user_id", selectedOwnerId);
 
     const { data: taskLogs, error: taskError } = await supabase
       .from("task_logs")
       .select("id, title, note, start_time, end_time, session_id")
+      .eq("user_id", selectedOwnerId)
       .order("start_time", { ascending: false });
 
     if (workError || taskError) {
@@ -198,7 +212,7 @@ export default function SummaryPage() {
     });
   }, [searchQuery, searchableTasks]);
 
-  async function loadData() {
+  async function loadData(selectedOwnerId: string) {
     setLoading(true);
 
     const from = new Date(selectedYear, selectedMonth, 1);
@@ -207,12 +221,14 @@ export default function SummaryPage() {
     const { data: workLogs, error: workError } = await supabase
       .from("work_logs")
       .select("start_time, end_time")
+      .eq("user_id", selectedOwnerId)
       .gte("start_time", from.toISOString())
       .lt("start_time", nextMonthStart.toISOString());
 
     const { data: taskLogs, error: taskError } = await supabase
       .from("task_logs")
       .select("start_time, end_time, session_id")
+      .eq("user_id", selectedOwnerId)
       .gte("start_time", from.toISOString())
       .lt("start_time", nextMonthStart.toISOString());
 
@@ -375,8 +391,8 @@ export default function SummaryPage() {
           />
         )}
 
-        {selectedDate && (
-          <DayModal date={selectedDate} onClose={() => setSelectedDate(null)} />
+        {selectedDate && ownerId && (
+          <DayModal date={selectedDate} ownerId={ownerId} onClose={() => setSelectedDate(null)} />
         )}
       </div>
     </div>
