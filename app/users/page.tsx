@@ -21,6 +21,8 @@ export default function UsersPage() {
   const [inviteRole, setInviteRole] = useState<Exclude<AppRole, "admin">>("viewer");
   const [invitationLink, setInvitationLink] = useState("");
   const [creatingInvitation, setCreatingInvitation] = useState(false);
+  const [copiedToast, setCopiedToast] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -150,8 +152,49 @@ export default function UsersPage() {
   }
 
   async function copyInvitation() {
-    await navigator.clipboard.writeText(invitationLink);
-    setMessage("Uzaicinājuma saite nokopēta.");
+    try {
+      await navigator.clipboard.writeText(invitationLink);
+      setCopiedToast(true);
+      window.setTimeout(() => setCopiedToast(false), 2500);
+    } catch {
+      setMessage("Saiti neizdevās nokopēt.");
+    }
+  }
+
+  async function deleteUser(profile: AccessProfile) {
+    if (profile.id === adminId) return;
+    const confirmed = window.confirm(
+      `Vai tiešām dzēst lietotāju ${profile.email || profile.id}? Šo darbību nevarēs atcelt.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingUserId(profile.id);
+    setMessage("");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch(`/api/admin/users/${profile.id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
+      },
+    });
+    const result = (await response.json()) as { error?: string };
+    setDeletingUserId("");
+
+    if (!response.ok) {
+      setMessage(result.error || "Lietotāju neizdevās dzēst.");
+      return;
+    }
+
+    setProfiles((current) => current.filter((item) => item.id !== profile.id));
+    setSummaryAccess((current) => {
+      const next = { ...current };
+      delete next[profile.id];
+      Object.keys(next).forEach((viewerId) => {
+        next[viewerId] = next[viewerId].filter((ownerId) => ownerId !== profile.id);
+      });
+      return next;
+    });
+    setMessage("Lietotājs izdzēsts.");
   }
 
   if (loading) return <p className="p-6">Ielādē...</p>;
@@ -199,16 +242,28 @@ export default function UsersPage() {
                 <p className="font-medium">{profile.email || profile.id}</p>
                 <p className="text-xs text-zinc-500">{roleLabels[profile.role]}</p>
               </div>
-              <select
-                value={profile.role}
-                disabled={profile.id === adminId}
-                onChange={(event) => changeRole(profile, event.target.value as AppRole)}
-                className="rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
-              >
-                <option value="member">Datu ievadītājs</option>
-                <option value="viewer">Tikai kopsavilkums</option>
-                {profile.id === adminId && <option value="admin">Administrators</option>}
-              </select>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  value={profile.role}
+                  disabled={profile.id === adminId}
+                  onChange={(event) => changeRole(profile, event.target.value as AppRole)}
+                  className="rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                >
+                  <option value="member">Datu ievadītājs</option>
+                  <option value="viewer">Tikai kopsavilkums</option>
+                  {profile.id === adminId && <option value="admin">Administrators</option>}
+                </select>
+                {profile.id !== adminId && (
+                  <button
+                    type="button"
+                    disabled={deletingUserId === profile.id}
+                    onClick={() => deleteUser(profile)}
+                    className="rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950"
+                  >
+                    {deletingUserId === profile.id ? "Dzēš..." : "Dzēst"}
+                  </button>
+                )}
+              </div>
             </div>
 
             {profile.role === "viewer" && (
@@ -231,6 +286,12 @@ export default function UsersPage() {
           </div>
         ))}
       </div>
+
+      {copiedToast && (
+        <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-lg dark:bg-white dark:text-zinc-900">
+          Saite nokopēta
+        </div>
+      )}
     </div>
   );
 }
