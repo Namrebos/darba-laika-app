@@ -40,7 +40,7 @@ function drawDigitalTime(
   const y = bottom - height;
   const half = Math.round(height / 2);
 
-  context.fillStyle = "#ffffff";
+  context.fillStyle = "#7CFF6B";
 
   [...text].forEach((character, index) => {
     if (character === ":") {
