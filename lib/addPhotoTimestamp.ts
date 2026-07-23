@@ -19,6 +19,55 @@ const digitSegments: Record<string, number[]> = {
   "9": [0, 1, 2, 3, 5, 6],
 };
 
+function fillPolygon(
+  context: CanvasRenderingContext2D,
+  points: [number, number][],
+) {
+  context.beginPath();
+  points.forEach(([x, y], index) => {
+    if (index === 0) context.moveTo(x, y);
+    else context.lineTo(x, y);
+  });
+  context.closePath();
+  context.fill();
+}
+
+function drawHorizontalSegment(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  thickness: number,
+) {
+  const bevel = Math.round(thickness * 0.48);
+  fillPolygon(context, [
+    [x + bevel, y],
+    [x + width - bevel, y],
+    [x + width, y + bevel],
+    [x + width - bevel, y + thickness],
+    [x + bevel, y + thickness],
+    [x, y + bevel],
+  ]);
+}
+
+function drawVerticalSegment(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  thickness: number,
+  height: number,
+) {
+  const bevel = Math.round(thickness * 0.48);
+  fillPolygon(context, [
+    [x + bevel, y],
+    [x + thickness, y + bevel],
+    [x + thickness, y + height - bevel],
+    [x + bevel, y + height],
+    [x, y + height - bevel],
+    [x, y + bevel],
+  ]);
+}
+
 function drawDigitalTime(
   context: CanvasRenderingContext2D,
   text: string,
@@ -40,30 +89,53 @@ function drawDigitalTime(
   const y = bottom - height;
   const half = Math.round(height / 2);
 
-  context.fillStyle = "#7CFF6B";
-
   [...text].forEach((character, index) => {
     if (character === ":") {
       const dotSize = thickness;
+      context.fillStyle = "#7CFF4F";
       context.fillRect(x, y + Math.round(height * 0.3), dotSize, dotSize);
       context.fillRect(x, y + Math.round(height * 0.68), dotSize, dotSize);
     } else {
-      const segments = digitSegments[character] || [];
-      const horizontalWidth = digitWidth - thickness;
-      const verticalHeight = half - thickness;
-      const positions = [
-        [x, y, horizontalWidth, thickness],
-        [x, y, thickness, verticalHeight],
-        [x + digitWidth - thickness, y, thickness, verticalHeight],
-        [x, y + half - Math.round(thickness / 2), horizontalWidth, thickness],
-        [x, y + half, thickness, verticalHeight],
-        [x + digitWidth - thickness, y + half, thickness, verticalHeight],
-        [x, y + height - thickness, horizontalWidth, thickness],
+      const activeSegments = new Set(digitSegments[character] || []);
+      const horizontalWidth = digitWidth - Math.round(thickness * 0.35);
+      const verticalHeight = half - Math.round(thickness * 0.7);
+      const positions: {
+        direction: "horizontal" | "vertical";
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      }[] = [
+        { direction: "horizontal", x, y, width: horizontalWidth, height: thickness },
+        { direction: "vertical", x, y: y + Math.round(thickness * 0.35), width: thickness, height: verticalHeight },
+        { direction: "vertical", x: x + digitWidth - thickness, y: y + Math.round(thickness * 0.35), width: thickness, height: verticalHeight },
+        { direction: "horizontal", x, y: y + half - Math.round(thickness / 2), width: horizontalWidth, height: thickness },
+        { direction: "vertical", x, y: y + half + Math.round(thickness * 0.15), width: thickness, height: verticalHeight },
+        { direction: "vertical", x: x + digitWidth - thickness, y: y + half + Math.round(thickness * 0.15), width: thickness, height: verticalHeight },
+        { direction: "horizontal", x, y: y + height - thickness, width: horizontalWidth, height: thickness },
       ];
 
-      segments.forEach((segment) => {
-        const [segmentX, segmentY, width, segmentHeight] = positions[segment];
-        context.fillRect(segmentX, segmentY, width, segmentHeight);
+      positions.forEach((position, segment) => {
+        context.fillStyle = activeSegments.has(segment)
+          ? "#7CFF4F"
+          : "rgba(0, 48, 0, 0.52)";
+        if (position.direction === "horizontal") {
+          drawHorizontalSegment(
+            context,
+            position.x,
+            position.y,
+            position.width,
+            position.height,
+          );
+        } else {
+          drawVerticalSegment(
+            context,
+            position.x,
+            position.y,
+            position.width,
+            position.height,
+          );
+        }
       });
     }
 
