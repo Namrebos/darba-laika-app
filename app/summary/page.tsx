@@ -109,9 +109,19 @@ export default function SummaryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchableTasks, setSearchableTasks] = useState<TaskLogRow[]>([]);
   const [ownerId, setOwnerId] = useState("");
+  const [showWorkTime, setShowWorkTime] = useState(true);
 
   useEffect(() => {
     async function resolveOwner() {
+      const { data: authData } = await supabase.auth.getUser();
+      if (authData.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", authData.user.id)
+          .single();
+        setShowWorkTime(profile?.role !== "viewer");
+      }
       const { data } = await supabase.rpc("get_accessible_summary_users");
       const users = (data || []) as { id: string; email: string | null }[];
       const requested = new URLSearchParams(window.location.search).get("user") || "";
@@ -392,7 +402,12 @@ export default function SummaryPage() {
         )}
 
         {selectedDate && ownerId && (
-          <DayModal date={selectedDate} ownerId={ownerId} onClose={() => setSelectedDate(null)} />
+          <DayModal
+            date={selectedDate}
+            ownerId={ownerId}
+            showWorkTime={showWorkTime}
+            onClose={() => setSelectedDate(null)}
+          />
         )}
       </div>
     </div>
