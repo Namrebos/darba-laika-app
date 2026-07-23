@@ -85,7 +85,7 @@ export default function RootLayout({
       const currentRole = (profile?.role || "member") as AppRole;
       setRole(currentRole);
 
-      if (currentRole === "viewer") {
+      if (currentRole === "viewer" || currentRole === "admin") {
         const { data: allowedUsers } = await supabase.rpc("get_accessible_summary_users");
         const users = (allowedUsers || []) as SummaryUser[];
         const requestedUser = new URLSearchParams(window.location.search).get("user") || "";
@@ -197,7 +197,7 @@ export default function RootLayout({
                 </Link>
               ))}
 
-              {role === "viewer" && (
+              {(role === "viewer" || role === "admin") && (
                 <div className="space-y-2 pl-2">
                   <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                     Skatīt lietotāju
