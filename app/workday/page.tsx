@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import TaskCard from "../components/TaskCard";
@@ -257,9 +258,16 @@ export default function WorkdayPage() {
     for (const image of task.images) {
       const fileName = `${user.id}/${taskLogId}/${Date.now()}-${image.name}`;
 
+      let fileToUpload = image;
+      try {
+        fileToUpload = await addPhotoTimestamp(image);
+      } catch (error) {
+        console.error("Kļūda pievienojot foto laiku:", error);
+      }
+
       const { error: uploadError } = await supabase.storage
         .from("task-images")
-        .upload(fileName, image);
+        .upload(fileName, fileToUpload, { contentType: fileToUpload.type });
 
       if (!uploadError) {
         const publicUrl = supabase.storage

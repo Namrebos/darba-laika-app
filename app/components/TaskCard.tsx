@@ -20,6 +20,7 @@ import ImageGalleryModal from "@/app/components/ImageGalleryModal";
 import TaskPreviewCard from "@/app/components/TaskPreviewCard";
 import TaskDetailsCard from "@/app/components/TaskDetailsCard";
 import DictionaryModal from "@/app/components/DictionaryModal";
+import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
 
 type Task = {
   id: string;
@@ -344,8 +345,9 @@ export default function TaskCard({
             initialQuality: 0.9,
             useWebWorker: true,
           });
+          fileToUpload = await addPhotoTimestamp(fileToUpload);
         } catch (compressionError) {
-          console.error("Kļūda kompresējot attēlu:", compressionError);
+          console.error("Kļūda apstrādājot attēlu:", compressionError);
         }
 
         const { error: uploadError } = await supabase.storage
