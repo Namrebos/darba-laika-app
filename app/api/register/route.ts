@@ -19,13 +19,15 @@ export async function POST(request: NextRequest) {
     token?: string;
     email?: string;
     password?: string;
+    displayName?: string;
   };
   const token = body.token?.trim();
   const email = body.email?.trim().toLowerCase();
   const password = body.password || "";
-  if (!token || !email || password.length < 8) {
+  const displayName = body.displayName?.trim() || "";
+  if (!token || !email || password.length < 8 || !displayName || displayName.length > 50) {
     return NextResponse.json(
-      { error: "Ievadi derīgu e-pastu un vismaz 8 zīmju paroli." },
+      { error: "Ievadi lietotājvārdu, derīgu e-pastu un vismaz 8 zīmju paroli." },
       { status: 400 },
     );
   }
@@ -60,6 +62,7 @@ export async function POST(request: NextRequest) {
       user_metadata: {
         invited_role: invitation.role,
         invited_by: invitation.invited_by,
+        display_name: displayName,
       },
     });
 

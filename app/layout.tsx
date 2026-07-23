@@ -9,7 +9,12 @@ import "./globals.css";
 import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister";
 import type { AppRole } from "@/lib/access";
 
-type SummaryUser = { id: string; email: string | null };
+type SummaryUser = {
+  id: string;
+  email: string | null;
+  display_name: string;
+  avatar_url: string | null;
+};
 
 export default function RootLayout({
   children,
@@ -91,7 +96,7 @@ export default function RootLayout({
         setSelectedSummaryUser(selected);
       }
 
-      if (currentRole === "viewer" && pathname !== "/summary") {
+      if (currentRole === "viewer" && !["/summary", "/profile"].includes(pathname)) {
         router.replace("/summary");
       }
       if (pathname === "/users" && currentRole !== "admin") {
@@ -135,7 +140,8 @@ export default function RootLayout({
     { href: "/summary", label: "Kopsavilkums" },
     { href: "/finance", label: "Finanses" },
     ...(role === "admin" ? [{ href: "/users", label: "Lietotāji" }] : []),
-  ].filter(({ href }) => role !== "viewer" || href === "/summary");
+    { href: "/profile", label: "Profils" },
+  ].filter(({ href }) => role !== "viewer" || ["/summary", "/profile"].includes(href));
 
   if (isAuthPage) {
     return (
@@ -208,7 +214,7 @@ export default function RootLayout({
                     >
                       {summaryUsers.map((item) => (
                         <option key={item.id} value={item.id}>
-                          {item.email || item.id}
+                          {item.display_name || item.email || item.id}
                         </option>
                       ))}
                     </select>

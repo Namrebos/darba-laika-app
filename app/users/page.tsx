@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import type { AccessProfile, AppRole } from "@/lib/access";
+import UserAvatar from "@/app/components/UserAvatar";
 
 const roleLabels: Record<AppRole, string> = {
   admin: "Administrators",
@@ -46,7 +47,7 @@ export default function UsersPage() {
       const [{ data, error }, { data: accessRows }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, email, role, data_owner_id")
+          .select("id, email, display_name, avatar_url, role, data_owner_id")
           .order("created_at", { ascending: true }),
         supabase.from("summary_access").select("viewer_id, owner_id"),
       ]);
@@ -164,7 +165,7 @@ export default function UsersPage() {
   async function deleteUser(profile: AccessProfile) {
     if (profile.id === adminId) return;
     const confirmed = window.confirm(
-      `Vai tiešām dzēst lietotāju ${profile.email || profile.id}? Šo darbību nevarēs atcelt.`,
+      `Vai tiešām dzēst lietotāju ${profile.display_name || profile.email || profile.id}? Šo darbību nevarēs atcelt.`,
     );
     if (!confirmed) return;
 
@@ -238,9 +239,13 @@ export default function UsersPage() {
         {profiles.map((profile) => (
           <div key={profile.id} className="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-medium">{profile.email || profile.id}</p>
-                <p className="text-xs text-zinc-500">{roleLabels[profile.role]}</p>
+              <div className="flex items-center gap-3">
+                <UserAvatar name={profile.display_name} avatarUrl={profile.avatar_url} />
+                <div>
+                  <p className="font-medium">{profile.display_name}</p>
+                  <p className="text-xs text-zinc-500">{profile.email || profile.id}</p>
+                  <p className="text-xs text-zinc-500">{roleLabels[profile.role]}</p>
+                </div>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <select
@@ -277,7 +282,7 @@ export default function UsersPage() {
                         checked={(summaryAccess[profile.id] || []).includes(owner.id)}
                         onChange={(event) => toggleSummaryAccess(profile.id, owner.id, event.target.checked)}
                       />
-                      <span>{owner.email || owner.id}</span>
+                      <span>{owner.display_name || owner.email || owner.id}</span>
                     </label>
                   ))}
                 </div>
