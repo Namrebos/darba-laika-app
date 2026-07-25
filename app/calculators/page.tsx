@@ -308,7 +308,7 @@ export default function CalculatorsPage() {
               <th rowSpan={2} className="border-b border-r border-zinc-300 p-3 text-right dark:border-zinc-700">Darba stundas</th>
               <th rowSpan={2} className="border-b border-r border-zinc-300 p-3 text-right dark:border-zinc-700">Virsstundas</th>
               <th colSpan={2} className="border-b border-r border-zinc-300 p-3 text-center dark:border-zinc-700">Visa alga oficiāla</th>
-              <th colSpan={2} className="border-b border-zinc-300 p-3 text-center dark:border-zinc-700">Oficiālā daļa + papildu stundas atsevišķi</th>
+              <th colSpan={2} className="border-b border-zinc-300 p-3 text-center dark:border-zinc-700">Saliktā alga</th>
             </tr>
             <tr>
               <th className="border-b border-r border-zinc-300 p-3 text-right dark:border-zinc-700">Virsst. {multiplierA}×</th>
