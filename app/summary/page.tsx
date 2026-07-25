@@ -125,9 +125,16 @@ export default function SummaryPage() {
       const { data } = await supabase.rpc("get_accessible_summary_users");
       const users = (data || []) as { id: string; email: string | null }[];
       const requested = new URLSearchParams(window.location.search).get("user") || "";
+      const storageKey = authData.user
+        ? `summary-selected-user:${authData.user.id}`
+        : "";
+      const saved = storageKey ? localStorage.getItem(storageKey) || "" : "";
       const selected = users.some((item) => item.id === requested)
         ? requested
-        : users[0]?.id || "";
+        : users.some((item) => item.id === saved)
+          ? saved
+          : users[0]?.id || "";
+      if (selected && storageKey) localStorage.setItem(storageKey, selected);
       setOwnerId(selected);
       if (selected) await loadAvailableMonths(selected);
       else setLoading(false);

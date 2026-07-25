@@ -89,11 +89,16 @@ export default function RootLayout({
         const { data: allowedUsers } = await supabase.rpc("get_accessible_summary_users");
         const users = (allowedUsers || []) as SummaryUser[];
         const requestedUser = new URLSearchParams(window.location.search).get("user") || "";
+        const storageKey = `summary-selected-user:${authData.user.id}`;
+        const savedUser = localStorage.getItem(storageKey) || "";
         const selected = users.some((item) => item.id === requestedUser)
           ? requestedUser
-          : users[0]?.id || "";
+          : users.some((item) => item.id === savedUser)
+            ? savedUser
+            : users[0]?.id || "";
         setSummaryUsers(users);
         setSelectedSummaryUser(selected);
+        if (selected) localStorage.setItem(storageKey, selected);
       }
 
       if (currentRole === "viewer" && !["/summary", "/profile"].includes(pathname)) {
@@ -214,6 +219,14 @@ export default function RootLayout({
                             onChange={(event) => {
                               const userId = event.target.value;
                               setSelectedSummaryUser(userId);
+                              supabase.auth.getUser().then(({ data }) => {
+                                if (data.user) {
+                                  localStorage.setItem(
+                                    `summary-selected-user:${data.user.id}`,
+                                    userId,
+                                  );
+                                }
+                              });
                               window.location.href = `/summary?user=${encodeURIComponent(userId)}`;
                             }}
                             className="w-full rounded border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
