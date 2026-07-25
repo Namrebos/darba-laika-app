@@ -99,7 +99,7 @@ export default function RootLayout({
       if (currentRole === "viewer" && !["/summary", "/profile"].includes(pathname)) {
         router.replace("/summary");
       }
-      if (pathname === "/users" && currentRole !== "admin") {
+      if (["/users", "/calculators"].includes(pathname) && currentRole !== "admin") {
         router.replace("/summary");
       }
     }
@@ -139,7 +139,12 @@ export default function RootLayout({
     { href: "/workday", label: "Darbadiena" },
     { href: "/summary", label: "Kopsavilkums" },
     { href: "/finance", label: "Finanses" },
-    ...(role === "admin" ? [{ href: "/users", label: "Lietotāji" }] : []),
+    ...(role === "admin"
+      ? [
+          { href: "/calculators", label: "Kalkulatori" },
+          { href: "/users", label: "Lietotāji" },
+        ]
+      : []),
     { href: "/profile", label: "Profils" },
   ].filter(({ href }) => role !== "viewer" || ["/summary", "/profile"].includes(href));
 
