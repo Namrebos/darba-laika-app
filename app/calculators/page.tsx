@@ -19,6 +19,7 @@ type WorkLog = {
 type MonthHours = {
   regular: number;
   overtime: number;
+  workdays: number;
 };
 
 const MONTHS = [
@@ -71,6 +72,10 @@ function formatHours(value: number) {
   })} h`;
 }
 
+function localDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 export default function CalculatorsPage() {
   const router = useRouter();
   const [allowed, setAllowed] = useState(false);
@@ -82,8 +87,10 @@ export default function CalculatorsPage() {
   const [multiplierB, setMultiplierB] = useState(1.5);
   const [taxBookSubmitted, setTaxBookSubmitted] = useState(true);
   const [dependants, setDependants] = useState(0);
+  const [paidMeals, setPaidMeals] = useState(false);
+  const [mealRate, setMealRate] = useState(6);
   const [hoursByMonth, setHoursByMonth] = useState<MonthHours[]>(
-    MONTHS.map(() => ({ regular: 0, overtime: 0 })),
+    MONTHS.map(() => ({ regular: 0, overtime: 0, workdays: 0 })),
   );
 
   useEffect(() => {
@@ -131,12 +138,18 @@ export default function CalculatorsPage() {
         .lt("start_time", new Date(2027, 0, 1).toISOString());
 
       if (error) {
-        setHoursByMonth(MONTHS.map(() => ({ regular: 0, overtime: 0 })));
+        setHoursByMonth(
+          MONTHS.map(() => ({ regular: 0, overtime: 0, workdays: 0 })),
+        );
         setLoading(false);
         return;
       }
 
-      const totals = MONTHS.map(() => ({ regular: 0, overtime: 0 }));
+      const totals = MONTHS.map(() => ({
+        regular: 0,
+        overtime: 0,
+        workdays: new Set<string>(),
+      }));
       ((data || []) as WorkLog[]).forEach((log) => {
         if (!log.end_time) return;
         const start = new Date(log.start_time);
@@ -145,11 +158,16 @@ export default function CalculatorsPage() {
         const calculated = calculateWorkHours(start, end);
         totals[month].regular += calculated.baseHours;
         totals[month].overtime += calculated.overtimeHours;
+        const dayOfWeek = start.getDay();
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+          totals[month].workdays.add(localDateKey(start));
+        }
       });
       setHoursByMonth(
         totals.map((hours) => ({
           regular: Math.round(hours.regular),
           overtime: Math.round(hours.overtime),
+          workdays: hours.workdays.size,
         })),
       );
       setLoading(false);
@@ -211,6 +229,12 @@ export default function CalculatorsPage() {
       taxBookSubmitted,
     ],
   );
+
+  const totalWorkdays = useMemo(
+    () => hoursByMonth.reduce((total, month) => total + month.workdays, 0),
+    [hoursByMonth],
+  );
+  const mealTotal = paidMeals ? roundMoney(totalWorkdays * mealRate) : 0;
 
   if (!allowed) {
     return <p className="p-6 text-sm text-zinc-500">Pārbauda piekļuvi...</p>;
@@ -333,6 +357,49 @@ export default function CalculatorsPage() {
           </tbody>
         </table>
       </div>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Pusdienas</h2>
+        <div className="grid items-end gap-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700 sm:grid-cols-4">
+          <label className="flex min-h-10 items-center gap-2">
+            <input
+              type="checkbox"
+              checked={paidMeals}
+              onChange={(event) => setPaidMeals(event.target.checked)}
+              className="h-5 w-5"
+            />
+            <span className="text-sm font-medium">Apmaksātas pusdienas</span>
+          </label>
+
+          <label className="space-y-1">
+            <span className="block text-sm font-medium">Likme dienā</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={mealRate}
+              onChange={(event) =>
+                setMealRate(Math.max(0, Number(event.target.value)))
+              }
+              className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+            />
+          </label>
+
+          <div>
+            <span className="block text-sm font-medium">Darba dienu skaits</span>
+            <p className="mt-1 rounded border border-zinc-300 px-3 py-2 text-right dark:border-zinc-600">
+              {totalWorkdays}
+            </p>
+          </div>
+
+          <div>
+            <span className="block text-sm font-medium">Summa</span>
+            <p className="mt-1 rounded border border-zinc-300 px-3 py-2 text-right font-bold dark:border-zinc-600">
+              {money.format(mealTotal)}
+            </p>
+          </div>
+        </div>
+      </section>
 
       {loading && <p className="text-sm text-zinc-500">Atjauno stundu datus...</p>}
 
