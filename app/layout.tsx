@@ -188,46 +188,51 @@ export default function RootLayout({
 
             <nav className="flex h-full flex-col space-y-4 p-4">
               {navLinks.map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`text-base font-medium hover:underline ${
-                    pathname === href
-                      ? "font-bold text-blue-600 dark:text-blue-400"
-                      : ""
-                  }`}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  {label}
-                </Link>
-              ))}
+                <div key={href} className="space-y-2">
+                  <Link
+                    href={href}
+                    className={`block text-base font-medium hover:underline ${
+                      pathname === href
+                        ? "font-bold text-blue-600 dark:text-blue-400"
+                        : ""
+                    }`}
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    {label}
+                  </Link>
 
-              {(role === "viewer" || role === "admin") && (
-                <div className="space-y-2 pl-2">
-                  <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                    Skatīt lietotāju
-                  </label>
-                  {summaryUsers.length > 0 ? (
-                    <select
-                      value={selectedSummaryUser}
-                      onChange={(event) => {
-                        const userId = event.target.value;
-                        setSelectedSummaryUser(userId);
-                        window.location.href = `/summary?user=${encodeURIComponent(userId)}`;
-                      }}
-                      className="w-full rounded border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
-                    >
-                      {summaryUsers.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.display_name || item.email || item.id}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <p className="text-xs text-zinc-500">Admins vēl nav piešķīris piekļuvi.</p>
-                  )}
+                  {href === "/summary" &&
+                    pathname === "/summary" &&
+                    (role === "viewer" || role === "admin") && (
+                      <div className="space-y-2 pl-2">
+                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                          Skatīt lietotāju
+                        </label>
+                        {summaryUsers.length > 0 ? (
+                          <select
+                            value={selectedSummaryUser}
+                            onChange={(event) => {
+                              const userId = event.target.value;
+                              setSelectedSummaryUser(userId);
+                              window.location.href = `/summary?user=${encodeURIComponent(userId)}`;
+                            }}
+                            className="w-full rounded border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                          >
+                            {summaryUsers.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.display_name || item.email || item.id}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <p className="text-xs text-zinc-500">
+                            Admins vēl nav piešķīris piekļuvi.
+                          </p>
+                        )}
+                      </div>
+                    )}
                 </div>
-              )}
+              ))}
 
               <hr className="my-4 border-zinc-300 dark:border-zinc-700" />
 
