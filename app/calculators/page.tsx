@@ -164,8 +164,6 @@ export default function CalculatorsPage() {
         const regularHours = hoursByMonth[index].regular;
         const overtimeHours = hoursByMonth[index].overtime;
         const normHours = WORK_HOURS_2026[index];
-        const officialHours = Math.min(regularHours, normHours);
-        const extraRegularHours = Math.max(0, regularHours - normHours);
 
         const fullyOfficial = (multiplier: number) =>
           calculateNetSalary(
@@ -175,16 +173,23 @@ export default function CalculatorsPage() {
             dependants,
           );
 
-        const officialPlusExtra = (multiplier: number) =>
-          roundMoney(
+        const officialPlusExtra = (multiplier: number) => {
+          if (regularHours === 0 && overtimeHours === 0) return 0;
+
+          const officialGross = normHours * hourlyRate;
+          const fullGross =
+            regularHours * hourlyRate +
+            overtimeHours * hourlyRate * multiplier;
+          const extraPart = fullGross - officialGross;
+
+          return roundMoney(
             calculateNetSalary(
-              officialHours * hourlyRate,
+              officialGross,
               taxBookSubmitted,
               dependants,
-            ) +
-              extraRegularHours * hourlyRate +
-              overtimeHours * hourlyRate * multiplier,
+            ) + extraPart,
           );
+        };
 
         return {
           month,
