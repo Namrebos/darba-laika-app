@@ -146,7 +146,12 @@ export default function CalculatorsPage() {
         totals[month].regular += calculated.baseHours;
         totals[month].overtime += calculated.overtimeHours;
       });
-      setHoursByMonth(totals);
+      setHoursByMonth(
+        totals.map((hours) => ({
+          regular: Math.round(hours.regular),
+          overtime: Math.round(hours.overtime),
+        })),
+      );
       setLoading(false);
     }
 
