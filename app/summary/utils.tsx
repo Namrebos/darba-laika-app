@@ -15,11 +15,13 @@ export function calculateWorkHours(
 
   while (cur < end) {
     const hour = cur.getHours();
+    const day = cur.getDay();
+    const isWeekend = day === 0 || day === 6;
     const next = new Date(cur.getTime() + 15 * 60 * 1000);
 
     if (next > end) break;
 
-    if (hour >= BASE_START && hour < BASE_END) {
+    if (!isWeekend && hour >= BASE_START && hour < BASE_END) {
       baseMinutes += 15;
     } else {
       overtimeMinutes += 15;

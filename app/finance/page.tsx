@@ -79,7 +79,10 @@ export default function FinancePage() {
         workdays: new Set<string>(),
       };
       current.hours += calculateWorkHours(start, end).baseHours;
-      current.workdays.add(localDateKey(start));
+      const dayOfWeek = start.getDay();
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        current.workdays.add(localDateKey(start));
+      }
       totals.set(key, current);
     });
 
