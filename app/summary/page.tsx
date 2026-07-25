@@ -110,6 +110,7 @@ export default function SummaryPage() {
   const [searchableTasks, setSearchableTasks] = useState<TaskLogRow[]>([]);
   const [ownerId, setOwnerId] = useState("");
   const [showWorkTime, setShowWorkTime] = useState(true);
+  const [eightHourWorkday, setEightHourWorkday] = useState(false);
 
   useEffect(() => {
     async function resolveOwner() {
@@ -136,6 +137,12 @@ export default function SummaryPage() {
           : users[0]?.id || "";
       if (selected && storageKey) localStorage.setItem(storageKey, selected);
       setOwnerId(selected);
+      setEightHourWorkday(
+        selected
+          ? localStorage.getItem(`finance-eight-hour-workday:${selected}`) ===
+              "true"
+          : false,
+      );
       if (selected) await loadAvailableMonths(selected);
       else setLoading(false);
     }
@@ -393,7 +400,10 @@ export default function SummaryPage() {
           )}
         </div>
 
-        <MonthlySummary data={entries} />
+        <MonthlySummary
+          data={entries}
+          deductWeekdayLunch={eightHourWorkday}
+        />
 
         {loading ? (
           <div className="rounded-xl border border-border bg-card p-6 text-sm">
