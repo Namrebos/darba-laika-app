@@ -232,11 +232,17 @@ export default function CalculatorsPage() {
     ],
   );
 
-  const totalWorkdays = useMemo(
-    () => hoursByMonth.reduce((total, month) => total + month.workdays, 0),
-    [hoursByMonth],
+  const mealRows = useMemo(
+    () =>
+      MONTHS.map((month, index) => ({
+        month,
+        workdays: hoursByMonth[index].workdays,
+        total: paidMeals
+          ? roundMoney(hoursByMonth[index].workdays * mealRate)
+          : 0,
+      })),
+    [hoursByMonth, mealRate, paidMeals],
   );
-  const mealTotal = paidMeals ? roundMoney(totalWorkdays * mealRate) : 0;
 
   if (!allowed) {
     return <p className="p-6 text-sm text-zinc-500">Pārbauda piekļuvi...</p>;
@@ -378,7 +384,7 @@ export default function CalculatorsPage() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Pusdienas</h2>
-        <div className="grid items-end gap-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700 sm:grid-cols-4">
+        <div className="grid items-end gap-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700 sm:grid-cols-2">
           <label className="flex min-h-10 items-center gap-2">
             <input
               type="checkbox"
@@ -402,20 +408,32 @@ export default function CalculatorsPage() {
               className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
             />
           </label>
+        </div>
 
-          <div>
-            <span className="block text-sm font-medium">Darba dienu skaits</span>
-            <p className="mt-1 rounded border border-zinc-300 px-3 py-2 text-right dark:border-zinc-600">
-              {totalWorkdays}
-            </p>
-          </div>
-
-          <div>
-            <span className="block text-sm font-medium">Summa</span>
-            <p className="mt-1 rounded border border-zinc-300 px-3 py-2 text-right font-bold dark:border-zinc-600">
-              {money.format(mealTotal)}
-            </p>
-          </div>
+        <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
+          <table className="w-full text-sm">
+            <thead className="bg-zinc-100 dark:bg-zinc-800">
+              <tr>
+                <th className="p-3 text-left">Mēnesis</th>
+                <th className="p-3 text-right">Darba dienu skaits</th>
+                <th className="p-3 text-right">Summa</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mealRows.map((row) => (
+                <tr
+                  key={row.month}
+                  className="border-t border-zinc-200 dark:border-zinc-700"
+                >
+                  <td className="p-3 font-medium">{row.month}</td>
+                  <td className="p-3 text-right">{row.workdays}</td>
+                  <td className="p-3 text-right font-bold">
+                    {money.format(row.total)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
