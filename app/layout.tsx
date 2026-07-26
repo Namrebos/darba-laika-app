@@ -8,6 +8,7 @@ import { Menu, X, Sun, Moon, Laptop, Power } from "lucide-react";
 import "./globals.css";
 import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister";
 import type { AppRole } from "@/lib/access";
+import { APP_VERSION } from "@/lib/appVersion";
 
 type SummaryUser = {
   id: string;
@@ -288,6 +289,23 @@ export default function RootLayout({
                     <Laptop size={18} />
                   </button>
                 </div>
+              </div>
+
+              <div className="space-y-2 border-t border-zinc-300 pt-4 dark:border-zinc-700">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Versija: {APP_VERSION}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new Event("app-check-for-updates"),
+                    )
+                  }
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-700"
+                >
+                  Pārbaudīt atjauninājumus
+                </button>
               </div>
 
               <div className="mt-auto pt-10">
