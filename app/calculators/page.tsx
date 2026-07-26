@@ -155,21 +155,23 @@ export default function CalculatorsPage() {
         >(),
       }));
       ((data || []) as WorkLog[]).forEach((log) => {
-        if (!log.end_time) return;
         const start = new Date(log.start_time);
-        const end = new Date(log.end_time);
-        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+        if (Number.isNaN(start.getTime())) return;
         const month = start.getMonth();
-        const calculated = calculateWorkHours(start, end);
-        totals[month].regular += calculated.baseHours;
-        totals[month].overtime += calculated.overtimeHours;
         const dateKey = localDateKey(start);
         const workedDay = totals[month].workedDays.get(dateKey) || {
           dayOfWeek: start.getDay(),
           hours: 0,
         };
-        workedDay.hours += calculated.baseHours + calculated.overtimeHours;
         totals[month].workedDays.set(dateKey, workedDay);
+
+        if (!log.end_time) return;
+        const end = new Date(log.end_time);
+        if (Number.isNaN(end.getTime())) return;
+        const calculated = calculateWorkHours(start, end);
+        totals[month].regular += calculated.baseHours;
+        totals[month].overtime += calculated.overtimeHours;
+        workedDay.hours += calculated.baseHours + calculated.overtimeHours;
       });
       setHoursByMonth(
         totals.map((hours) => ({
@@ -177,7 +179,7 @@ export default function CalculatorsPage() {
           overtime: Math.round(hours.overtime),
           workdays: Array.from(hours.workedDays.values()).filter((day) => {
             const isWeekday = day.dayOfWeek >= 1 && day.dayOfWeek <= 5;
-            return isWeekday ? day.hours > 0 : day.hours >= 5;
+            return isWeekday || day.hours >= 5;
           }).length,
         })),
       );
