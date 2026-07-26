@@ -179,7 +179,7 @@ export default function CalculatorsPage() {
           overtime: Math.round(hours.overtime),
           workdays: Array.from(hours.workedDays.values()).filter((day) => {
             const isWeekday = day.dayOfWeek >= 1 && day.dayOfWeek <= 5;
-            return isWeekday || day.hours >= 5;
+            return isWeekday || day.hours >= 4;
           }).length,
         })),
       );
