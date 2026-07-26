@@ -83,6 +83,7 @@ export default function CalculatorsPage() {
   const [users, setUsers] = useState<SummaryUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [hourlyRate, setHourlyRate] = useState(10);
+  const [officialHourlyRate, setOfficialHourlyRate] = useState(8.5);
   const [multiplierA, setMultiplierA] = useState(2);
   const [multiplierB, setMultiplierB] = useState(1.5);
   const [taxBookSubmitted, setTaxBookSubmitted] = useState(true);
@@ -194,7 +195,7 @@ export default function CalculatorsPage() {
         const officialPlusExtra = (multiplier: number) => {
           if (regularHours === 0 && overtimeHours === 0) return 0;
 
-          const officialGross = normHours * hourlyRate;
+          const officialGross = normHours * officialHourlyRate;
           const fullGross =
             regularHours * hourlyRate +
             overtimeHours * hourlyRate * multiplier;
@@ -226,6 +227,7 @@ export default function CalculatorsPage() {
       hoursByMonth,
       multiplierA,
       multiplierB,
+      officialHourlyRate,
       taxBookSubmitted,
     ],
   );
@@ -249,7 +251,7 @@ export default function CalculatorsPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700 sm:grid-cols-2 lg:grid-cols-7">
         <label className="space-y-1 sm:col-span-2">
           <span className="text-sm font-medium">Lietotājs</span>
           <select
@@ -273,6 +275,22 @@ export default function CalculatorsPage() {
             step="0.01"
             value={hourlyRate}
             onChange={(event) => setHourlyRate(Math.max(0, Number(event.target.value)))}
+            className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+          />
+        </label>
+
+        <label className="space-y-1">
+          <span className="text-sm font-medium">Ofic. likme</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={officialHourlyRate}
+            onChange={(event) =>
+              setOfficialHourlyRate(
+                Math.max(0, Number(event.target.value)),
+              )
+            }
             className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
           />
         </label>
