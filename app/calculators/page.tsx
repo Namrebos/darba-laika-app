@@ -195,17 +195,24 @@ export default function CalculatorsPage() {
         const regularHours = hoursByMonth[index].regular;
         const overtimeHours = hoursByMonth[index].overtime;
         const normHours = WORK_HOURS_2026[index];
+        const mealAllowance = paidMeals
+          ? roundMoney(hoursByMonth[index].workdays * mealRate)
+          : 0;
 
         const fullyOfficial = (multiplier: number) =>
-          calculateNetSalary(
-            regularHours * hourlyRate +
-              overtimeHours * hourlyRate * multiplier,
-            taxBookSubmitted,
-            dependants,
+          roundMoney(
+            calculateNetSalary(
+              regularHours * hourlyRate +
+                overtimeHours * hourlyRate * multiplier,
+              taxBookSubmitted,
+              dependants,
+            ) + mealAllowance,
           );
 
         const officialPlusExtra = (multiplier: number) => {
-          if (regularHours === 0 && overtimeHours === 0) return 0;
+          if (regularHours === 0 && overtimeHours === 0) {
+            return mealAllowance;
+          }
 
           const officialGross = normHours * officialHourlyRate;
           const fullGross =
@@ -218,7 +225,9 @@ export default function CalculatorsPage() {
               officialGross,
               taxBookSubmitted,
               dependants,
-            ) + extraPart,
+            ) +
+              extraPart +
+              mealAllowance,
           );
         };
 
@@ -240,20 +249,10 @@ export default function CalculatorsPage() {
       multiplierA,
       multiplierB,
       officialHourlyRate,
+      mealRate,
+      paidMeals,
       taxBookSubmitted,
     ],
-  );
-
-  const mealRows = useMemo(
-    () =>
-      MONTHS.map((month, index) => ({
-        month,
-        workdays: hoursByMonth[index].workdays,
-        total: paidMeals
-          ? roundMoney(hoursByMonth[index].workdays * mealRate)
-          : 0,
-      })),
-    [hoursByMonth, mealRate, paidMeals],
   );
 
   if (!allowed) {
@@ -420,32 +419,6 @@ export default function CalculatorsPage() {
               className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
             />
           </label>
-        </div>
-
-        <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
-          <table className="w-full text-sm">
-            <thead className="bg-zinc-100 dark:bg-zinc-800">
-              <tr>
-                <th className="p-3 text-left">Mēnesis</th>
-                <th className="p-3 text-right">Darba dienu skaits</th>
-                <th className="p-3 text-right">Summa</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mealRows.map((row) => (
-                <tr
-                  key={row.month}
-                  className="border-t border-zinc-200 dark:border-zinc-700"
-                >
-                  <td className="p-3 font-medium">{row.month}</td>
-                  <td className="p-3 text-right">{row.workdays}</td>
-                  <td className="p-3 text-right font-bold">
-                    {money.format(row.total)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </section>
 
