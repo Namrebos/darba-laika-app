@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Check } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 
 type Expense = {
   id: number;
@@ -105,6 +105,29 @@ export default function FinancePage() {
     setExpenseAmount("");
   }
 
+  async function deleteExpense(expense: Expense) {
+    const confirmed = window.confirm(
+      `Vai tiešām dzēst izdevumu “${expense.name}”?`,
+    );
+    if (!confirmed) return;
+
+    setError("");
+    const { error: deleteError } = await supabase
+      .from("monthly_expenses")
+      .delete()
+      .eq("id", expense.id)
+      .eq("user_id", userId);
+
+    if (deleteError) {
+      setError("Neizdevās izdzēst izdevumu.");
+      return;
+    }
+
+    setExpenses((current) =>
+      current.filter((item) => item.id !== expense.id),
+    );
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
       <label className="flex items-center gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
@@ -171,13 +194,23 @@ export default function FinancePage() {
                 className="flex items-center justify-between gap-4 border-b border-zinc-200 px-4 py-3 last:border-b-0 dark:border-zinc-700"
               >
                 <span className="break-words">{expense.name}</span>
-                <span className="shrink-0 font-semibold">
-                  {expense.amount.toLocaleString("lv-LV", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  €
-                </span>
+                <div className="ml-auto flex shrink-0 items-center gap-3">
+                  <span className="font-semibold">
+                    {expense.amount.toLocaleString("lv-LV", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    €
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => deleteExpense(expense)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700"
+                    aria-label={`Dzēst izdevumu ${expense.name}`}
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
               </div>
             ))
           )}
