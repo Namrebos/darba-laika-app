@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Darba Laiks",
-    short_name: "Darbs",
+    short_name: "Darba laiks",
     description: "Darba laika uzskaite",
     start_url: "/",
     display: "standalone",
