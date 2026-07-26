@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Plus, X } from "lucide-react";
+import { Check } from "lucide-react";
 
 type Expense = {
   id: number;
@@ -27,7 +27,6 @@ export default function FinancePage() {
   const [storageKey, setStorageKey] = useState("");
   const [userId, setUserId] = useState("");
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [formOpen, setFormOpen] = useState(false);
   const [expenseName, setExpenseName] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [saving, setSaving] = useState(false);
@@ -104,7 +103,6 @@ export default function FinancePage() {
     ]);
     setExpenseName("");
     setExpenseAmount("");
-    setFormOpen(false);
   }
 
   return (
@@ -120,53 +118,40 @@ export default function FinancePage() {
       </label>
 
       <section className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
-        <div className="flex items-center justify-between p-4">
-          <h2 className="text-lg font-semibold">Izdevumi</h2>
+        <form
+          onSubmit={saveExpense}
+          className="flex items-center gap-2 p-3 sm:gap-3 sm:p-4"
+        >
+          <h2 className="shrink-0 font-semibold sm:text-lg">Izdevumi</h2>
+          <input
+            type="text"
+            value={expenseName}
+            onChange={(event) => setExpenseName(event.target.value)}
+            placeholder="Nosaukums"
+            aria-label="Izdevuma nosaukums"
+            maxLength={120}
+            className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent px-2 py-2 text-sm outline-none focus:border-blue-500 sm:px-3 dark:border-zinc-600"
+          />
+          <input
+            type="number"
+            value={expenseAmount}
+            onChange={(event) => setExpenseAmount(event.target.value)}
+            placeholder="Summa €"
+            aria-label="Izdevuma summa"
+            min="0.01"
+            step="0.01"
+            inputMode="decimal"
+            className="w-24 shrink-0 rounded-lg border border-zinc-300 bg-transparent px-2 py-2 text-sm outline-none focus:border-blue-500 sm:w-28 sm:px-3 dark:border-zinc-600"
+          />
           <button
-            type="button"
-            onClick={() => {
-              setFormOpen((open) => !open);
-              setError("");
-            }}
-            className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-            aria-label={formOpen ? "Aizvērt izdevuma ievadi" : "Pievienot izdevumu"}
+            type="submit"
+            disabled={saving}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-60"
+            aria-label="Saglabāt izdevumu"
           >
-            {formOpen ? <X size={20} /> : <Plus size={20} />}
+            <Check size={21} strokeWidth={3} />
           </button>
-        </div>
-
-        {formOpen && (
-          <form
-            onSubmit={saveExpense}
-            className="space-y-3 border-t border-zinc-200 p-4 dark:border-zinc-700"
-          >
-            <input
-              type="text"
-              value={expenseName}
-              onChange={(event) => setExpenseName(event.target.value)}
-              placeholder="Izdevuma nosaukums"
-              maxLength={120}
-              className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 outline-none focus:border-blue-500 dark:border-zinc-600"
-            />
-            <input
-              type="number"
-              value={expenseAmount}
-              onChange={(event) => setExpenseAmount(event.target.value)}
-              placeholder="Summa, €"
-              min="0.01"
-              step="0.01"
-              inputMode="decimal"
-              className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 outline-none focus:border-blue-500 dark:border-zinc-600"
-            />
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-            >
-              {saving ? "Saglabā..." : "Saglabāt"}
-            </button>
-          </form>
-        )}
+        </form>
 
         {error && (
           <p className="border-t border-zinc-200 px-4 py-3 text-sm text-red-600 dark:border-zinc-700 dark:text-red-400">
