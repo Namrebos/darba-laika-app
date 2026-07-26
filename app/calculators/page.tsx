@@ -272,7 +272,7 @@ export default function CalculatorsPage() {
           <input
             type="number"
             min="0"
-            step="0.01"
+            step="0.5"
             value={hourlyRate}
             onChange={(event) => setHourlyRate(Math.max(0, Number(event.target.value)))}
             className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
@@ -284,7 +284,7 @@ export default function CalculatorsPage() {
           <input
             type="number"
             min="0"
-            step="0.01"
+            step="0.5"
             value={officialHourlyRate}
             onChange={(event) =>
               setOfficialHourlyRate(
@@ -300,7 +300,7 @@ export default function CalculatorsPage() {
           <input
             type="number"
             min="1"
-            step="0.1"
+            step="0.5"
             value={multiplierA}
             onChange={(event) => setMultiplierA(Math.max(1, Number(event.target.value)))}
             className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
@@ -312,7 +312,7 @@ export default function CalculatorsPage() {
           <input
             type="number"
             min="1"
-            step="0.1"
+            step="0.5"
             value={multiplierB}
             onChange={(event) => setMultiplierB(Math.max(1, Number(event.target.value)))}
             className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
@@ -394,7 +394,7 @@ export default function CalculatorsPage() {
             <input
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={mealRate}
               onChange={(event) =>
                 setMealRate(Math.max(0, Number(event.target.value)))
