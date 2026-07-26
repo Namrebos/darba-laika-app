@@ -69,6 +69,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const invitationLink = `${request.nextUrl.origin}/register?token=${encodeURIComponent(token)}`;
+  const productionOrigin = (
+    process.env.APP_PRODUCTION_URL ||
+    "https://darba-laika-app.vercel.app"
+  ).replace(/\/$/, "");
+  const invitationLink = `${productionOrigin}/register?token=${encodeURIComponent(token)}`;
   return NextResponse.json({ invitationLink, expiresAt });
 }
