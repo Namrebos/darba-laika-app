@@ -24,7 +24,7 @@ export default function LoginPage() {
       }
     } else if (mode === 'reset') {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://tavs-vercel-domeins.vercel.app/reset-password' // <-- šeit nomaini uz reālo domēnu
+        redirectTo: 'https://darba-laika-app.vercel.app/reset-password'
       })
       if (error) {
         setMessage('❌ Neizdevās nosūtīt paroles atjaunošanas saiti')
