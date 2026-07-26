@@ -7,6 +7,7 @@ type DayData = {
 
 type Props = {
   data?: Record<string, DayData>
+  deductWeekdayLunch?: boolean
 }
 
 type Totals = {
@@ -63,14 +64,23 @@ function SummaryCard({
   )
 }
 
-export default function MonthlySummary({ data }: Props) {
+export default function MonthlySummary({
+  data,
+  deductWeekdayLunch = false,
+}: Props) {
   const safeData = data ?? {}
 
-  const totals: Totals = Object.values(safeData).reduce<Totals>(
-    (acc, day) => {
-      const baseHours = day.baseHours ?? 0
+  const totals: Totals = Object.entries(safeData).reduce<Totals>(
+    (acc, [dateKey, day]) => {
+      const recordedBaseHours = day.baseHours ?? 0
       const overtimeHours = day.overtimeHours ?? 0
-      const hasWorkday = baseHours > 0 || overtimeHours > 0
+      const hasWorkday = recordedBaseHours > 0 || overtimeHours > 0
+      const date = new Date(`${dateKey}T12:00:00`)
+      const dayOfWeek = date.getDay()
+      const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5
+      const lunchHours =
+        deductWeekdayLunch && isWeekday && recordedBaseHours > 0 ? 1 : 0
+      const baseHours = Math.max(0, recordedBaseHours - lunchHours)
 
       return {
         baseHours: acc.baseHours + baseHours,

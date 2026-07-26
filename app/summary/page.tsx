@@ -108,25 +108,63 @@ export default function SummaryPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchableTasks, setSearchableTasks] = useState<TaskLogRow[]>([]);
+  const [ownerId, setOwnerId] = useState("");
+  const [showWorkTime, setShowWorkTime] = useState(true);
+  const [eightHourWorkday, setEightHourWorkday] = useState(false);
 
   useEffect(() => {
-    loadAvailableMonths();
+    async function resolveOwner() {
+      const { data: authData } = await supabase.auth.getUser();
+      if (authData.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", authData.user.id)
+          .single();
+        setShowWorkTime(profile?.role !== "viewer");
+      }
+      const { data } = await supabase.rpc("get_accessible_summary_users");
+      const users = (data || []) as { id: string; email: string | null }[];
+      const requested = new URLSearchParams(window.location.search).get("user") || "";
+      const storageKey = authData.user
+        ? `summary-selected-user:${authData.user.id}`
+        : "";
+      const saved = storageKey ? localStorage.getItem(storageKey) || "" : "";
+      const selected = users.some((item) => item.id === requested)
+        ? requested
+        : users.some((item) => item.id === saved)
+          ? saved
+          : users[0]?.id || "";
+      if (selected && storageKey) localStorage.setItem(storageKey, selected);
+      setOwnerId(selected);
+      setEightHourWorkday(
+        selected
+          ? localStorage.getItem(`finance-eight-hour-workday:${selected}`) ===
+              "true"
+          : false,
+      );
+      if (selected) await loadAvailableMonths(selected);
+      else setLoading(false);
+    }
+    resolveOwner();
   }, []);
 
   useEffect(() => {
     if (availableMonths.length > 0) {
-      loadData();
+      loadData(ownerId);
     }
-  }, [selectedYear, selectedMonth, availableMonths]);
+  }, [selectedYear, selectedMonth, availableMonths, ownerId]);
 
-  async function loadAvailableMonths() {
+  async function loadAvailableMonths(selectedOwnerId: string) {
     const { data: workLogs, error: workError } = await supabase
       .from("work_logs")
-      .select("start_time");
+      .select("start_time")
+      .eq("user_id", selectedOwnerId);
 
     const { data: taskLogs, error: taskError } = await supabase
       .from("task_logs")
       .select("id, title, note, start_time, end_time, session_id")
+      .eq("user_id", selectedOwnerId)
       .order("start_time", { ascending: false });
 
     if (workError || taskError) {
@@ -198,7 +236,7 @@ export default function SummaryPage() {
     });
   }, [searchQuery, searchableTasks]);
 
-  async function loadData() {
+  async function loadData(selectedOwnerId: string) {
     setLoading(true);
 
     const from = new Date(selectedYear, selectedMonth, 1);
@@ -207,12 +245,14 @@ export default function SummaryPage() {
     const { data: workLogs, error: workError } = await supabase
       .from("work_logs")
       .select("start_time, end_time")
+      .eq("user_id", selectedOwnerId)
       .gte("start_time", from.toISOString())
       .lt("start_time", nextMonthStart.toISOString());
 
     const { data: taskLogs, error: taskError } = await supabase
       .from("task_logs")
       .select("start_time, end_time, session_id")
+      .eq("user_id", selectedOwnerId)
       .gte("start_time", from.toISOString())
       .lt("start_time", nextMonthStart.toISOString());
 
@@ -360,7 +400,10 @@ export default function SummaryPage() {
           )}
         </div>
 
-        <MonthlySummary data={entries} />
+        <MonthlySummary
+          data={entries}
+          deductWeekdayLunch={eightHourWorkday}
+        />
 
         {loading ? (
           <div className="rounded-xl border border-border bg-card p-6 text-sm">
@@ -375,8 +418,13 @@ export default function SummaryPage() {
           />
         )}
 
-        {selectedDate && (
-          <DayModal date={selectedDate} onClose={() => setSelectedDate(null)} />
+        {selectedDate && ownerId && (
+          <DayModal
+            date={selectedDate}
+            ownerId={ownerId}
+            showWorkTime={showWorkTime}
+            onClose={() => setSelectedDate(null)}
+          />
         )}
       </div>
     </div>

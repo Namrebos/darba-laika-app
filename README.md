@@ -1,5 +1,16 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Supabase lietotāju uzaicinājumi
+
+Vercel projekta vides mainīgajos jāpievieno `SUPABASE_SERVICE_ROLE_KEY` no
+Supabase **Project Settings → API**. Tā ir tikai servera atslēga, tāpēc tās
+nosaukumam nedrīkst pievienot `NEXT_PUBLIC_` un to nedrīkst ierakstīt GitHub.
+
+Supabase **Authentication → Providers → Email** iestatījumos jāizslēdz publiska
+lietotāju reģistrācija. Administrators sadaļā **Lietotāji** izvēlas lomu un
+ģenerē vienreizēju saiti, kas derīga 12 stundas. Saņēmējs saitē pats ievada
+savu e-pastu un paroli.
+
 ## Getting Started
 
 First, run the development server:

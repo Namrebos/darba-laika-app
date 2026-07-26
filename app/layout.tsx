@@ -7,6 +7,15 @@ import Link from "next/link";
 import { Menu, X, Sun, Moon, Laptop, Power } from "lucide-react";
 import "./globals.css";
 import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister";
+import type { AppRole } from "@/lib/access";
+import { APP_VERSION } from "@/lib/appVersion";
+
+type SummaryUser = {
+  id: string;
+  email: string | null;
+  display_name: string;
+  avatar_url: string | null;
+};
 
 export default function RootLayout({
   children,
@@ -16,12 +25,16 @@ export default function RootLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [role, setRole] = useState<AppRole | null>(null);
+  const [summaryUsers, setSummaryUsers] = useState<SummaryUser[]>([]);
+  const [selectedSummaryUser, setSelectedSummaryUser] = useState("");
   const pathname = usePathname();
   const router = useRouter();
 
   const isAuthPage =
     pathname === "/login" ||
     pathname === "/signup" ||
+    pathname === "/register" ||
     pathname === "/reset-password";
 
   useEffect(() => {
@@ -56,6 +69,51 @@ export default function RootLayout({
   }, []);
 
   useEffect(() => {
+    if (isAuthPage) return;
+
+    async function checkAccess() {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user.id)
+        .single();
+      const currentRole = (profile?.role || "member") as AppRole;
+      setRole(currentRole);
+
+      if (currentRole === "viewer" || currentRole === "admin") {
+        const { data: allowedUsers } = await supabase.rpc("get_accessible_summary_users");
+        const users = (allowedUsers || []) as SummaryUser[];
+        const requestedUser = new URLSearchParams(window.location.search).get("user") || "";
+        const storageKey = `summary-selected-user:${authData.user.id}`;
+        const savedUser = localStorage.getItem(storageKey) || "";
+        const selected = users.some((item) => item.id === requestedUser)
+          ? requestedUser
+          : users.some((item) => item.id === savedUser)
+            ? savedUser
+            : users[0]?.id || "";
+        setSummaryUsers(users);
+        setSelectedSummaryUser(selected);
+        if (selected) localStorage.setItem(storageKey, selected);
+      }
+
+      if (currentRole === "viewer" && !["/summary", "/profile"].includes(pathname)) {
+        router.replace("/summary");
+      }
+      if (["/users", "/calculators"].includes(pathname) && currentRole !== "admin") {
+        router.replace("/summary");
+      }
+    }
+
+    checkAccess();
+  }, [isAuthPage, pathname, router]);
+
+  useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
@@ -87,7 +145,14 @@ export default function RootLayout({
     { href: "/workday", label: "Darbadiena" },
     { href: "/summary", label: "Kopsavilkums" },
     { href: "/finance", label: "Finanses" },
-  ];
+    ...(role === "admin"
+      ? [
+          { href: "/calculators", label: "Kalkulatori" },
+          { href: "/users", label: "Lietotāji" },
+        ]
+      : []),
+    { href: "/profile", label: "Profils" },
+  ].filter(({ href }) => role !== "viewer" || ["/summary", "/profile"].includes(href));
 
   if (isAuthPage) {
     return (
@@ -129,18 +194,58 @@ export default function RootLayout({
 
             <nav className="flex h-full flex-col space-y-4 p-4">
               {navLinks.map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`text-base font-medium hover:underline ${
-                    pathname === href
-                      ? "font-bold text-blue-600 dark:text-blue-400"
-                      : ""
-                  }`}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  {label}
-                </Link>
+                <div key={href} className="space-y-2">
+                  <Link
+                    href={href}
+                    className={`block text-base font-medium hover:underline ${
+                      pathname === href
+                        ? "font-bold text-blue-600 dark:text-blue-400"
+                        : ""
+                    }`}
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    {label}
+                  </Link>
+
+                  {href === "/summary" &&
+                    pathname === "/summary" &&
+                    (role === "viewer" || role === "admin") && (
+                      <div className="space-y-2 pl-2">
+                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                          Skatīt lietotāju
+                        </label>
+                        {summaryUsers.length > 0 ? (
+                          <select
+                            value={selectedSummaryUser}
+                            onChange={(event) => {
+                              const userId = event.target.value;
+                              setSelectedSummaryUser(userId);
+                              supabase.auth.getUser().then(({ data }) => {
+                                if (data.user) {
+                                  localStorage.setItem(
+                                    `summary-selected-user:${data.user.id}`,
+                                    userId,
+                                  );
+                                }
+                              });
+                              window.location.href = `/summary?user=${encodeURIComponent(userId)}`;
+                            }}
+                            className="w-full rounded border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                          >
+                            {summaryUsers.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.display_name || item.email || item.id}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <p className="text-xs text-zinc-500">
+                            Admins vēl nav piešķīris piekļuvi.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                </div>
               ))}
 
               <hr className="my-4 border-zinc-300 dark:border-zinc-700" />
@@ -184,6 +289,23 @@ export default function RootLayout({
                     <Laptop size={18} />
                   </button>
                 </div>
+              </div>
+
+              <div className="space-y-2 border-t border-zinc-300 pt-4 dark:border-zinc-700">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Versija: {APP_VERSION}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new Event("app-check-for-updates"),
+                    )
+                  }
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-700"
+                >
+                  Pārbaudīt atjauninājumus
+                </button>
               </div>
 
               <div className="mt-auto pt-10">

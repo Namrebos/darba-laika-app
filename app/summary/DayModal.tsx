@@ -10,6 +10,8 @@ import TaskDetailsCard from "@/app/components/TaskDetailsCard";
 
 type DayModalProps = {
   date: string;
+  ownerId: string;
+  showWorkTime: boolean;
   onClose: () => void;
 };
 
@@ -88,7 +90,12 @@ function buildTimeRangeText(start: string, end: string | null) {
   return `${format(startDate, "HH:mm")}-${format(endDate, "HH:mm")} (${durationText})`;
 }
 
-export default function DayModal({ date, onClose }: DayModalProps) {
+export default function DayModal({
+  date,
+  ownerId,
+  showWorkTime,
+  onClose,
+}: DayModalProps) {
   const [workLog, setWorkLog] = useState<WorkLog | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +118,7 @@ export default function DayModal({ date, onClose }: DayModalProps) {
 
   useEffect(() => {
     loadData();
-  }, [date]);
+  }, [date, ownerId]);
 
   async function loadData() {
     setLoading(true);
@@ -128,6 +135,7 @@ export default function DayModal({ date, onClose }: DayModalProps) {
     const { data: workLogs, error: workError } = await supabase
       .from("work_logs")
       .select("*")
+      .eq("user_id", ownerId)
       .gte("start_time", from)
       .lte("start_time", to)
       .order("start_time", { ascending: true });
@@ -135,6 +143,7 @@ export default function DayModal({ date, onClose }: DayModalProps) {
     const { data: taskLogs, error: taskError } = await supabase
       .from("task_logs")
       .select("*")
+      .eq("user_id", ownerId)
       .gte("start_time", from)
       .lte("start_time", to)
       .order("start_time", { ascending: true });
@@ -330,27 +339,29 @@ export default function DayModal({ date, onClose }: DayModalProps) {
               </p>
             ) : (
               <div className="space-y-5">
-                <div className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900">
-                  <div className="space-y-2 text-sm">
-                    <p>
-                      <span className="font-medium">Darba laiks:</span>{" "}
-                      {workLog
-                        ? `${format(new Date(workLog.start_time), "HH:mm")} – ${format(
-                            new Date(workLog.end_time),
-                            "HH:mm",
-                          )}`
-                        : "Nav datu"}
-                    </p>
+                {showWorkTime && (
+                  <div className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900">
+                    <div className="space-y-2 text-sm">
+                      <p>
+                        <span className="font-medium">Darba laiks:</span>{" "}
+                        {workLog
+                          ? `${format(new Date(workLog.start_time), "HH:mm")} – ${format(
+                              new Date(workLog.end_time),
+                              "HH:mm",
+                            )}`
+                          : "Nav datu"}
+                      </p>
 
-                    <p>
-                      <span className="font-medium">Pamata:</span>{" "}
-                      {formatHours(hours.baseHours)}
-                      {" • "}
-                      <span className="font-medium">Virsstundas:</span>{" "}
-                      {formatHours(hours.overtimeHours)}
-                    </p>
+                      <p>
+                        <span className="font-medium">Pamata:</span>{" "}
+                        {formatHours(hours.baseHours)}
+                        {" • "}
+                        <span className="font-medium">Virsstundas:</span>{" "}
+                        {formatHours(hours.overtimeHours)}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="rounded-xl bg-white dark:bg-zinc-950">
                   <h3 className="mb-3 text-base font-semibold">Uzdevumi</h3>
