@@ -11,6 +11,9 @@ import {
   ExternalLink,
   ImagePlus,
   Link2,
+  Mail,
+  MessageCircle,
+  MessageSquareText,
   Pencil,
   Plus,
   Send,
@@ -395,6 +398,14 @@ export default function PlannedTasksPage() {
     setMessage("Pieteikuma saite nokopēta.");
   }
 
+  const requestShareText = requestLink
+    ? `Lūdzu, aizpildiet kravas pārvadājuma pieteikumu:\n${requestLink}`
+    : "";
+  const encodedRequestShareText = encodeURIComponent(requestShareText);
+  const requestEmailSubject = encodeURIComponent(
+    "Kravas pārvadājuma pieteikums",
+  );
+
   async function saveDraft(task: PlannedTask) {
     setSavingId(task.id);
     setMessage("");
@@ -669,20 +680,49 @@ export default function PlannedTasksPage() {
       )}
 
       {requestLink && (
-        <div className="flex flex-col gap-2 rounded-xl border border-violet-200 bg-violet-50 p-3 dark:border-violet-900 dark:bg-violet-950/30 sm:flex-row sm:items-center">
-          <input
-            readOnly
-            value={requestLink}
-            className="min-w-0 flex-1 rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm text-black"
-          />
-          <button
-            type="button"
-            onClick={copyRequestLink}
-            className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
-          >
-            <Clipboard size={16} />
-            Kopēt saiti
-          </button>
+        <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50 p-3 dark:border-violet-900 dark:bg-violet-950/30">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              readOnly
+              value={requestLink}
+              className="min-w-0 flex-1 rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm text-black"
+            />
+            <button
+              type="button"
+              onClick={copyRequestLink}
+              className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              <Clipboard size={16} />
+              Kopēt saiti
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <a
+              href={`https://wa.me/?text=${encodedRequestShareText}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-2 rounded-lg bg-green-600 px-2 py-2 text-sm font-semibold text-white hover:bg-green-700"
+            >
+              <MessageCircle size={17} />
+              <span className="hidden sm:inline">WhatsApp</span>
+              <span className="sm:hidden">WhatsApp</span>
+            </a>
+            <a
+              href={`sms:?&body=${encodedRequestShareText}`}
+              className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-2 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              <MessageSquareText size={17} />
+              SMS
+            </a>
+            <a
+              href={`mailto:?subject=${requestEmailSubject}&body=${encodedRequestShareText}`}
+              className="flex items-center justify-center gap-2 rounded-lg bg-zinc-700 px-2 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+            >
+              <Mail size={17} />
+              E-pasts
+            </a>
+          </div>
         </div>
       )}
 
