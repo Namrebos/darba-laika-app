@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import imageCompression from "browser-image-compression";
 import {
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
   Trash2,
   Truck,
 } from "lucide-react";
+import AddressField from "@/app/components/AddressField";
 
 const LocationPicker = dynamic(
   () => import("@/app/components/LocationPicker"),
@@ -176,7 +177,7 @@ function PartyFields({
             />
           </label>
           <label>
-            <FieldLabel required>Reģistrācijas numurs</FieldLabel>
+            <FieldLabel>Reģistrācijas/PVN numurs</FieldLabel>
             <input
               value={String(form[field("registration_number")])}
               onChange={(event) =>
@@ -237,6 +238,8 @@ export default function RequestForm({
   const [form, setForm] = useState<FormState>(initialForm);
   const [pickupPoint, setPickupPoint] = useState<Point | null>(null);
   const [dropoffPoint, setDropoffPoint] = useState<Point | null>(null);
+  const [pickupFocus, setPickupFocus] = useState<Point | null>(null);
+  const [dropoffFocus, setDropoffFocus] = useState<Point | null>(null);
   const [images, setImages] = useState<File[]>([]);
   const [step, setStep] = useState(1);
   const [customCargo, setCustomCargo] = useState("");
@@ -260,10 +263,7 @@ export default function RequestForm({
   const identityComplete = (prefix: "sender" | "recipient") => {
     const type = form[`${prefix}_type`];
     return type === "company"
-      ? Boolean(
-          form[`${prefix}_company_name`].trim() &&
-            form[`${prefix}_registration_number`].trim(),
-        )
+      ? Boolean(form[`${prefix}_company_name`].trim())
       : Boolean(
           form[`${prefix}_first_name`].trim() &&
             form[`${prefix}_last_name`].trim(),
@@ -275,18 +275,18 @@ export default function RequestForm({
       return Boolean(
         identityComplete("sender") &&
           form.sender_phone.trim() &&
+          form.pickup_address.trim() &&
           pickupPoint &&
-          form.pickup_date &&
-          form.pickup_time,
+          form.pickup_date,
       );
     }
     if (targetStep === 2) {
       return Boolean(
         identityComplete("recipient") &&
           form.recipient_phone.trim() &&
+          form.dropoff_address.trim() &&
           dropoffPoint &&
-          form.dropoff_date &&
-          form.dropoff_time,
+          form.dropoff_date,
       );
     }
     return Boolean(
@@ -307,6 +307,15 @@ export default function RequestForm({
     setStep((current) => Math.min(3, current + 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const focusPickupMap = useCallback(
+    (point: Point) => setPickupFocus(point),
+    [],
+  );
+  const focusDropoffMap = useCallback(
+    (point: Point) => setDropoffFocus(point),
+    [],
+  );
 
   const addImages = async (files: FileList | null) => {
     if (!files) return;
@@ -431,21 +440,22 @@ export default function RequestForm({
           </FormCard>
           <FormCard title="Uzkraušanas vieta">
             <div className="space-y-4">
-              <label>
-                <FieldLabel>Adrese (nav obligāta)</FieldLabel>
-                <input
+              <div>
+                <label htmlFor="pickup_address">
+                  <FieldLabel required>Adrese</FieldLabel>
+                </label>
+                <AddressField
+                  id="pickup_address"
                   value={form.pickup_address}
-                  onChange={(event) =>
-                    update({ pickup_address: event.target.value })
-                  }
-                  className="form-input"
-                  maxLength={250}
+                  onChange={(value) => update({ pickup_address: value })}
+                  onMapFocus={focusPickupMap}
                 />
-              </label>
+              </div>
               <div>
                 <FieldLabel required>Precīza vieta kartē</FieldLabel>
                 <LocationPicker
                   point={pickupPoint}
+                  focusPoint={pickupFocus}
                   onChange={setPickupPoint}
                   markerColor="blue"
                   active={step === 1}
@@ -464,7 +474,7 @@ export default function RequestForm({
                   />
                 </label>
                 <label>
-                  <FieldLabel required>Laiks</FieldLabel>
+                  <FieldLabel>Laiks</FieldLabel>
                   <input
                     type="time"
                     value={form.pickup_time}
@@ -496,21 +506,22 @@ export default function RequestForm({
           </FormCard>
           <FormCard title="Izkraušanas vieta">
             <div className="space-y-4">
-              <label>
-                <FieldLabel>Adrese (nav obligāta)</FieldLabel>
-                <input
+              <div>
+                <label htmlFor="dropoff_address">
+                  <FieldLabel required>Adrese</FieldLabel>
+                </label>
+                <AddressField
+                  id="dropoff_address"
                   value={form.dropoff_address}
-                  onChange={(event) =>
-                    update({ dropoff_address: event.target.value })
-                  }
-                  className="form-input"
-                  maxLength={250}
+                  onChange={(value) => update({ dropoff_address: value })}
+                  onMapFocus={focusDropoffMap}
                 />
-              </label>
+              </div>
               <div>
                 <FieldLabel required>Precīza vieta kartē</FieldLabel>
                 <LocationPicker
                   point={dropoffPoint}
+                  focusPoint={dropoffFocus}
                   onChange={setDropoffPoint}
                   markerColor="red"
                   active={step === 2}
@@ -529,7 +540,7 @@ export default function RequestForm({
                   />
                 </label>
                 <label>
-                  <FieldLabel required>Laiks</FieldLabel>
+                  <FieldLabel>Laiks</FieldLabel>
                   <input
                     type="time"
                     value={form.dropoff_time}

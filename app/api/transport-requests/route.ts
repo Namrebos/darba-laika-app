@@ -31,14 +31,12 @@ function validatePayload(input: Record<string, unknown>) {
 
   const senderIdentity =
     senderType === "company"
-      ? cleanText(input.sender_company_name, 120) &&
-        cleanText(input.sender_registration_number, 30)
+      ? cleanText(input.sender_company_name, 120)
       : cleanText(input.sender_first_name, 60) &&
         cleanText(input.sender_last_name, 60);
   const recipientIdentity =
     recipientType === "company"
-      ? cleanText(input.recipient_company_name, 120) &&
-        cleanText(input.recipient_registration_number, 30)
+      ? cleanText(input.recipient_company_name, 120)
       : cleanText(input.recipient_first_name, 60) &&
         cleanText(input.recipient_last_name, 60);
 
@@ -47,10 +45,10 @@ function validatePayload(input: Record<string, unknown>) {
       recipientIdentity &&
       cleanText(input.sender_phone, 30) &&
       cleanText(input.recipient_phone, 30) &&
+      cleanText(input.pickup_address, 250) &&
+      cleanText(input.dropoff_address, 250) &&
       cleanText(input.pickup_date, 10) &&
-      cleanText(input.pickup_time, 5) &&
       cleanText(input.dropoff_date, 10) &&
-      cleanText(input.dropoff_time, 5) &&
       cleanText(input.cargo_type, 100) &&
       validCoordinate(input.pickup_lat, -90, 90) &&
       validCoordinate(input.pickup_lng, -180, 180) &&

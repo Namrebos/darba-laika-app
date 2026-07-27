@@ -17,6 +17,7 @@ type Point = {
 
 type Props = {
   point: Point | null;
+  focusPoint?: Point | null;
   onChange: (point: Point) => void;
   markerColor?: "blue" | "red";
   active?: boolean;
@@ -44,24 +45,34 @@ function MapEvents({ onChange }: Pick<Props, "onChange">) {
 
 function MapUpdater({
   point,
+  focusPoint,
   active,
 }: {
   point: Point | null;
+  focusPoint: Point | null;
   active: boolean;
 }) {
   const map = useMap();
 
   useEffect(() => {
     const timeout = window.setTimeout(() => map.invalidateSize(), 80);
-    if (point) map.setView([point.lat, point.lng], Math.max(map.getZoom(), 14));
+    if (point) {
+      map.setView([point.lat, point.lng], Math.max(map.getZoom(), 16));
+    } else if (focusPoint) {
+      map.setView(
+        [focusPoint.lat, focusPoint.lng],
+        Math.max(map.getZoom(), 13),
+      );
+    }
     return () => window.clearTimeout(timeout);
-  }, [active, map, point]);
+  }, [active, focusPoint, map, point]);
 
   return null;
 }
 
 export default function LocationPicker({
   point,
+  focusPoint = null,
   onChange,
   markerColor = "blue",
   active = true,
@@ -100,7 +111,7 @@ export default function LocationPicker({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <MapEvents onChange={onChange} />
-          <MapUpdater point={point} active={active} />
+          <MapUpdater point={point} focusPoint={focusPoint} active={active} />
           {point && (
             <Marker
               position={[point.lat, point.lng]}

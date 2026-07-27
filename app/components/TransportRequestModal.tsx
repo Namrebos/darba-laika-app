@@ -29,13 +29,13 @@ type TransportRequest = {
   pickup_lat: number;
   pickup_lng: number;
   pickup_date: string;
-  pickup_time: string;
+  pickup_time: string | null;
   pickup_notes: string;
   dropoff_address: string | null;
   dropoff_lat: number;
   dropoff_lng: number;
   dropoff_date: string;
-  dropoff_time: string;
+  dropoff_time: string | null;
   dropoff_notes: string;
   cargo_type: string;
   additional_notes: string;
@@ -120,7 +120,7 @@ function LocationBlock({
   lat: number;
   lng: number;
   date: string;
-  time: string;
+  time: string | null;
   notes: string;
 }) {
   return (
@@ -132,7 +132,8 @@ function LocationBlock({
       <div className="text-sm">
         <p>{address || "Adrese nav norādīta"}</p>
         <p className="mt-1 text-zinc-500">
-          {date} · {time.slice(0, 5)}
+          {date}
+          {time ? ` · ${time.slice(0, 5)}` : ""}
         </p>
         {notes && <p className="mt-2 whitespace-pre-wrap">{notes}</p>}
       </div>
