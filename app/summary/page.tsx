@@ -23,6 +23,8 @@ type DayEntry = {
   overtimeHours: number;
   taskHours?: number;
   workSegments: WorkSegment[];
+  plannedCount?: number;
+  completedPlannedCount?: number;
 };
 
 type MonthOption = {
@@ -163,14 +165,29 @@ export default function SummaryPage() {
       .select("start_time")
       .eq("user_id", selectedOwnerId);
 
-    const { data: taskLogs, error: taskError } = await supabase
-      .from("task_logs")
-      .select("id, title, note, start_time, end_time, session_id")
-      .eq("user_id", selectedOwnerId)
-      .order("start_time", { ascending: false });
+    const [
+      { data: taskLogs, error: taskError },
+      { data: plannedTasks, error: plannedError },
+    ] = await Promise.all([
+      supabase
+        .from("task_logs")
+        .select("id, title, note, start_time, end_time, session_id")
+        .eq("user_id", selectedOwnerId)
+        .order("start_time", { ascending: false }),
+      supabase
+        .from("planned_tasks")
+        .select("scheduled_date")
+        .eq("assignee_id", selectedOwnerId)
+        .neq("status", "canceled")
+        .not("scheduled_date", "is", null),
+    ]);
 
-    if (workError || taskError) {
-      console.error("Summary month load error:", { workError, taskError });
+    if (workError || taskError || plannedError) {
+      console.error("Summary month load error:", {
+        workError,
+        taskError,
+        plannedError,
+      });
       setAvailableMonths([]);
       setSearchableTasks([]);
       setLoading(false);
@@ -184,6 +201,9 @@ export default function SummaryPage() {
         (w) => new Date(w.start_time),
       ),
       ...((taskLogs || []) as TaskLogRow[]).map((t) => new Date(t.start_time)),
+      ...((plannedTasks || []) as { scheduled_date: string }[]).map(
+        (task) => new Date(`${task.scheduled_date}T12:00:00`),
+      ),
     ];
 
     const monthSet = new Set<string>();
@@ -258,8 +278,22 @@ export default function SummaryPage() {
       .gte("start_time", from.toISOString())
       .lt("start_time", nextMonthStart.toISOString());
 
-    if (workError || taskError) {
-      console.error("Summary data load error:", { workError, taskError });
+    const fromDate = format(from, "yyyy-MM-dd");
+    const nextMonthDate = format(nextMonthStart, "yyyy-MM-dd");
+    const { data: plannedTasks, error: plannedError } = await supabase
+      .from("planned_tasks")
+      .select("scheduled_date, status")
+      .eq("assignee_id", selectedOwnerId)
+      .gte("scheduled_date", fromDate)
+      .lt("scheduled_date", nextMonthDate)
+      .neq("status", "canceled");
+
+    if (workError || taskError || plannedError) {
+      console.error("Summary data load error:", {
+        workError,
+        taskError,
+        plannedError,
+      });
       setEntries({});
       setLoading(false);
       return;
@@ -289,6 +323,18 @@ export default function SummaryPage() {
     Object.entries(taskByDate).forEach(([date, hours]) => {
       const entry = ensureDayEntry(dataMap, date);
       entry.taskHours = (entry.taskHours || 0) + hours;
+    });
+
+    ((plannedTasks || []) as {
+      scheduled_date: string;
+      status: string;
+    }[]).forEach((task) => {
+      const entry = ensureDayEntry(dataMap, task.scheduled_date);
+      if (task.status === "completed") {
+        entry.completedPlannedCount = (entry.completedPlannedCount || 0) + 1;
+      } else {
+        entry.plannedCount = (entry.plannedCount || 0) + 1;
+      }
     });
 
     setEntries(dataMap);

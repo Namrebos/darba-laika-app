@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
@@ -32,6 +33,15 @@ type Task = {
 type TaskImageRow = {
   url: string;
   task_log_id: number;
+};
+
+type PlannedTask = {
+  id: number;
+  title: string;
+  note: string;
+  scheduled_time: string | null;
+  status: "new" | "planned" | "started" | "completed" | "canceled";
+  position: number;
 };
 
 type TaskTimerRow = {
@@ -111,6 +121,13 @@ export default function DayModal({
   const [selectedImages, setSelectedImages] = useState<string[] | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedTask, setSelectedTask] = useState<SelectedTask | null>(null);
+  const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([]);
+  const [plannedImages, setPlannedImages] = useState<Record<number, string[]>>(
+    {},
+  );
+  const [plannedTab, setPlannedTab] = useState<"planned" | "completed">(
+    "planned",
+  );
   const [hours, setHours] = useState({
     baseHours: 0,
     overtimeHours: 0,
@@ -148,12 +165,26 @@ export default function DayModal({
       .lte("start_time", to)
       .order("start_time", { ascending: true });
 
-    if (workError || taskError) {
-      console.error("Day modal load error:", { workError, taskError });
+    const { data: plannedRows, error: plannedError } = await supabase
+      .from("planned_tasks")
+      .select("id, title, note, scheduled_time, status, position")
+      .eq("assignee_id", ownerId)
+      .eq("scheduled_date", date)
+      .neq("status", "canceled")
+      .order("position", { ascending: true });
+
+    if (workError || taskError || plannedError) {
+      console.error("Day modal load error:", {
+        workError,
+        taskError,
+        plannedError,
+      });
       setWorkLog(null);
       setTasks([]);
       setImagesByTask({});
       setTimersByTask({});
+      setPlannedTasks([]);
+      setPlannedImages({});
       setHours({ baseHours: 0, overtimeHours: 0 })
       setLoading(false);
       return;
@@ -164,6 +195,25 @@ export default function DayModal({
 
     setWorkLog(work);
     setTasks(taskRows);
+    setPlannedTasks((plannedRows || []) as PlannedTask[]);
+
+    const plannedIds = (plannedRows || []).map((task) => task.id);
+    if (plannedIds.length > 0) {
+      const { data: plannedImageRows } = await supabase
+        .from("planned_task_images")
+        .select("planned_task_id, url")
+        .in("planned_task_id", plannedIds);
+      const grouped: Record<number, string[]> = {};
+      (plannedImageRows || []).forEach((image) => {
+        if (!grouped[image.planned_task_id]) {
+          grouped[image.planned_task_id] = [];
+        }
+        grouped[image.planned_task_id].push(image.url);
+      });
+      setPlannedImages(grouped);
+    } else {
+      setPlannedImages({});
+    }
 
     if (taskRows.length > 0) {
       const taskIds = taskRows.map((t) => t.id);
@@ -315,6 +365,23 @@ export default function DayModal({
     }));
   }, [tasks, imagesByTask]);
 
+  const visiblePlannedTasks = useMemo(
+    () =>
+      plannedTasks.filter((task) =>
+        plannedTab === "completed"
+          ? task.status === "completed"
+          : task.status === "planned" || task.status === "started",
+      ),
+    [plannedTab, plannedTasks],
+  );
+
+  const plannedCount = plannedTasks.filter(
+    (task) => task.status === "planned" || task.status === "started",
+  ).length;
+  const completedPlannedCount = plannedTasks.filter(
+    (task) => task.status === "completed",
+  ).length;
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -360,6 +427,106 @@ export default function DayModal({
                         {formatHours(hours.overtimeHours)}
                       </p>
                     </div>
+                  </div>
+                )}
+
+                {plannedTasks.length > 0 && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
+                    <h3 className="mb-3 text-base font-semibold">
+                      Plānotie uzdevumi
+                    </h3>
+                    <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-blue-100 p-1 dark:bg-blue-950">
+                      <button
+                        type="button"
+                        onClick={() => setPlannedTab("planned")}
+                        className={`rounded-md px-3 py-2 text-sm font-medium ${
+                          plannedTab === "planned"
+                            ? "bg-white shadow dark:bg-zinc-800"
+                            : "text-zinc-500"
+                        }`}
+                      >
+                        Plānotie {plannedCount}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlannedTab("completed")}
+                        className={`rounded-md px-3 py-2 text-sm font-medium ${
+                          plannedTab === "completed"
+                            ? "bg-white shadow dark:bg-zinc-800"
+                            : "text-zinc-500"
+                        }`}
+                      >
+                        Izpildītie {completedPlannedCount}
+                      </button>
+                    </div>
+
+                    {visiblePlannedTasks.length === 0 ? (
+                      <p className="text-sm text-zinc-500">
+                        Šajā skatā uzdevumu nav.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {visiblePlannedTasks.map((task, index) => (
+                          <div
+                            key={task.id}
+                            className="rounded-lg border border-blue-200 bg-white p-3 dark:border-blue-900 dark:bg-zinc-900"
+                          >
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm font-semibold text-blue-600">
+                                {index + 1}.
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h4 className="font-semibold">{task.title}</h4>
+                                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">
+                                    {task.status === "started"
+                                      ? "Sākts"
+                                      : task.status === "completed"
+                                        ? "Pabeigts"
+                                        : "Plānots"}
+                                  </span>
+                                </div>
+                                <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">
+                                  {task.note}
+                                </p>
+                                {task.scheduled_time && (
+                                  <p className="mt-1 text-xs text-zinc-500">
+                                    Laiks: {task.scheduled_time.slice(0, 5)}
+                                  </p>
+                                )}
+                                {(plannedImages[task.id] || []).length > 0 && (
+                                  <div className="mt-2 flex gap-2 overflow-x-auto">
+                                    {(plannedImages[task.id] || []).map(
+                                      (url, imageIndex) => (
+                                        <button
+                                          key={url}
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedImages(
+                                              plannedImages[task.id],
+                                            );
+                                            setSelectedIndex(imageIndex);
+                                          }}
+                                        >
+                                          <Image
+                                            src={url}
+                                            alt=""
+                                            width={56}
+                                            height={56}
+                                            unoptimized
+                                            className="h-14 w-14 rounded object-cover"
+                                          />
+                                        </button>
+                                      ),
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

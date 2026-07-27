@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import Image from "next/image";
 import TaskCard from "../components/TaskCard";
 
 type Task = {
@@ -18,6 +19,16 @@ type Task = {
   startTime?: Date;
   endTime?: Date;
   supabaseTaskId?: number;
+  plannedTaskId?: number;
+};
+
+type PlannedTask = {
+  id: number;
+  title: string;
+  note: string;
+  scheduled_time: string | null;
+  position: number;
+  imageUrls: string[];
 };
 
 type DictionaryWord = {
@@ -40,6 +51,7 @@ export default function WorkdayPage() {
   const [dictionaryWords, setDictionaryWords] = useState<DictionaryWord[]>([]);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [savingTasks, setSavingTasks] = useState<Record<string, boolean>>({});
+  const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([]);
 
   useEffect(() => {
     const getUser = async () => {
@@ -68,6 +80,7 @@ export default function WorkdayPage() {
       setUser(user);
       await checkSession(user);
       await loadDictionary(user.id);
+      await loadTodayPlannedTasks(user.id);
       setLoading(false);
     };
 
@@ -119,6 +132,15 @@ export default function WorkdayPage() {
       .select("*")
       .eq("user_id", userId);
 
+    const taskLogIds = logs.map((log: any) => log.id);
+    const { data: linkedPlannedTasks } =
+      taskLogIds.length > 0
+        ? await supabase
+            .from("planned_tasks")
+            .select("id, task_log_id")
+            .in("task_log_id", taskLogIds)
+        : { data: [] };
+
     const restoredTasks: Task[] = logs.map((log: any) => {
       const uploaded =
         images
@@ -142,10 +164,51 @@ export default function WorkdayPage() {
         startTime: log.start_time ? new Date(log.start_time) : undefined,
         endTime: log.end_time ? new Date(log.end_time) : undefined,
         supabaseTaskId: log.id,
+        plannedTaskId: linkedPlannedTasks?.find(
+          (planned: any) => planned.task_log_id === log.id,
+        )?.id,
       };
     });
 
     setTasks(restoredTasks);
+  };
+
+  const loadTodayPlannedTasks = async (userId: string) => {
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Riga",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    const { data: plannedRows } = await supabase
+      .from("planned_tasks")
+      .select("id, title, note, scheduled_time, position")
+      .eq("assignee_id", userId)
+      .eq("scheduled_date", today)
+      .eq("status", "planned")
+      .order("position", { ascending: true });
+
+    if (!plannedRows || plannedRows.length === 0) {
+      setPlannedTasks([]);
+      return;
+    }
+
+    const plannedIds = plannedRows.map((task) => task.id);
+    const { data: plannedImages } = await supabase
+      .from("planned_task_images")
+      .select("planned_task_id, url")
+      .in("planned_task_id", plannedIds);
+
+    setPlannedTasks(
+      plannedRows.map((task) => ({
+        ...task,
+        imageUrls:
+          plannedImages
+            ?.filter((image) => image.planned_task_id === task.id)
+            .map((image) => image.url) || [],
+      })),
+    );
   };
 
   const checkSession = async (currentUser: User) => {
@@ -339,8 +402,34 @@ export default function WorkdayPage() {
 
       if (data) {
         const uploadedUrls = await uploadImages(task, data.id);
+        if (task.uploadedImageUrls.length > 0) {
+          await supabase.from("task_images").insert(
+            task.uploadedImageUrls.map((url) => ({
+              user_id: user.id,
+              task_log_id: data.id,
+              url,
+            })),
+          );
+        }
+        if (task.plannedTaskId) {
+          await supabase.rpc("update_assigned_planned_task_status", {
+            target_id: task.plannedTaskId,
+            target_status: "started",
+            linked_task_log_id: data.id,
+          });
+          if (task.status === "finished") {
+            await supabase.rpc("update_assigned_planned_task_status", {
+              target_id: task.plannedTaskId,
+              target_status: "completed",
+              linked_task_log_id: data.id,
+            });
+          }
+          setPlannedTasks((current) =>
+            current.filter((item) => item.id !== task.plannedTaskId),
+          );
+        }
         updateTask(task.id, {
-          uploadedImageUrls: uploadedUrls,
+          uploadedImageUrls: [...task.uploadedImageUrls, ...uploadedUrls],
           supabaseTaskId: data.id,
         });
       }
@@ -425,6 +514,22 @@ export default function WorkdayPage() {
     setTasks((prev) => [...prev, newTask]);
   };
 
+  const startPlannedTask = (plannedTask: PlannedTask) => {
+    if (workdayState !== "active") return;
+    const newTask: Task = {
+      id: makeLocalId(),
+      title: plannedTask.title,
+      notes: plannedTask.note,
+      tags: [],
+      images: [],
+      uploadedImageUrls: plannedTask.imageUrls,
+      status: "active",
+      startTime: new Date(),
+      plannedTaskId: plannedTask.id,
+    };
+    setTasks((current) => [...current, newTask]);
+  };
+
   const updateTask = async (id: string, updated: Partial<Task>) => {
     const existing = tasks.find((task) => task.id === id);
 
@@ -441,6 +546,13 @@ export default function WorkdayPage() {
 
     if (updated.status === "finished" && updated.endTime) {
       updates.end_time = new Date(updated.endTime).toISOString();
+      if (existing.plannedTaskId) {
+        await supabase.rpc("update_assigned_planned_task_status", {
+          target_id: existing.plannedTaskId,
+          target_status: "completed",
+          linked_task_log_id: existing.supabaseTaskId,
+        });
+      }
     }
 
     if (Object.keys(updates).length > 0) {
@@ -463,6 +575,13 @@ export default function WorkdayPage() {
         .from("task_images")
         .delete()
         .eq("task_log_id", taskToDelete.supabaseTaskId);
+    }
+    if (taskToDelete?.plannedTaskId) {
+      await supabase.rpc("update_assigned_planned_task_status", {
+        target_id: taskToDelete.plannedTaskId,
+        target_status: "canceled",
+        linked_task_log_id: taskToDelete.supabaseTaskId || null,
+      });
     }
 
     setTasks((prev) => prev.filter((task) => task.id !== id));
@@ -496,6 +615,60 @@ export default function WorkdayPage() {
 
       {workdayState === "active" && (
         <div className="space-y-6">
+          {plannedTasks.length > 0 && (
+            <section className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40">
+              <div>
+                <h2 className="font-semibold">Šodien plānotie uzdevumi</h2>
+                <p className="text-sm text-zinc-500">
+                  Uzdevumi parādīti plānotajā secībā.
+                </p>
+              </div>
+              {plannedTasks.map((plannedTask, index) => (
+                <article
+                  key={plannedTask.id}
+                  className="rounded-lg border border-blue-200 bg-white p-3 dark:border-blue-900 dark:bg-zinc-900"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-blue-600">
+                        {index + 1}.
+                        {plannedTask.scheduled_time
+                          ? ` · ${plannedTask.scheduled_time.slice(0, 5)}`
+                          : ""}
+                      </p>
+                      <h3 className="font-semibold">{plannedTask.title}</h3>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">
+                        {plannedTask.note}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => startPlannedTask(plannedTask)}
+                      className="shrink-0 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+                    >
+                      Sākt
+                    </button>
+                  </div>
+                  {plannedTask.imageUrls.length > 0 && (
+                    <div className="mt-3 flex gap-2 overflow-x-auto">
+                      {plannedTask.imageUrls.map((url) => (
+                        <Image
+                          key={url}
+                          src={url}
+                          alt=""
+                          width={56}
+                          height={56}
+                          unoptimized
+                          className="h-14 w-14 shrink-0 rounded object-cover"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </article>
+              ))}
+            </section>
+          )}
+
           {tasks.map((task) => (
             <TaskCard
               key={task.id}
