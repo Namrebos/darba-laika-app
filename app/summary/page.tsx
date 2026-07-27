@@ -110,7 +110,7 @@ export default function SummaryPage() {
   const [searchableTasks, setSearchableTasks] = useState<TaskLogRow[]>([]);
   const [ownerId, setOwnerId] = useState("");
   const [showWorkTime, setShowWorkTime] = useState(true);
-  const [eightHourWorkday, setEightHourWorkday] = useState(false);
+  const [eightHourWorkday, setEightHourWorkday] = useState(true);
 
   useEffect(() => {
     async function resolveOwner() {
@@ -137,12 +137,14 @@ export default function SummaryPage() {
           : users[0]?.id || "";
       if (selected && storageKey) localStorage.setItem(storageKey, selected);
       setOwnerId(selected);
-      setEightHourWorkday(
-        selected
-          ? localStorage.getItem(`finance-eight-hour-workday:${selected}`) ===
-              "true"
-          : false,
-      );
+      if (selected) {
+        const { data: financeSettings } = await supabase
+          .from("user_finance_settings")
+          .select("eight_hour_workday")
+          .eq("user_id", selected)
+          .maybeSingle();
+        setEightHourWorkday(financeSettings?.eight_hour_workday ?? true);
+      }
       if (selected) await loadAvailableMonths(selected);
       else setLoading(false);
     }

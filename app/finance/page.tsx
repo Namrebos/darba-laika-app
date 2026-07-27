@@ -25,8 +25,7 @@ function getCurrentMonth() {
 
 export default function FinancePage() {
   const router = useRouter();
-  const [eightHourWorkday, setEightHourWorkday] = useState(false);
-  const [storageKey, setStorageKey] = useState("");
+  const [eightHourWorkday, setEightHourWorkday] = useState(true);
   const [userId, setUserId] = useState("");
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [expenseName, setExpenseName] = useState("");
@@ -56,9 +55,16 @@ export default function FinancePage() {
       }
 
       setUserId(data.user.id);
-      const key = `finance-eight-hour-workday:${data.user.id}`;
-      setStorageKey(key);
-      setEightHourWorkday(localStorage.getItem(key) === "true");
+      const { data: financeSettings, error: settingsError } = await supabase
+        .from("user_finance_settings")
+        .select("eight_hour_workday")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+      if (settingsError) {
+        setError("Neizdevās ielādēt finanšu iestatījumus.");
+        return;
+      }
+      setEightHourWorkday(financeSettings?.eight_hour_workday ?? true);
 
       const { data: expenseData, error: expenseError } = await supabase
         .from("monthly_expenses")
@@ -81,9 +87,26 @@ export default function FinancePage() {
     loadFinance();
   }, [router]);
 
-  function toggleEightHourWorkday(checked: boolean) {
+  async function toggleEightHourWorkday(checked: boolean) {
+    const previousValue = eightHourWorkday;
     setEightHourWorkday(checked);
-    if (storageKey) localStorage.setItem(storageKey, String(checked));
+    setError("");
+
+    const { error: settingsError } = await supabase
+      .from("user_finance_settings")
+      .upsert(
+        {
+          user_id: userId,
+          eight_hour_workday: checked,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+
+    if (settingsError) {
+      setEightHourWorkday(previousValue);
+      setError("Iestatījumu neizdevās saglabāt.");
+    }
   }
 
   async function saveExpense(event: React.FormEvent) {
