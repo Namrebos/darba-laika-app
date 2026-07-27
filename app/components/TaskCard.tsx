@@ -7,6 +7,7 @@ import {
   BookOpenText,
   CirclePlay,
   Clock3,
+  ExternalLink,
   OctagonX,
   Pencil,
   Plus,
@@ -25,6 +26,7 @@ import TaskPreviewCard from "@/app/components/TaskPreviewCard";
 import TaskDetailsCard from "@/app/components/TaskDetailsCard";
 import DictionaryModal from "@/app/components/DictionaryModal";
 import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
+import TransportRequestModal from "@/app/components/TransportRequestModal";
 
 type Task = {
   id: string;
@@ -37,6 +39,7 @@ type Task = {
   startTime?: Date;
   endTime?: Date;
   supabaseTaskId?: number;
+  transportRequestId?: number;
 };
 
 type TimerEntry = {
@@ -180,6 +183,7 @@ export default function TaskCard({
     useState<TrackingTab>("timeline");
 
   const [dictionaryOpen, setDictionaryOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [activeField, setActiveField] = useState<ActiveField>(null);
   const [titleCursor, setTitleCursor] = useState(0);
   const [notesCursor, setNotesCursor] = useState(0);
@@ -1409,6 +1413,18 @@ export default function TaskCard({
                 <BookOpenText size={18} />
               </button>
 
+              {task.transportRequestId && (
+                <button
+                  type="button"
+                  onClick={() => setRequestOpen(true)}
+                  className="flex h-10 shrink-0 items-center gap-2 rounded bg-violet-600 px-3 text-sm font-semibold text-white hover:bg-violet-700"
+                  title="Apskatīt klienta pieteikumu"
+                >
+                  <ExternalLink size={17} />
+                  Pieteikums
+                </button>
+              )}
+
               <button
                 disabled={isSaving}
                 onClick={handleFinish}
@@ -1569,6 +1585,10 @@ export default function TaskCard({
         words={dictionaryWords}
         onAddWord={onAddDictionaryWord}
         onDeleteWords={onDeleteDictionaryWords}
+      />
+      <TransportRequestModal
+        requestId={requestOpen ? task.transportRequestId || null : null}
+        onClose={() => setRequestOpen(false)}
       />
 
       <ImageGalleryModal

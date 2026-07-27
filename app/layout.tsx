@@ -46,7 +46,8 @@ export default function RootLayout({
     pathname === "/login" ||
     pathname === "/signup" ||
     pathname === "/register" ||
-    pathname === "/reset-password";
+    pathname === "/reset-password" ||
+    pathname.startsWith("/request/");
 
   useEffect(() => {
     const saved = localStorage.getItem("theme") as

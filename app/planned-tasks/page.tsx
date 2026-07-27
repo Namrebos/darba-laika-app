@@ -7,13 +7,17 @@ import {
   ArrowDown,
   ArrowUp,
   BookOpenText,
+  Clipboard,
+  ExternalLink,
   ImagePlus,
+  Link2,
   Pencil,
   Plus,
   Send,
   X,
 } from "lucide-react";
 import DictionaryModal from "@/app/components/DictionaryModal";
+import TransportRequestModal from "@/app/components/TransportRequestModal";
 import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -36,6 +40,7 @@ type PlannedTask = {
   position: number;
   status: PlannedStatus;
   task_log_id: number | null;
+  transport_request_id: number | null;
 };
 
 type PlannedImage = {
@@ -91,6 +96,9 @@ export default function PlannedTasksPage() {
     field: DictionaryField;
     cursor: number;
   } | null>(null);
+  const [requestLink, setRequestLink] = useState("");
+  const [creatingRequestLink, setCreatingRequestLink] = useState(false);
+  const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -360,6 +368,33 @@ export default function PlannedTasksPage() {
     setTasks((current) => [data as PlannedTask, ...current]);
   }
 
+  async function createRequestLink() {
+    setCreatingRequestLink(true);
+    setMessage("");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch("/api/admin/transport-request-links", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
+      },
+    });
+    const result = await response.json();
+    setCreatingRequestLink(false);
+    if (!response.ok) {
+      setMessage(result.error || "Pieteikuma saiti neizdevās izveidot.");
+      return;
+    }
+    setRequestLink(result.requestLink);
+    await navigator.clipboard.writeText(result.requestLink);
+    setMessage("Pieteikuma saite izveidota un nokopēta.");
+  }
+
+  async function copyRequestLink() {
+    if (!requestLink) return;
+    await navigator.clipboard.writeText(requestLink);
+    setMessage("Pieteikuma saite nokopēta.");
+  }
+
   async function saveDraft(task: PlannedTask) {
     setSavingId(task.id);
     setMessage("");
@@ -602,6 +637,15 @@ export default function PlannedTasksPage() {
         </div>
         <button
           type="button"
+          disabled={creatingRequestLink}
+          onClick={createRequestLink}
+          className="flex shrink-0 items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 font-medium text-white hover:bg-violet-700 disabled:opacity-60"
+        >
+          <Link2 size={18} />
+          {creatingRequestLink ? "Veido..." : "Klienta saite"}
+        </button>
+        <button
+          type="button"
           onClick={() => setDictionaryOpen(true)}
           className="flex shrink-0 items-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 font-medium text-white hover:bg-cyan-700"
         >
@@ -624,6 +668,24 @@ export default function PlannedTasksPage() {
         </p>
       )}
 
+      {requestLink && (
+        <div className="flex flex-col gap-2 rounded-xl border border-violet-200 bg-violet-50 p-3 dark:border-violet-900 dark:bg-violet-950/30 sm:flex-row sm:items-center">
+          <input
+            readOnly
+            value={requestLink}
+            className="min-w-0 flex-1 rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm text-black"
+          />
+          <button
+            type="button"
+            onClick={copyRequestLink}
+            className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
+          >
+            <Clipboard size={16} />
+            Kopēt saiti
+          </button>
+        </div>
+      )}
+
       <section className="space-y-3">
         <h2 className="font-semibold">Jaunās kartītes ({newTasks.length})</h2>
         {newTasks.length === 0 ? (
@@ -637,9 +699,16 @@ export default function PlannedTasksPage() {
               className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
             >
               <div className="flex items-center justify-between">
-                <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                  Jauns
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                    Jauns
+                  </span>
+                  {task.transport_request_id && (
+                    <span className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-800 dark:bg-violet-950 dark:text-violet-200">
+                      Klienta pieteikums
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => cancelTask(task)}
@@ -806,20 +875,34 @@ export default function PlannedTasksPage() {
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600">
-                  <ImagePlus size={18} />
-                  Pievienot foto
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(event) => {
-                      void uploadImages(task, event.target.files);
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
+                <div className="flex flex-wrap gap-2">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600">
+                    <ImagePlus size={18} />
+                    Pievienot foto
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => {
+                        void uploadImages(task, event.target.files);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {task.transport_request_id && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenedRequestId(task.transport_request_id)
+                      }
+                      className="flex items-center gap-2 rounded-lg border border-violet-300 px-3 py-2 text-sm font-semibold text-violet-700 dark:border-violet-800 dark:text-violet-300"
+                    >
+                      <ExternalLink size={17} />
+                      Apskatīt pieteikumu
+                    </button>
+                  )}
+                </div>
                 <button
                   type="button"
                   disabled={savingId === task.id}
@@ -942,6 +1025,18 @@ export default function PlannedTasksPage() {
                         ))}
                       </div>
                     )}
+                    {task.transport_request_id && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenedRequestId(task.transport_request_id!)
+                        }
+                        className="mt-3 flex items-center gap-2 rounded-lg border border-violet-300 px-3 py-2 text-sm font-semibold text-violet-700 dark:border-violet-800 dark:text-violet-300"
+                      >
+                        <ExternalLink size={16} />
+                        Apskatīt pieteikumu
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -975,6 +1070,10 @@ export default function PlannedTasksPage() {
         words={dictionaryWords}
         onAddWord={addDictionaryWord}
         onDeleteWords={deleteDictionaryWords}
+      />
+      <TransportRequestModal
+        requestId={openedRequestId}
+        onClose={() => setOpenedRequestId(null)}
       />
     </div>
   );

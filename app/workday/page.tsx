@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import Image from "next/image";
 import TaskCard from "../components/TaskCard";
+import TransportRequestModal from "@/app/components/TransportRequestModal";
+import { ExternalLink } from "lucide-react";
 
 type Task = {
   id: string;
@@ -20,6 +22,7 @@ type Task = {
   endTime?: Date;
   supabaseTaskId?: number;
   plannedTaskId?: number;
+  transportRequestId?: number;
 };
 
 type PlannedTask = {
@@ -29,6 +32,7 @@ type PlannedTask = {
   scheduled_time: string | null;
   position: number;
   imageUrls: string[];
+  transport_request_id: number | null;
 };
 
 type DictionaryWord = {
@@ -52,6 +56,7 @@ export default function WorkdayPage() {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [savingTasks, setSavingTasks] = useState<Record<string, boolean>>({});
   const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([]);
+  const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
 
   useEffect(() => {
     const getUser = async () => {
@@ -137,7 +142,7 @@ export default function WorkdayPage() {
       taskLogIds.length > 0
         ? await supabase
             .from("planned_tasks")
-            .select("id, task_log_id")
+            .select("id, task_log_id, transport_request_id")
             .in("task_log_id", taskLogIds)
         : { data: [] };
 
@@ -167,6 +172,9 @@ export default function WorkdayPage() {
         plannedTaskId: linkedPlannedTasks?.find(
           (planned: any) => planned.task_log_id === log.id,
         )?.id,
+        transportRequestId: linkedPlannedTasks?.find(
+          (planned: any) => planned.task_log_id === log.id,
+        )?.transport_request_id,
       };
     });
 
@@ -183,7 +191,7 @@ export default function WorkdayPage() {
 
     const { data: plannedRows } = await supabase
       .from("planned_tasks")
-      .select("id, title, note, scheduled_time, position")
+      .select("id, title, note, scheduled_time, position, transport_request_id")
       .eq("assignee_id", userId)
       .eq("scheduled_date", today)
       .eq("status", "planned")
@@ -526,6 +534,7 @@ export default function WorkdayPage() {
       status: "active",
       startTime: new Date(),
       plannedTaskId: plannedTask.id,
+      transportRequestId: plannedTask.transport_request_id || undefined,
     };
     setTasks((current) => [...current, newTask]);
   };
@@ -641,13 +650,29 @@ export default function WorkdayPage() {
                         {plannedTask.note}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => startPlannedTask(plannedTask)}
-                      className="shrink-0 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
-                    >
-                      Sākt
-                    </button>
+                    <div className="flex shrink-0 flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startPlannedTask(plannedTask)}
+                        className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+                      >
+                        Sākt
+                      </button>
+                      {plannedTask.transport_request_id && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenedRequestId(
+                              plannedTask.transport_request_id,
+                            )
+                          }
+                          className="flex items-center justify-center gap-1 rounded-lg border border-violet-300 px-2 py-2 text-xs font-semibold text-violet-700 dark:border-violet-800 dark:text-violet-300"
+                        >
+                          <ExternalLink size={14} />
+                          Pieteikums
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {plannedTask.imageUrls.length > 0 && (
                     <div className="mt-3 flex gap-2 overflow-x-auto">
@@ -694,6 +719,10 @@ export default function WorkdayPage() {
               savingTasks={savingTasks}
             />
           ))}
+          <TransportRequestModal
+            requestId={openedRequestId}
+            onClose={() => setOpenedRequestId(null)}
+          />
 
           {(() => {
             const last = tasks[tasks.length - 1];

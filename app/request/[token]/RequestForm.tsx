@@ -1,0 +1,731 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import imageCompression from "browser-image-compression";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Camera,
+  CheckCircle2,
+  ImagePlus,
+  Send,
+  Trash2,
+  Truck,
+} from "lucide-react";
+
+const LocationPicker = dynamic(
+  () => import("@/app/components/LocationPicker"),
+  { ssr: false },
+);
+
+type PartyType = "private" | "company";
+type Point = { lat: number; lng: number };
+
+type FormState = {
+  sender_type: PartyType;
+  sender_first_name: string;
+  sender_last_name: string;
+  sender_company_name: string;
+  sender_registration_number: string;
+  sender_phone: string;
+  recipient_type: PartyType;
+  recipient_first_name: string;
+  recipient_last_name: string;
+  recipient_company_name: string;
+  recipient_registration_number: string;
+  recipient_phone: string;
+  pickup_address: string;
+  pickup_date: string;
+  pickup_time: string;
+  pickup_notes: string;
+  dropoff_address: string;
+  dropoff_date: string;
+  dropoff_time: string;
+  dropoff_notes: string;
+  cargo_type: string;
+  additional_notes: string;
+};
+
+const initialForm: FormState = {
+  sender_type: "private",
+  sender_first_name: "",
+  sender_last_name: "",
+  sender_company_name: "",
+  sender_registration_number: "",
+  sender_phone: "",
+  recipient_type: "private",
+  recipient_first_name: "",
+  recipient_last_name: "",
+  recipient_company_name: "",
+  recipient_registration_number: "",
+  recipient_phone: "",
+  pickup_address: "",
+  pickup_date: "",
+  pickup_time: "",
+  pickup_notes: "",
+  dropoff_address: "",
+  dropoff_date: "",
+  dropoff_time: "",
+  dropoff_notes: "",
+  cargo_type: "",
+  additional_notes: "",
+};
+
+const cargoTypes = [
+  "Paletes",
+  "Mēbeles",
+  "Būvmateriāli",
+  "Sadzīves tehnika",
+  "Lauksaimniecības tehnika",
+  "Metāla konstrukcijas",
+  "Sūtījumi",
+  "Cits",
+];
+
+function FieldLabel({
+  children,
+  required = false,
+}: {
+  children: React.ReactNode;
+  required?: boolean;
+}) {
+  return (
+    <span className="mb-1 block text-sm font-semibold text-slate-800">
+      {children}
+      {required && <span className="text-red-500"> *</span>}
+    </span>
+  );
+}
+
+function PartyFields({
+  prefix,
+  form,
+  update,
+}: {
+  prefix: "sender" | "recipient";
+  form: FormState;
+  update: (changes: Partial<FormState>) => void;
+}) {
+  const typeKey = `${prefix}_type` as const;
+  const partyType = form[typeKey];
+  const field = (name: string) =>
+    `${prefix}_${name}` as keyof FormState;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <FieldLabel required>Klienta veids</FieldLabel>
+        <div className="flex flex-wrap gap-5">
+          {(
+            [
+              ["private", "Privātpersona"],
+              ["company", "Juridiska persona"],
+            ] as const
+          ).map(([value, label]) => (
+            <label key={value} className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                checked={partyType === value}
+                onChange={() => update({ [typeKey]: value })}
+                className="h-4 w-4 accent-blue-600"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {partyType === "private" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label>
+            <FieldLabel required>Vārds</FieldLabel>
+            <input
+              value={String(form[field("first_name")])}
+              onChange={(event) =>
+                update({ [field("first_name")]: event.target.value })
+              }
+              className="form-input"
+              maxLength={60}
+            />
+          </label>
+          <label>
+            <FieldLabel required>Uzvārds</FieldLabel>
+            <input
+              value={String(form[field("last_name")])}
+              onChange={(event) =>
+                update({ [field("last_name")]: event.target.value })
+              }
+              className="form-input"
+              maxLength={60}
+            />
+          </label>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <label>
+            <FieldLabel required>Uzņēmuma nosaukums</FieldLabel>
+            <input
+              value={String(form[field("company_name")])}
+              onChange={(event) =>
+                update({ [field("company_name")]: event.target.value })
+              }
+              className="form-input"
+              maxLength={120}
+            />
+          </label>
+          <label>
+            <FieldLabel required>Reģistrācijas numurs</FieldLabel>
+            <input
+              value={String(form[field("registration_number")])}
+              onChange={(event) =>
+                update({
+                  [field("registration_number")]: event.target.value,
+                })
+              }
+              className="form-input"
+              maxLength={30}
+            />
+          </label>
+        </div>
+      )}
+
+      <label>
+        <FieldLabel required>Tālrunis</FieldLabel>
+        <input
+          type="tel"
+          value={String(form[field("phone")])}
+          onChange={(event) =>
+            update({ [field("phone")]: event.target.value })
+          }
+          className="form-input"
+          placeholder="+371"
+          maxLength={30}
+        />
+      </label>
+    </div>
+  );
+}
+
+function FormCard({
+  title,
+  children,
+  className = "",
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 ${className}`}
+    >
+      <h2 className="mb-4 text-xl font-bold text-slate-900">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+export default function RequestForm({
+  token,
+  initiallyValid,
+}: {
+  token: string;
+  initiallyValid: boolean;
+}) {
+  const [form, setForm] = useState<FormState>(initialForm);
+  const [pickupPoint, setPickupPoint] = useState<Point | null>(null);
+  const [dropoffPoint, setDropoffPoint] = useState<Point | null>(null);
+  const [images, setImages] = useState<File[]>([]);
+  const [step, setStep] = useState(1);
+  const [customCargo, setCustomCargo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+
+  const previews = useMemo(
+    () => images.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [images],
+  );
+
+  useEffect(
+    () => () => previews.forEach((preview) => URL.revokeObjectURL(preview.url)),
+    [previews],
+  );
+
+  const update = (changes: Partial<FormState>) =>
+    setForm((current) => ({ ...current, ...changes }));
+
+  const identityComplete = (prefix: "sender" | "recipient") => {
+    const type = form[`${prefix}_type`];
+    return type === "company"
+      ? Boolean(
+          form[`${prefix}_company_name`].trim() &&
+            form[`${prefix}_registration_number`].trim(),
+        )
+      : Boolean(
+          form[`${prefix}_first_name`].trim() &&
+            form[`${prefix}_last_name`].trim(),
+        );
+  };
+
+  const stepValid = (targetStep: number): boolean => {
+    if (targetStep === 1) {
+      return Boolean(
+        identityComplete("sender") &&
+          form.sender_phone.trim() &&
+          pickupPoint &&
+          form.pickup_date &&
+          form.pickup_time,
+      );
+    }
+    if (targetStep === 2) {
+      return Boolean(
+        identityComplete("recipient") &&
+          form.recipient_phone.trim() &&
+          dropoffPoint &&
+          form.dropoff_date &&
+          form.dropoff_time,
+      );
+    }
+    return Boolean(
+      (form.cargo_type === "Cits"
+        ? customCargo.trim()
+        : form.cargo_type.trim()) &&
+        stepValid(1) &&
+        stepValid(2),
+    );
+  };
+
+  const nextStep = () => {
+    if (!stepValid(step)) {
+      setError("Aizpildi obligātos laukus un atzīmē vietu kartē.");
+      return;
+    }
+    setError("");
+    setStep((current) => Math.min(3, current + 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const addImages = async (files: FileList | null) => {
+    if (!files) return;
+    const available = Math.max(0, 8 - images.length);
+    const selected = Array.from(files).slice(0, available);
+    const compressed = await Promise.all(
+      selected.map(async (file) => {
+        try {
+          return await imageCompression(file, {
+            maxSizeMB: 2,
+            maxWidthOrHeight: 2200,
+            useWebWorker: true,
+          });
+        } catch {
+          return file;
+        }
+      }),
+    );
+    setImages((current) => [...current, ...compressed]);
+  };
+
+  const submit = async () => {
+    if (!pickupPoint || !dropoffPoint || !stepValid(3)) {
+      setError("Aizpildi visus obligātos laukus.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    const payload = {
+      ...form,
+      cargo_type:
+        form.cargo_type === "Cits" ? customCargo.trim() : form.cargo_type,
+      pickup_lat: pickupPoint.lat,
+      pickup_lng: pickupPoint.lng,
+      dropoff_lat: dropoffPoint.lat,
+      dropoff_lng: dropoffPoint.lng,
+    };
+    const body = new FormData();
+    body.set("token", token);
+    body.set("payload", JSON.stringify(payload));
+    images.forEach((file) => body.append("images", file));
+
+    const response = await fetch("/api/transport-requests", {
+      method: "POST",
+      body,
+    });
+    const result = await response.json();
+    setSubmitting(false);
+    if (!response.ok) {
+      setError(result.error || "Pieteikumu neizdevās nosūtīt.");
+      return;
+    }
+    setSubmitted(true);
+  };
+
+  if (!initiallyValid) {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl bg-white p-8 text-center shadow">
+        <h1 className="text-2xl font-bold">Pieteikuma saite nav derīga</h1>
+        <p className="mt-3 text-slate-600">
+          Saite ir izmantota vai tai beidzies derīguma termiņš.
+        </p>
+      </div>
+    );
+  }
+
+  if (submitted) {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl bg-white p-8 text-center shadow">
+        <CheckCircle2 className="mx-auto text-green-600" size={56} />
+        <h1 className="mt-4 text-2xl font-bold">Pieteikums nosūtīts!</h1>
+        <p className="mt-3 text-slate-600">
+          Paldies! Pakalpojuma sniedzējs ir saņēmis jūsu informāciju.
+        </p>
+      </div>
+    );
+  }
+
+  const sectionClass = (targetStep: number) =>
+    step === targetStep ? "block" : "hidden md:block";
+
+  return (
+    <div className="mx-auto max-w-6xl">
+      <header className="mb-5 flex items-start gap-3">
+        <div className="rounded-xl bg-blue-100 p-3 text-blue-700">
+          <Truck size={30} />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-950 sm:text-3xl">
+            Jauns kravas pārvadājuma pieprasījums
+          </h1>
+          <p className="mt-1 text-sm text-slate-600 sm:text-base">
+            Aizpildiet nepieciešamos laukus un nosūtiet pieprasījumu.
+          </p>
+        </div>
+      </header>
+
+      <div className="mb-5 md:hidden">
+        <div className="mb-2 flex justify-between text-sm font-semibold text-slate-700">
+          <span>
+            {step === 1
+              ? "Nosūtītājs un uzkraušana"
+              : step === 2
+                ? "Saņēmējs un izkraušana"
+                : "Krava un papildinformācija"}
+          </span>
+          <span>{step}. no 3</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+          <div
+            className="h-full bg-blue-600 transition-all"
+            style={{ width: `${(step / 3) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className={`space-y-4 ${sectionClass(1)}`}>
+          <FormCard title="Nosūtītājs">
+            <PartyFields prefix="sender" form={form} update={update} />
+          </FormCard>
+          <FormCard title="Uzkraušanas vieta">
+            <div className="space-y-4">
+              <label>
+                <FieldLabel>Adrese (nav obligāta)</FieldLabel>
+                <input
+                  value={form.pickup_address}
+                  onChange={(event) =>
+                    update({ pickup_address: event.target.value })
+                  }
+                  className="form-input"
+                  maxLength={250}
+                />
+              </label>
+              <div>
+                <FieldLabel required>Precīza vieta kartē</FieldLabel>
+                <LocationPicker
+                  point={pickupPoint}
+                  onChange={setPickupPoint}
+                  markerColor="blue"
+                  active={step === 1}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label>
+                  <FieldLabel required>Uzkraušanas datums</FieldLabel>
+                  <input
+                    type="date"
+                    value={form.pickup_date}
+                    onChange={(event) =>
+                      update({ pickup_date: event.target.value })
+                    }
+                    className="form-input"
+                  />
+                </label>
+                <label>
+                  <FieldLabel required>Laiks</FieldLabel>
+                  <input
+                    type="time"
+                    value={form.pickup_time}
+                    onChange={(event) =>
+                      update({ pickup_time: event.target.value })
+                    }
+                    className="form-input"
+                  />
+                </label>
+              </div>
+              <label>
+                <FieldLabel>Piezīmes par uzkraušanu</FieldLabel>
+                <textarea
+                  value={form.pickup_notes}
+                  onChange={(event) =>
+                    update({ pickup_notes: event.target.value })
+                  }
+                  className="form-input min-h-24 resize-y"
+                  maxLength={500}
+                />
+              </label>
+            </div>
+          </FormCard>
+        </div>
+
+        <div className={`space-y-4 ${sectionClass(2)}`}>
+          <FormCard title="Saņēmējs">
+            <PartyFields prefix="recipient" form={form} update={update} />
+          </FormCard>
+          <FormCard title="Izkraušanas vieta">
+            <div className="space-y-4">
+              <label>
+                <FieldLabel>Adrese (nav obligāta)</FieldLabel>
+                <input
+                  value={form.dropoff_address}
+                  onChange={(event) =>
+                    update({ dropoff_address: event.target.value })
+                  }
+                  className="form-input"
+                  maxLength={250}
+                />
+              </label>
+              <div>
+                <FieldLabel required>Precīza vieta kartē</FieldLabel>
+                <LocationPicker
+                  point={dropoffPoint}
+                  onChange={setDropoffPoint}
+                  markerColor="red"
+                  active={step === 2}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label>
+                  <FieldLabel required>Izkraušanas datums</FieldLabel>
+                  <input
+                    type="date"
+                    value={form.dropoff_date}
+                    onChange={(event) =>
+                      update({ dropoff_date: event.target.value })
+                    }
+                    className="form-input"
+                  />
+                </label>
+                <label>
+                  <FieldLabel required>Laiks</FieldLabel>
+                  <input
+                    type="time"
+                    value={form.dropoff_time}
+                    onChange={(event) =>
+                      update({ dropoff_time: event.target.value })
+                    }
+                    className="form-input"
+                  />
+                </label>
+              </div>
+              <label>
+                <FieldLabel>Piezīmes par izkraušanu</FieldLabel>
+                <textarea
+                  value={form.dropoff_notes}
+                  onChange={(event) =>
+                    update({ dropoff_notes: event.target.value })
+                  }
+                  className="form-input min-h-24 resize-y"
+                  maxLength={500}
+                />
+              </label>
+            </div>
+          </FormCard>
+        </div>
+
+        <div className={`space-y-4 md:col-span-2 ${sectionClass(3)}`}>
+          <FormCard title="Kravas informācija">
+            <label>
+              <FieldLabel required>Kravas veids</FieldLabel>
+              {form.cargo_type === "Cits" ? (
+                <div className="flex gap-2">
+                  <input
+                    value={customCargo}
+                    onChange={(event) => setCustomCargo(event.target.value)}
+                    className="form-input"
+                    placeholder="Ierakstiet kravas veidu"
+                    maxLength={100}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      update({ cargo_type: "" });
+                      setCustomCargo("");
+                    }}
+                    className="rounded-lg border border-slate-300 px-3 text-sm"
+                  >
+                    Mainīt
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={form.cargo_type}
+                  onChange={(event) =>
+                    update({ cargo_type: event.target.value })
+                  }
+                  className="form-input"
+                >
+                  <option value="">Izvēlieties</option>
+                  {cargoTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </label>
+          </FormCard>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormCard title="Papildinformācija">
+              <label>
+                <FieldLabel>Papildu piezīmes</FieldLabel>
+                <textarea
+                  value={form.additional_notes}
+                  onChange={(event) =>
+                    update({ additional_notes: event.target.value })
+                  }
+                  className="form-input min-h-36 resize-y"
+                  maxLength={500}
+                />
+              </label>
+            </FormCard>
+
+            <FormCard title="Attēli">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="image-upload-button">
+                  <Camera size={22} />
+                  Uzņemt foto
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(event) => {
+                      void addImages(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+                <label className="image-upload-button">
+                  <ImagePlus size={22} />
+                  Pievienot attēlus
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => {
+                      void addImages(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              {previews.length > 0 && (
+                <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {previews.map(({ file, url }, index) => (
+                    <div
+                      key={url}
+                      className="relative aspect-square overflow-hidden rounded-lg"
+                    >
+                      <Image
+                        src={url}
+                        alt=""
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setImages((current) =>
+                            current.filter((_, itemIndex) => itemIndex !== index),
+                          )
+                        }
+                        className="absolute right-1 top-1 rounded-full bg-red-600 p-1 text-white"
+                        aria-label="Dzēst attēlu"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </FormCard>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+
+      <div className="mt-5 flex gap-3">
+        {step > 1 && (
+          <button
+            type="button"
+            onClick={() => setStep((current) => current - 1)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold md:hidden"
+          >
+            <ArrowLeft size={18} />
+            Atpakaļ
+          </button>
+        )}
+        {step < 3 ? (
+          <button
+            type="button"
+            onClick={nextStep}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 font-semibold text-white md:hidden"
+          >
+            Turpināt
+            <ArrowRight size={18} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={submit}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-800 px-5 py-3 font-semibold text-white disabled:opacity-60 md:hidden"
+          >
+            <Send size={18} />
+            {submitting ? "Nosūta..." : "Nosūtīt pieprasījumu"}
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={submit}
+          className="hidden flex-1 items-center justify-center gap-2 rounded-xl bg-blue-800 px-5 py-3 font-semibold text-white disabled:opacity-60 md:flex"
+        >
+          <Send size={18} />
+          {submitting ? "Nosūta..." : "Nosūtīt pieprasījumu"}
+        </button>
+      </div>
+    </div>
+  );
+}
