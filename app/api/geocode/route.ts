@@ -52,7 +52,6 @@ export async function GET(request: NextRequest) {
   const url = new URL("https://photon.komoot.io/api");
   url.searchParams.set("q", query);
   url.searchParams.set("limit", "5");
-  url.searchParams.set("lang", "lv");
   url.searchParams.set("lat", "56.9496");
   url.searchParams.set("lon", "24.1052");
   url.searchParams.set("zoom", "6");
