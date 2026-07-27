@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { calculateWorkHours } from "@/app/summary/utils";
+import { hasSectionAccess } from "@/lib/access";
 
 type SummaryUser = {
   id: string;
@@ -104,11 +105,21 @@ export default function CalculatorsPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, can_access_calculators")
         .eq("id", authData.user.id)
         .single();
 
-      if (profile?.role !== "admin") {
+      if (
+        !profile ||
+        !hasSectionAccess(
+          {
+            role: profile.role,
+            can_access_calculators:
+              profile.can_access_calculators === true,
+          },
+          "can_access_calculators",
+        )
+      ) {
         router.replace("/summary");
         return;
       }

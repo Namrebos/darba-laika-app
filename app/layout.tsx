@@ -7,7 +7,12 @@ import Link from "next/link";
 import { Menu, X, Sun, Moon, Laptop, Power } from "lucide-react";
 import "./globals.css";
 import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister";
-import type { AppRole } from "@/lib/access";
+import {
+  hasSectionAccess,
+  type AppRole,
+  type SectionAccessKey,
+  type SectionPermissions,
+} from "@/lib/access";
 import { APP_VERSION } from "@/lib/appVersion";
 
 type SummaryUser = {
@@ -26,6 +31,12 @@ export default function RootLayout({
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [role, setRole] = useState<AppRole | null>(null);
+  const [permissions, setPermissions] = useState<SectionPermissions>({
+    can_access_workday: false,
+    can_access_finance: false,
+    can_access_calculators: false,
+    can_access_planned_tasks: false,
+  });
   const [summaryUsers, setSummaryUsers] = useState<SummaryUser[]>([]);
   const [selectedSummaryUser, setSelectedSummaryUser] = useState("");
   const pathname = usePathname();
@@ -80,32 +91,59 @@ export default function RootLayout({
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select(`
+          role,
+          can_access_workday,
+          can_access_finance,
+          can_access_calculators,
+          can_access_planned_tasks
+        `)
         .eq("id", authData.user.id)
         .single();
       const currentRole = (profile?.role || "member") as AppRole;
+      const currentPermissions: SectionPermissions = {
+        can_access_workday: profile?.can_access_workday === true,
+        can_access_finance: profile?.can_access_finance === true,
+        can_access_calculators: profile?.can_access_calculators === true,
+        can_access_planned_tasks: profile?.can_access_planned_tasks === true,
+      };
       setRole(currentRole);
+      setPermissions(currentPermissions);
 
-      if (currentRole === "viewer" || currentRole === "admin") {
-        const { data: allowedUsers } = await supabase.rpc("get_accessible_summary_users");
-        const users = (allowedUsers || []) as SummaryUser[];
-        const requestedUser = new URLSearchParams(window.location.search).get("user") || "";
-        const storageKey = `summary-selected-user:${authData.user.id}`;
-        const savedUser = localStorage.getItem(storageKey) || "";
-        const selected = users.some((item) => item.id === requestedUser)
-          ? requestedUser
-          : users.some((item) => item.id === savedUser)
-            ? savedUser
-            : users[0]?.id || "";
-        setSummaryUsers(users);
-        setSelectedSummaryUser(selected);
-        if (selected) localStorage.setItem(storageKey, selected);
-      }
+      const { data: allowedUsers } = await supabase.rpc(
+        "get_accessible_summary_users",
+      );
+      const users = (allowedUsers || []) as SummaryUser[];
+      const requestedUser =
+        new URLSearchParams(window.location.search).get("user") || "";
+      const storageKey = `summary-selected-user:${authData.user.id}`;
+      const savedUser = localStorage.getItem(storageKey) || "";
+      const selected = users.some((item) => item.id === requestedUser)
+        ? requestedUser
+        : users.some((item) => item.id === savedUser)
+          ? savedUser
+          : users[0]?.id || "";
+      setSummaryUsers(users);
+      setSelectedSummaryUser(selected);
+      if (selected) localStorage.setItem(storageKey, selected);
 
-      if (currentRole === "viewer" && !["/summary", "/profile"].includes(pathname)) {
+      const profileAccess = {
+        role: currentRole,
+        ...currentPermissions,
+      };
+      const protectedRoutes: Partial<Record<string, SectionAccessKey>> = {
+        "/workday": "can_access_workday",
+        "/finance": "can_access_finance",
+        "/calculators": "can_access_calculators",
+      };
+      const requiredSection = protectedRoutes[pathname];
+      if (
+        requiredSection &&
+        !hasSectionAccess(profileAccess, requiredSection)
+      ) {
         router.replace("/summary");
       }
-      if (["/users", "/calculators"].includes(pathname) && currentRole !== "admin") {
+      if (pathname === "/users" && currentRole !== "admin") {
         router.replace("/summary");
       }
     }
@@ -141,18 +179,24 @@ export default function RootLayout({
     router.push("/login");
   };
 
+  const currentAccess = role ? { role, ...permissions } : null;
   const navLinks = [
-    { href: "/workday", label: "Darbadiena" },
-    { href: "/summary", label: "Kopsavilkums" },
-    { href: "/finance", label: "Finanses" },
-    ...(role === "admin"
-      ? [
-          { href: "/calculators", label: "Kalkulatori" },
-          { href: "/users", label: "Lietotāji" },
-        ]
+    ...(currentAccess &&
+    hasSectionAccess(currentAccess, "can_access_workday")
+      ? [{ href: "/workday", label: "Darbadiena" }]
       : []),
+    { href: "/summary", label: "Kopsavilkums" },
+    ...(currentAccess &&
+    hasSectionAccess(currentAccess, "can_access_finance")
+      ? [{ href: "/finance", label: "Finanses" }]
+      : []),
+    ...(currentAccess &&
+    hasSectionAccess(currentAccess, "can_access_calculators")
+      ? [{ href: "/calculators", label: "Kalkulatori" }]
+      : []),
+    ...(role === "admin" ? [{ href: "/users", label: "Profili" }] : []),
     { href: "/profile", label: "Profils" },
-  ].filter(({ href }) => role !== "viewer" || ["/summary", "/profile"].includes(href));
+  ];
 
   if (isAuthPage) {
     return (
@@ -209,7 +253,7 @@ export default function RootLayout({
 
                   {href === "/summary" &&
                     pathname === "/summary" &&
-                    (role === "viewer" || role === "admin") && (
+                    summaryUsers.length > 1 && (
                       <div className="space-y-2 pl-2">
                         <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                           Skatīt lietotāju

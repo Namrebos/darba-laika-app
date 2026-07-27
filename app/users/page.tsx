@@ -3,13 +3,25 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import type { AccessProfile, AppRole } from "@/lib/access";
+import type {
+  AccessProfile,
+  SectionAccessKey,
+  SectionPermissions,
+} from "@/lib/access";
 import UserAvatar from "@/app/components/UserAvatar";
 
-const roleLabels: Record<AppRole, string> = {
-  admin: "Administrators",
-  member: "Datu ievadītājs",
-  viewer: "Tikai kopsavilkums",
+const sectionOptions: { key: SectionAccessKey; label: string }[] = [
+  { key: "can_access_workday", label: "Darbadiena" },
+  { key: "can_access_finance", label: "Finanses" },
+  { key: "can_access_calculators", label: "Kalkulatori" },
+  { key: "can_access_planned_tasks", label: "Plānotie uzdevumi" },
+];
+
+const emptyPermissions: SectionPermissions = {
+  can_access_workday: false,
+  can_access_finance: false,
+  can_access_calculators: false,
+  can_access_planned_tasks: false,
 };
 
 export default function UsersPage() {
@@ -19,7 +31,8 @@ export default function UsersPage() {
   const [adminId, setAdminId] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [inviteRole, setInviteRole] = useState<Exclude<AppRole, "admin">>("viewer");
+  const [invitePermissions, setInvitePermissions] =
+    useState<SectionPermissions>(emptyPermissions);
   const [invitationLink, setInvitationLink] = useState("");
   const [creatingInvitation, setCreatingInvitation] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
@@ -47,7 +60,18 @@ export default function UsersPage() {
       const [{ data, error }, { data: accessRows }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, email, display_name, avatar_url, role, data_owner_id")
+          .select(`
+            id,
+            email,
+            display_name,
+            avatar_url,
+            role,
+            data_owner_id,
+            can_access_workday,
+            can_access_finance,
+            can_access_calculators,
+            can_access_planned_tasks
+          `)
           .order("created_at", { ascending: true }),
         supabase.from("summary_access").select("viewer_id, owner_id"),
       ]);
@@ -68,39 +92,27 @@ export default function UsersPage() {
     load();
   }, [router]);
 
-  async function changeRole(profile: AccessProfile, role: AppRole) {
-    const dataOwnerId = role === "viewer" ? adminId : profile.id;
+  async function changeSectionAccess(
+    profileId: string,
+    key: SectionAccessKey,
+    allowed: boolean,
+  ) {
     const { error } = await supabase
       .from("profiles")
-      .update({ role, data_owner_id: dataOwnerId })
-      .eq("id", profile.id);
+      .update({ [key]: allowed })
+      .eq("id", profileId);
 
     if (error) {
-      setMessage("Lomu neizdevās saglabāt.");
+      setMessage("Sadaļas piekļuvi neizdevās saglabāt.");
       return;
     }
 
     setProfiles((current) =>
       current.map((item) =>
-        item.id === profile.id
-          ? { ...item, role, data_owner_id: dataOwnerId }
-          : item,
+        item.id === profileId ? { ...item, [key]: allowed } : item,
       ),
     );
-    if (role === "viewer" && !(summaryAccess[profile.id] || []).length) {
-      await supabase.from("summary_access").insert({
-        viewer_id: profile.id,
-        owner_id: adminId,
-      });
-      setSummaryAccess((current) => ({
-        ...current,
-        [profile.id]: [adminId],
-      }));
-    } else if (role !== "viewer") {
-      await supabase.from("summary_access").delete().eq("viewer_id", profile.id);
-      setSummaryAccess((current) => ({ ...current, [profile.id]: [] }));
-    }
-    setMessage("Loma saglabāta.");
+    setMessage("Sadaļas piekļuve saglabāta.");
   }
 
   async function toggleSummaryAccess(viewerId: string, ownerId: string, allowed: boolean) {
@@ -135,7 +147,7 @@ export default function UsersPage() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
       },
-      body: JSON.stringify({ role: inviteRole }),
+      body: JSON.stringify(invitePermissions),
     });
     const result = (await response.json()) as {
       invitationLink?: string;
@@ -149,6 +161,7 @@ export default function UsersPage() {
     }
 
     setInvitationLink(result.invitationLink);
+    setInvitePermissions(emptyPermissions);
     setMessage("Uzaicinājums izveidots. Nokopē saiti un nosūti lietotājam.");
   }
 
@@ -203,7 +216,7 @@ export default function UsersPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4">
       <div>
-        <h1 className="text-2xl font-bold">Lietotāji</h1>
+        <h1 className="text-2xl font-bold">Profili</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Izveido personīgu reģistrācijas saiti un nosūti to jaunajam lietotājam.
         </p>
@@ -213,16 +226,28 @@ export default function UsersPage() {
 
       <form onSubmit={createInvitation} className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
         <h2 className="font-semibold">Jauns uzaicinājums</h2>
-        <p className="text-sm text-zinc-500">Izvēlies lomu. Lietotājs e-pastu un paroli ievadīs pats.</p>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <select
-            value={inviteRole}
-            onChange={(event) => setInviteRole(event.target.value as Exclude<AppRole, "admin">)}
-            className="rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
-          >
-            <option value="viewer">Tikai kopsavilkums</option>
-            <option value="member">Datu ievadītājs</option>
-          </select>
+        <p className="text-sm text-zinc-500">
+          Kopsavilkums un Profils būs pieejams vienmēr. Atzīmē pārējās
+          sadaļas.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {sectionOptions.map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={invitePermissions[key]}
+                onChange={(event) =>
+                  setInvitePermissions((current) => ({
+                    ...current,
+                    [key]: event.target.checked,
+                  }))
+                }
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+        <div>
           <button disabled={creatingInvitation} className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50">
             {creatingInvitation ? "Veido..." : "Izveidot saiti"}
           </button>
@@ -244,20 +269,14 @@ export default function UsersPage() {
                 <div>
                   <p className="font-medium">{profile.display_name}</p>
                   <p className="text-xs text-zinc-500">{profile.email || profile.id}</p>
-                  <p className="text-xs text-zinc-500">{roleLabels[profile.role]}</p>
+                  {profile.role === "admin" && (
+                    <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                      Administrators
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <select
-                  value={profile.role}
-                  disabled={profile.id === adminId}
-                  onChange={(event) => changeRole(profile, event.target.value as AppRole)}
-                  className="rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
-                >
-                  <option value="member">Datu ievadītājs</option>
-                  <option value="viewer">Tikai kopsavilkums</option>
-                  {profile.id === adminId && <option value="admin">Administrators</option>}
-                </select>
                 {profile.id !== adminId && (
                   <button
                     type="button"
@@ -271,20 +290,59 @@ export default function UsersPage() {
               </div>
             </div>
 
-            {profile.role === "viewer" && (
+            <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700">
+              <p className="mb-2 text-sm font-semibold">Sadaļas:</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {sectionOptions.map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={profile.role === "admin" || profile[key]}
+                      disabled={profile.role === "admin"}
+                      onChange={(event) =>
+                        changeSectionAccess(
+                          profile.id,
+                          key,
+                          event.target.checked,
+                        )
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {profile.role !== "admin" && (
               <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700">
                 <p className="mb-2 text-sm font-semibold">Drīkst skatīt kopsavilkumus:</p>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {profiles.filter((owner) => owner.role !== "viewer").map((owner) => (
-                    <label key={owner.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={(summaryAccess[profile.id] || []).includes(owner.id)}
-                        onChange={(event) => toggleSummaryAccess(profile.id, owner.id, event.target.checked)}
-                      />
-                      <span>{owner.display_name || owner.email || owner.id}</span>
-                    </label>
-                  ))}
+                  {profiles.map((owner) => {
+                    const isOwnProfile = owner.id === profile.id;
+                    return (
+                      <label key={owner.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={
+                            isOwnProfile ||
+                            (summaryAccess[profile.id] || []).includes(owner.id)
+                          }
+                          disabled={isOwnProfile}
+                          onChange={(event) =>
+                            toggleSummaryAccess(
+                              profile.id,
+                              owner.id,
+                              event.target.checked,
+                            )
+                          }
+                        />
+                        <span>
+                          {owner.display_name || owner.email || owner.id}
+                          {isOwnProfile ? " (savs)" : ""}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             )}

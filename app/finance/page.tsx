@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Check, Trash2 } from "lucide-react";
 
@@ -23,6 +24,7 @@ function getCurrentMonth() {
 }
 
 export default function FinancePage() {
+  const router = useRouter();
   const [eightHourWorkday, setEightHourWorkday] = useState(false);
   const [storageKey, setStorageKey] = useState("");
   const [userId, setUserId] = useState("");
@@ -35,7 +37,23 @@ export default function FinancePage() {
   useEffect(() => {
     async function loadFinance() {
       const { data } = await supabase.auth.getUser();
-      if (!data.user) return;
+      if (!data.user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, can_access_finance")
+        .eq("id", data.user.id)
+        .single();
+      if (
+        profile?.role !== "admin" &&
+        profile?.can_access_finance !== true
+      ) {
+        router.replace("/summary");
+        return;
+      }
 
       setUserId(data.user.id);
       const key = `finance-eight-hour-workday:${data.user.id}`;
@@ -61,7 +79,7 @@ export default function FinancePage() {
     }
 
     loadFinance();
-  }, []);
+  }, [router]);
 
   function toggleEightHourWorkday(checked: boolean) {
     setEightHourWorkday(checked);

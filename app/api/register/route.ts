@@ -44,7 +44,15 @@ export async function POST(request: NextRequest) {
     .eq("token_hash", tokenHash)
     .is("used_at", null)
     .gt("expires_at", claimedAt)
-    .select("id, role, invited_by")
+    .select(`
+      id,
+      role,
+      invited_by,
+      can_access_workday,
+      can_access_finance,
+      can_access_calculators,
+      can_access_planned_tasks
+    `)
     .maybeSingle();
 
   if (!invitation) {
@@ -79,6 +87,29 @@ export async function POST(request: NextRequest) {
           : "Kontu neizdevās izveidot.",
       },
       { status: 400 },
+    );
+  }
+
+  const { error: profileError } = await adminClient
+    .from("profiles")
+    .update({
+      can_access_workday: invitation.can_access_workday === true,
+      can_access_finance: invitation.can_access_finance === true,
+      can_access_calculators: invitation.can_access_calculators === true,
+      can_access_planned_tasks: invitation.can_access_planned_tasks === true,
+    })
+    .eq("id", created.user.id);
+
+  if (profileError) {
+    await adminClient.auth.admin.deleteUser(created.user.id);
+    await adminClient
+      .from("user_invitations")
+      .update({ used_at: null })
+      .eq("id", invitation.id)
+      .eq("used_at", claimedAt);
+    return NextResponse.json(
+      { error: "Lietotāja pieejas neizdevās saglabāt." },
+      { status: 500 },
     );
   }
 

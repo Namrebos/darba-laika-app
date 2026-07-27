@@ -52,6 +52,19 @@ export default function WorkdayPage() {
         return;
       }
 
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, can_access_workday")
+        .eq("id", user.id)
+        .single();
+      if (
+        profile?.role !== "admin" &&
+        profile?.can_access_workday !== true
+      ) {
+        router.replace("/summary");
+        return;
+      }
+
       setUser(user);
       await checkSession(user);
       await loadDictionary(user.id);

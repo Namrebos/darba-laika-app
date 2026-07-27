@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import type { AppRole } from "@/lib/access";
+import type { SectionPermissions } from "@/lib/access";
 import { createHash, randomBytes } from "crypto";
 
 const supabaseUrl =
@@ -43,11 +43,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = (await request.json()) as { role?: AppRole };
-  const role = body.role;
-  if (!["member", "viewer"].includes(role || "")) {
+  const body = (await request.json()) as Partial<SectionPermissions>;
+  const permissions: SectionPermissions = {
+    can_access_workday: body.can_access_workday === true,
+    can_access_finance: body.can_access_finance === true,
+    can_access_calculators: body.can_access_calculators === true,
+    can_access_planned_tasks: body.can_access_planned_tasks === true,
+  };
+  const hasAdditionalSection = Object.values(permissions).some(Boolean);
+  const role = hasAdditionalSection ? "member" : "viewer";
+
+  if (
+    Object.values(body).some(
+      (value) => typeof value !== "boolean",
+    )
+  ) {
     return NextResponse.json(
-      { error: "Norādi derīgu lomu." },
+      { error: "Norādi derīgas sadaļu pieejas." },
       { status: 400 },
     );
   }
@@ -60,6 +72,7 @@ export async function POST(request: NextRequest) {
     role,
     invited_by: authData.user.id,
     expires_at: expiresAt,
+    ...permissions,
   });
 
   if (error) {
