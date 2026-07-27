@@ -37,6 +37,7 @@ export default function UsersPage() {
   const [creatingInvitation, setCreatingInvitation] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState("");
+  const [expandedUserId, setExpandedUserId] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -263,7 +264,19 @@ export default function UsersPage() {
       <div className="space-y-3">
         {profiles.map((profile) => (
           <div key={profile.id} className="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              disabled={profile.role === "admin"}
+              onClick={() =>
+                setExpandedUserId((current) =>
+                  current === profile.id ? "" : profile.id,
+                )
+              }
+              className="flex w-full items-center justify-between gap-3 text-left disabled:cursor-default"
+              aria-expanded={
+                profile.role === "admin" || expandedUserId === profile.id
+              }
+            >
               <div className="flex items-center gap-3">
                 <UserAvatar name={profile.display_name} avatarUrl={profile.avatar_url} />
                 <div>
@@ -276,75 +289,92 @@ export default function UsersPage() {
                   )}
                 </div>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                {profile.id !== adminId && (
-                  <button
-                    type="button"
-                    disabled={deletingUserId === profile.id}
-                    onClick={() => deleteUser(profile)}
-                    className="rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950"
-                  >
-                    {deletingUserId === profile.id ? "Dzēš..." : "Dzēst"}
-                  </button>
-                )}
-              </div>
-            </div>
+              {profile.role !== "admin" && (
+                <span
+                  aria-hidden="true"
+                  className={`shrink-0 text-xl text-zinc-500 transition-transform ${
+                    expandedUserId === profile.id ? "rotate-180" : ""
+                  }`}
+                >
+                  ⌄
+                </span>
+              )}
+            </button>
 
-            <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700">
-              <p className="mb-2 text-sm font-semibold">Sadaļas:</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {sectionOptions.map(({ key, label }) => (
-                  <label key={key} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={profile.role === "admin" || profile[key]}
-                      disabled={profile.role === "admin"}
-                      onChange={(event) =>
-                        changeSectionAccess(
-                          profile.id,
-                          key,
-                          event.target.checked,
-                        )
-                      }
-                    />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {profile.role !== "admin" && (
-              <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700">
-                <p className="mb-2 text-sm font-semibold">Drīkst skatīt kopsavilkumus:</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {profiles.map((owner) => {
-                    const isOwnProfile = owner.id === profile.id;
-                    return (
-                      <label key={owner.id} className="flex items-center gap-2 text-sm">
+            {(profile.role === "admin" || expandedUserId === profile.id) && (
+              <>
+                <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                  <p className="mb-2 text-sm font-semibold">Sadaļas:</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {sectionOptions.map(({ key, label }) => (
+                      <label key={key} className="flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
-                          checked={
-                            isOwnProfile ||
-                            (summaryAccess[profile.id] || []).includes(owner.id)
-                          }
-                          disabled={isOwnProfile}
+                          checked={profile.role === "admin" || profile[key]}
+                          disabled={profile.role === "admin"}
                           onChange={(event) =>
-                            toggleSummaryAccess(
+                            changeSectionAccess(
                               profile.id,
-                              owner.id,
+                              key,
                               event.target.checked,
                             )
                           }
                         />
-                        <span>
-                          {owner.display_name || owner.email || owner.id}
-                          {isOwnProfile ? " (savs)" : ""}
-                        </span>
+                        <span>{label}</span>
                       </label>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
-              </div>
+
+                {profile.role !== "admin" && (
+                  <>
+                    <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                      <p className="mb-2 text-sm font-semibold">
+                        Drīkst skatīt kopsavilkumus:
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {profiles.map((owner) => {
+                          const isOwnProfile = owner.id === profile.id;
+                          return (
+                            <label key={owner.id} className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={
+                                  isOwnProfile ||
+                                  (summaryAccess[profile.id] || []).includes(owner.id)
+                                }
+                                disabled={isOwnProfile}
+                                onChange={(event) =>
+                                  toggleSummaryAccess(
+                                    profile.id,
+                                    owner.id,
+                                    event.target.checked,
+                                  )
+                                }
+                              />
+                              <span>
+                                {owner.display_name || owner.email || owner.id}
+                                {isOwnProfile ? " (savs)" : ""}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                      <button
+                        type="button"
+                        disabled={deletingUserId === profile.id}
+                        onClick={() => deleteUser(profile)}
+                        className="rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950"
+                      >
+                        {deletingUserId === profile.id ? "Dzēš..." : "Dzēst lietotāju"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </div>
         ))}
