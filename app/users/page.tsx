@@ -216,7 +216,7 @@ export default function UsersPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4">
       <div>
-        <h1 className="text-2xl font-bold">Profili</h1>
+        <h1 className="text-2xl font-bold">Lietotāji</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Izveido personīgu reģistrācijas saiti un nosūti to jaunajam lietotājam.
         </p>

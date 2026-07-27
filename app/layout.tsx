@@ -194,7 +194,7 @@ export default function RootLayout({
     hasSectionAccess(currentAccess, "can_access_calculators")
       ? [{ href: "/calculators", label: "Kalkulatori" }]
       : []),
-    ...(role === "admin" ? [{ href: "/users", label: "Profili" }] : []),
+    ...(role === "admin" ? [{ href: "/users", label: "Lietotāji" }] : []),
     { href: "/profile", label: "Profils" },
   ];
 
