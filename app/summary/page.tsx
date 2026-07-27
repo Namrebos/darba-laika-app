@@ -24,7 +24,6 @@ type DayEntry = {
   taskHours?: number;
   workSegments: WorkSegment[];
   plannedCount?: number;
-  completedPlannedCount?: number;
 };
 
 type MonthOption = {
@@ -178,7 +177,7 @@ export default function SummaryPage() {
         .from("planned_tasks")
         .select("scheduled_date")
         .eq("assignee_id", selectedOwnerId)
-        .neq("status", "canceled")
+        .in("status", ["planned", "started"])
         .not("scheduled_date", "is", null),
     ]);
 
@@ -286,7 +285,7 @@ export default function SummaryPage() {
       .eq("assignee_id", selectedOwnerId)
       .gte("scheduled_date", fromDate)
       .lt("scheduled_date", nextMonthDate)
-      .neq("status", "canceled");
+      .in("status", ["planned", "started"]);
 
     if (workError || taskError || plannedError) {
       console.error("Summary data load error:", {
@@ -330,11 +329,7 @@ export default function SummaryPage() {
       status: string;
     }[]).forEach((task) => {
       const entry = ensureDayEntry(dataMap, task.scheduled_date);
-      if (task.status === "completed") {
-        entry.completedPlannedCount = (entry.completedPlannedCount || 0) + 1;
-      } else {
-        entry.plannedCount = (entry.plannedCount || 0) + 1;
-      }
+      entry.plannedCount = (entry.plannedCount || 0) + 1;
     });
 
     setEntries(dataMap);

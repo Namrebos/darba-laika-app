@@ -3,7 +3,17 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ImagePlus, Pencil, Plus, Send, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  BookOpenText,
+  ImagePlus,
+  Pencil,
+  Plus,
+  Send,
+  X,
+} from "lucide-react";
+import DictionaryModal from "@/app/components/DictionaryModal";
 import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -35,6 +45,12 @@ type PlannedImage = {
 };
 
 type DayTab = "planned" | "completed" | "canceled";
+type DictionaryField = "title" | "note";
+
+type DictionaryWord = {
+  name: string;
+  usageCount: number;
+};
 
 function todayInRiga() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -68,6 +84,13 @@ export default function PlannedTasksPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
+  const [dictionaryWords, setDictionaryWords] = useState<DictionaryWord[]>([]);
+  const [dictionaryOpen, setDictionaryOpen] = useState(false);
+  const [activeDictionaryField, setActiveDictionaryField] = useState<{
+    taskId: number;
+    field: DictionaryField;
+    cursor: number;
+  } | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -95,6 +118,7 @@ export default function PlannedTasksPage() {
         { data: profileRows, error: profileError },
         { data: taskRows, error: taskError },
         { data: imageRows, error: imageError },
+        { data: tagRows, error: tagError },
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -106,15 +130,26 @@ export default function PlannedTasksPage() {
           .order("scheduled_date", { ascending: true, nullsFirst: true })
           .order("position", { ascending: true }),
         supabase.from("planned_task_images").select("id, planned_task_id, url"),
+        supabase
+          .from("tags")
+          .select("name, usage_count")
+          .eq("user_id", authData.user.id)
+          .order("usage_count", { ascending: false }),
       ]);
 
-      if (profileError || taskError || imageError) {
+      if (profileError || taskError || imageError || tagError) {
         setMessage("Neizdevās ielādēt plānotos uzdevumus.");
       }
 
       setUserId(authData.user.id);
       setProfiles((profileRows || []) as Profile[]);
       setTasks((taskRows || []) as PlannedTask[]);
+      setDictionaryWords(
+        (tagRows || []).map((word) => ({
+          name: word.name,
+          usageCount: word.usage_count || 0,
+        })),
+      );
 
       const imageMap: Record<number, PlannedImage[]> = {};
       ((imageRows || []) as PlannedImage[]).forEach((image) => {
@@ -170,6 +205,134 @@ export default function PlannedTasksPage() {
   function changeLocalTask(id: number, changes: Partial<PlannedTask>) {
     setTasks((current) =>
       current.map((task) => (task.id === id ? { ...task, ...changes } : task)),
+    );
+  }
+
+  async function reloadDictionary() {
+    if (!userId) return;
+    const { data } = await supabase
+      .from("tags")
+      .select("name, usage_count")
+      .eq("user_id", userId)
+      .order("usage_count", { ascending: false });
+    setDictionaryWords(
+      (data || []).map((word) => ({
+        name: word.name,
+        usageCount: word.usage_count || 0,
+      })),
+    );
+  }
+
+  async function addDictionaryWord(word: string) {
+    const clean = word.trim().replace(/^#+/, "").replace(/\s+/g, "_");
+    if (!clean || !userId) return;
+
+    const existing = dictionaryWords.find(
+      (item) => item.name.toLowerCase() === clean.toLowerCase(),
+    );
+    const { error } = existing
+      ? await supabase
+          .from("tags")
+          .update({ usage_count: existing.usageCount + 1 })
+          .eq("user_id", userId)
+          .eq("name", existing.name)
+      : await supabase
+          .from("tags")
+          .insert({ user_id: userId, name: clean, usage_count: 1 });
+
+    if (error) {
+      setMessage("Vārdu neizdevās saglabāt vārdnīcā.");
+      return;
+    }
+    await reloadDictionary();
+  }
+
+  async function deleteDictionaryWords(words: string[]) {
+    if (!userId || words.length === 0) return;
+    const { error } = await supabase
+      .from("tags")
+      .delete()
+      .eq("user_id", userId)
+      .in("name", words);
+    if (error) {
+      setMessage("Vārdus neizdevās izdzēst.");
+      return;
+    }
+    await reloadDictionary();
+  }
+
+  function extractHashtagWords(...texts: string[]) {
+    const matches = texts.flatMap(
+      (text) => text.match(/#([A-Za-zĀ-ž0-9_-]+)/g) || [],
+    );
+    return [...new Set(matches.map((item) => item.slice(1)).filter(Boolean))];
+  }
+
+  const dictionarySuggestions = useMemo(() => {
+    if (!activeDictionaryField) return [];
+    const task = tasks.find(
+      (item) => item.id === activeDictionaryField.taskId,
+    );
+    if (!task) return [];
+    const value =
+      activeDictionaryField.field === "title" ? task.title : task.note;
+    const before = value.slice(0, activeDictionaryField.cursor);
+    const prefix = (before.match(/(^|\s)([^\s]+)$/)?.[2] || "").toLowerCase();
+    if (!prefix) return [];
+    return dictionaryWords
+      .filter((word) => word.name.toLowerCase().startsWith(prefix))
+      .filter((word) => word.name.toLowerCase() !== prefix)
+      .slice(0, 6);
+  }, [activeDictionaryField, dictionaryWords, tasks]);
+
+  function applyDictionarySuggestion(word: string) {
+    if (!activeDictionaryField) return;
+    const task = tasks.find(
+      (item) => item.id === activeDictionaryField.taskId,
+    );
+    if (!task) return;
+    const value =
+      activeDictionaryField.field === "title" ? task.title : task.note;
+    const cursor = Math.max(
+      0,
+      Math.min(activeDictionaryField.cursor, value.length),
+    );
+    let start = cursor;
+    while (start > 0 && !/\s/.test(value[start - 1])) start -= 1;
+    let end = cursor;
+    while (end < value.length && !/\s/.test(value[end])) end += 1;
+    const inserted = word.replace(/_/g, " ");
+    const nextValue = `${value.slice(0, start)}${inserted} ${value.slice(end)}`;
+    changeLocalTask(task.id, {
+      [activeDictionaryField.field]: nextValue,
+    });
+    void addDictionaryWord(word);
+    setActiveDictionaryField(null);
+  }
+
+  function renderDictionarySuggestions(taskId: number, field: DictionaryField) {
+    if (
+      activeDictionaryField?.taskId !== taskId ||
+      activeDictionaryField.field !== field ||
+      dictionarySuggestions.length === 0
+    ) {
+      return null;
+    }
+
+    return (
+      <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-zinc-300 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        {dictionarySuggestions.map((word) => (
+          <button
+            key={word.name}
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => applyDictionarySuggestion(word.name)}
+            className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          >
+            {word.name.replace(/_/g, " ")}
+          </button>
+        ))}
+      </div>
     );
   }
 
@@ -250,6 +413,8 @@ export default function PlannedTasksPage() {
     }
 
     changeLocalTask(task.id, changes);
+    const hashtagWords = extractHashtagWords(task.title, task.note);
+    await Promise.all(hashtagWords.map((word) => addDictionaryWord(word)));
     setSelectedDate(task.scheduled_date);
     setDayTab("planned");
     setMessage("Kartīte nosūtīta uz izvēlēto dienu.");
@@ -437,6 +602,14 @@ export default function PlannedTasksPage() {
         </div>
         <button
           type="button"
+          onClick={() => setDictionaryOpen(true)}
+          className="flex shrink-0 items-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 font-medium text-white hover:bg-cyan-700"
+        >
+          <BookOpenText size={18} />
+          Vārdnīca
+        </button>
+        <button
+          type="button"
           onClick={createDraft}
           className="flex shrink-0 items-center gap-2 rounded-lg bg-green-600 px-3 py-2 font-medium text-white hover:bg-green-700"
         >
@@ -477,25 +650,73 @@ export default function PlannedTasksPage() {
                 </button>
               </div>
 
-              <input
-                value={task.title}
-                onChange={(event) =>
-                  changeLocalTask(task.id, { title: event.target.value })
-                }
-                onBlur={() => saveDraft(task)}
-                placeholder="Uzdevuma nosaukums"
-                className="w-full rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
-              />
-              <textarea
-                value={task.note}
-                onChange={(event) =>
-                  changeLocalTask(task.id, { note: event.target.value })
-                }
-                onBlur={() => saveDraft(task)}
-                placeholder="Piezīmes"
-                rows={4}
-                className="w-full resize-y rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
-              />
+              <div className="relative">
+                <input
+                  value={task.title}
+                  onFocus={(event) =>
+                    setActiveDictionaryField({
+                      taskId: task.id,
+                      field: "title",
+                      cursor: event.currentTarget.selectionStart || 0,
+                    })
+                  }
+                  onClick={(event) =>
+                    setActiveDictionaryField({
+                      taskId: task.id,
+                      field: "title",
+                      cursor: event.currentTarget.selectionStart || 0,
+                    })
+                  }
+                  onChange={(event) => {
+                    changeLocalTask(task.id, { title: event.target.value });
+                    setActiveDictionaryField({
+                      taskId: task.id,
+                      field: "title",
+                      cursor:
+                        event.currentTarget.selectionStart ||
+                        event.currentTarget.value.length,
+                    });
+                  }}
+                  onBlur={() => saveDraft(task)}
+                  placeholder="Uzdevuma nosaukums"
+                  className="w-full rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
+                />
+                {renderDictionarySuggestions(task.id, "title")}
+              </div>
+              <div className="relative">
+                <textarea
+                  value={task.note}
+                  onFocus={(event) =>
+                    setActiveDictionaryField({
+                      taskId: task.id,
+                      field: "note",
+                      cursor: event.currentTarget.selectionStart || 0,
+                    })
+                  }
+                  onClick={(event) =>
+                    setActiveDictionaryField({
+                      taskId: task.id,
+                      field: "note",
+                      cursor: event.currentTarget.selectionStart || 0,
+                    })
+                  }
+                  onChange={(event) => {
+                    changeLocalTask(task.id, { note: event.target.value });
+                    setActiveDictionaryField({
+                      taskId: task.id,
+                      field: "note",
+                      cursor:
+                        event.currentTarget.selectionStart ||
+                        event.currentTarget.value.length,
+                    });
+                  }}
+                  onBlur={() => saveDraft(task)}
+                  placeholder="Piezīmes"
+                  rows={4}
+                  className="w-full resize-y rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
+                />
+                {renderDictionarySuggestions(task.id, "note")}
+              </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className="space-y-1 text-sm">
@@ -748,6 +969,13 @@ export default function PlannedTasksPage() {
           </div>
         )}
       </section>
+      <DictionaryModal
+        open={dictionaryOpen}
+        onClose={() => setDictionaryOpen(false)}
+        words={dictionaryWords}
+        onAddWord={addDictionaryWord}
+        onDeleteWords={deleteDictionaryWords}
+      />
     </div>
   );
 }

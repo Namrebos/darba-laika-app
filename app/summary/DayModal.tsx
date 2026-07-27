@@ -125,9 +125,6 @@ export default function DayModal({
   const [plannedImages, setPlannedImages] = useState<Record<number, string[]>>(
     {},
   );
-  const [plannedTab, setPlannedTab] = useState<"planned" | "completed">(
-    "planned",
-  );
   const [hours, setHours] = useState({
     baseHours: 0,
     overtimeHours: 0,
@@ -170,7 +167,7 @@ export default function DayModal({
       .select("id, title, note, scheduled_time, status, position")
       .eq("assignee_id", ownerId)
       .eq("scheduled_date", date)
-      .neq("status", "canceled")
+      .in("status", ["planned", "started"])
       .order("position", { ascending: true });
 
     if (workError || taskError || plannedError) {
@@ -365,23 +362,6 @@ export default function DayModal({
     }));
   }, [tasks, imagesByTask]);
 
-  const visiblePlannedTasks = useMemo(
-    () =>
-      plannedTasks.filter((task) =>
-        plannedTab === "completed"
-          ? task.status === "completed"
-          : task.status === "planned" || task.status === "started",
-      ),
-    [plannedTab, plannedTasks],
-  );
-
-  const plannedCount = plannedTasks.filter(
-    (task) => task.status === "planned" || task.status === "started",
-  ).length;
-  const completedPlannedCount = plannedTasks.filter(
-    (task) => task.status === "completed",
-  ).length;
-
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -435,38 +415,8 @@ export default function DayModal({
                     <h3 className="mb-3 text-base font-semibold">
                       Plānotie uzdevumi
                     </h3>
-                    <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-blue-100 p-1 dark:bg-blue-950">
-                      <button
-                        type="button"
-                        onClick={() => setPlannedTab("planned")}
-                        className={`rounded-md px-3 py-2 text-sm font-medium ${
-                          plannedTab === "planned"
-                            ? "bg-white shadow dark:bg-zinc-800"
-                            : "text-zinc-500"
-                        }`}
-                      >
-                        Plānotie {plannedCount}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPlannedTab("completed")}
-                        className={`rounded-md px-3 py-2 text-sm font-medium ${
-                          plannedTab === "completed"
-                            ? "bg-white shadow dark:bg-zinc-800"
-                            : "text-zinc-500"
-                        }`}
-                      >
-                        Izpildītie {completedPlannedCount}
-                      </button>
-                    </div>
-
-                    {visiblePlannedTasks.length === 0 ? (
-                      <p className="text-sm text-zinc-500">
-                        Šajā skatā uzdevumu nav.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {visiblePlannedTasks.map((task, index) => (
+                    <div className="space-y-2">
+                        {plannedTasks.map((task, index) => (
                           <div
                             key={task.id}
                             className="rounded-lg border border-blue-200 bg-white p-3 dark:border-blue-900 dark:bg-zinc-900"
@@ -525,8 +475,7 @@ export default function DayModal({
                             </div>
                           </div>
                         ))}
-                      </div>
-                    )}
+                    </div>
                   </div>
                 )}
 

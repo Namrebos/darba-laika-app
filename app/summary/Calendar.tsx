@@ -30,7 +30,6 @@ type DayData = {
   taskHours?: number;
   workSegments: WorkSegment[];
   plannedCount?: number;
-  completedPlannedCount?: number;
 };
 
 type CalendarProps = {
@@ -358,12 +357,9 @@ function CalendarDayCell({
           className={`${dateFont.className} relative w-full min-w-0 text-right text-[18px] leading-none [font-variant-numeric:tabular-nums] sm:text-[28px] lg:text-[62px] xl:text-[82px] ${textColor}`}
         >
           {dayNum}
-          {isCurrentMonth &&
-            ((data?.plannedCount || 0) > 0 ||
-              (data?.completedPlannedCount || 0) > 0) && (
+          {isCurrentMonth && (data?.plannedCount || 0) > 0 && (
               <span className="absolute bottom-[-17px] right-0 whitespace-nowrap rounded bg-blue-600 px-1 py-0.5 font-sans text-[7px] leading-none text-white sm:bottom-[-24px] sm:text-[9px] lg:bottom-[-34px] lg:px-1.5 lg:py-1 lg:text-[11px]">
-                P {data?.plannedCount || 0} · I{" "}
-                {data?.completedPlannedCount || 0}
+                P {data?.plannedCount || 0}
               </span>
             )}
         </div>
