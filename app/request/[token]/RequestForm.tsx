@@ -85,6 +85,11 @@ const cargoTypes = [
   "Cits",
 ];
 
+function isValidLatvianPhone(value: string) {
+  const compact = value.replace(/[\s()-]/g, "");
+  return /^\d{8}$/.test(compact) || /^\+371\d{8}$/.test(compact);
+}
+
 function FieldLabel({
   children,
   required = false,
@@ -113,6 +118,9 @@ function PartyFields({
   const partyType = form[typeKey];
   const field = (name: string) =>
     `${prefix}_${name}` as keyof FormState;
+  const phone = String(form[field("phone")]);
+  const phoneInvalid = phone.length > 0 && !isValidLatvianPhone(phone);
+  const phoneErrorId = `${prefix}-phone-error`;
 
   return (
     <div className="space-y-4">
@@ -196,14 +204,22 @@ function PartyFields({
         <FieldLabel required>Tālrunis</FieldLabel>
         <input
           type="tel"
-          value={String(form[field("phone")])}
+          inputMode="tel"
+          value={phone}
           onChange={(event) =>
             update({ [field("phone")]: event.target.value })
           }
           className="form-input"
-          placeholder="+371"
-          maxLength={30}
+          placeholder="+371 20 123 456"
+          maxLength={16}
+          aria-invalid={phoneInvalid}
+          aria-describedby={phoneInvalid ? phoneErrorId : undefined}
         />
+        {phoneInvalid && (
+          <span id={phoneErrorId} className="mt-1 block text-sm text-red-600">
+            Ievadiet 8 ciparu Latvijas tālruņa numuru, piemēram, +371 20 123 456.
+          </span>
+        )}
       </label>
     </div>
   );
@@ -274,7 +290,7 @@ export default function RequestForm({
     if (targetStep === 1) {
       return Boolean(
         identityComplete("sender") &&
-          form.sender_phone.trim() &&
+          isValidLatvianPhone(form.sender_phone) &&
           form.pickup_address.trim() &&
           pickupPoint &&
           form.pickup_date,
@@ -283,7 +299,7 @@ export default function RequestForm({
     if (targetStep === 2) {
       return Boolean(
         identityComplete("recipient") &&
-          form.recipient_phone.trim() &&
+          isValidLatvianPhone(form.recipient_phone) &&
           form.dropoff_address.trim() &&
           dropoffPoint &&
           form.dropoff_date,

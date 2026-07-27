@@ -23,6 +23,11 @@ function validCoordinate(value: unknown, min: number, max: number) {
   return Number.isFinite(number) && number >= min && number <= max;
 }
 
+function validLatvianPhone(value: unknown) {
+  const compact = cleanText(value, 30).replace(/[\s()-]/g, "");
+  return /^\d{8}$/.test(compact) || /^\+371\d{8}$/.test(compact);
+}
+
 function validatePayload(input: Record<string, unknown>) {
   const senderType = input.sender_type;
   const recipientType = input.recipient_type;
@@ -43,8 +48,8 @@ function validatePayload(input: Record<string, unknown>) {
   return Boolean(
     senderIdentity &&
       recipientIdentity &&
-      cleanText(input.sender_phone, 30) &&
-      cleanText(input.recipient_phone, 30) &&
+      validLatvianPhone(input.sender_phone) &&
+      validLatvianPhone(input.recipient_phone) &&
       cleanText(input.pickup_address, 250) &&
       cleanText(input.dropoff_address, 250) &&
       cleanText(input.pickup_date, 10) &&
