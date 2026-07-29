@@ -24,6 +24,8 @@ export default function ProfilePage() {
   const [dictionaryWords, setDictionaryWords] = useState<DictionaryWord[]>([]);
   const [newPassword, setNewPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -152,6 +154,11 @@ export default function ProfilePage() {
     setImage(null);
     setNewPassword("");
     setRepeatPassword("");
+    setChangingPassword(false);
+    if (emailChanged) {
+      setEmail(originalEmail);
+      setEditingEmail(false);
+    }
     setMessage(
       emailChanged
         ? "Profils saglabāts. Apstiprini e-pasta maiņu saitē, kas nosūtīta uz e-pastu."
@@ -180,43 +187,87 @@ export default function ProfilePage() {
           <span className="text-sm font-medium">Vārds vai lietotājvārds</span>
           <input required maxLength={50} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800" />
         </label>
-        <label className="block space-y-1">
+        <div className="space-y-2">
           <span className="text-sm font-medium">E-pasts</span>
-          <input
-            required
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
-          />
-        </label>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block space-y-1">
-            <span className="text-sm font-medium">Jaunā parole</span>
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input
-              type="password"
-              minLength={8}
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              placeholder="Atstāj tukšu, ja nemaini"
-              className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+              required
+              disabled={!editingEmail}
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className="min-w-0 flex-1 rounded border border-zinc-300 bg-white px-3 py-2 disabled:bg-zinc-100 disabled:text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:disabled:bg-zinc-900"
             />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-sm font-medium">Atkārtot jauno paroli</span>
-            <input
-              type="password"
-              minLength={8}
-              autoComplete="new-password"
-              value={repeatPassword}
-              onChange={(event) => setRepeatPassword(event.target.value)}
-              placeholder="Atkārto jauno paroli"
-              className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
-            />
-          </label>
+            {editingEmail ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail(originalEmail);
+                  setEditingEmail(false);
+                }}
+                className="rounded border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-600"
+              >
+                Atcelt
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditingEmail(true)}
+                className="rounded border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-600"
+              >
+                Mainīt e-pastu
+              </button>
+            )}
+          </div>
         </div>
+        {changingPassword ? (
+          <div className="space-y-3">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-1">
+                <span className="text-sm font-medium">Jaunā parole</span>
+                <input
+                  type="password"
+                  minLength={8}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-sm font-medium">Atkārtot jauno paroli</span>
+                <input
+                  type="password"
+                  minLength={8}
+                  autoComplete="new-password"
+                  value={repeatPassword}
+                  onChange={(event) => setRepeatPassword(event.target.value)}
+                  className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setNewPassword("");
+                setRepeatPassword("");
+                setChangingPassword(false);
+              }}
+              className="rounded border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-600"
+            >
+              Atcelt paroles maiņu
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setChangingPassword(true)}
+            className="rounded border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-600"
+          >
+            Mainīt paroli
+          </button>
+        )}
         <div className="flex flex-wrap gap-3">
           <button disabled={saving} className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50">
             {saving ? "Saglabā..." : "Saglabāt"}
