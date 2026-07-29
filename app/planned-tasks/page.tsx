@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   Clipboard,
   ExternalLink,
   ImagePlus,
@@ -16,6 +17,7 @@ import {
   Pencil,
   Plus,
   Send,
+  Truck,
   X,
 } from "lucide-react";
 import TransportRequestModal from "@/app/components/TransportRequestModal";
@@ -99,6 +101,7 @@ export default function PlannedTasksPage() {
   const [requestLink, setRequestLink] = useState("");
   const [creatingRequestLink, setCreatingRequestLink] = useState(false);
   const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -629,23 +632,56 @@ export default function PlannedTasksPage() {
             Sagatavo, piešķir un sakārto uzdevumu kartītes.
           </p>
         </div>
-        <button
-          type="button"
-          disabled={creatingRequestLink}
-          onClick={createRequestLink}
-          className="flex shrink-0 items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 font-medium text-white hover:bg-violet-700 disabled:opacity-60"
-        >
-          <Link2 size={18} />
-          {creatingRequestLink ? "Veido..." : "Klienta saite"}
-        </button>
-        <button
-          type="button"
-          onClick={createDraft}
-          className="flex shrink-0 items-center gap-2 rounded-lg bg-green-600 px-3 py-2 font-medium text-white hover:bg-green-700"
-        >
-          <Plus size={18} />
-          Jauns
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setNewMenuOpen((current) => !current)}
+            className="flex shrink-0 items-center gap-2 rounded-lg bg-green-600 px-3 py-2 font-medium text-white hover:bg-green-700"
+            aria-expanded={newMenuOpen}
+          >
+            <Plus size={18} />
+            Jauns
+            <ChevronDown size={16} />
+          </button>
+          {newMenuOpen && (
+            <div className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+              <button
+                type="button"
+                onClick={() => {
+                  setNewMenuOpen(false);
+                  void createDraft();
+                }}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                <Plus size={18} />
+                Jauns uzdevums
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewMenuOpen(false);
+                  router.push("/planned-tasks/new-trip");
+                }}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                <Truck size={18} />
+                Jauns brauciens
+              </button>
+              <button
+                type="button"
+                disabled={creatingRequestLink}
+                onClick={() => {
+                  setNewMenuOpen(false);
+                  void createRequestLink();
+                }}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+              >
+                <Link2 size={18} />
+                {creatingRequestLink ? "Veido saiti..." : "Klienta saite"}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {message && (

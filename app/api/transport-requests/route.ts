@@ -93,9 +93,10 @@ export async function POST(request: NextRequest) {
   }
 
   const formData = await request.formData();
+  const internalRequest = formData.get("mode") === "internal";
   const token = String(formData.get("token") || "").trim();
   const payloadText = String(formData.get("payload") || "");
-  if (!token || !payloadText) {
+  if ((!internalRequest && !token) || !payloadText) {
     return NextResponse.json(
       { error: "Trūkst pieteikuma datu." },
       { status: 400 },
@@ -169,8 +170,52 @@ export async function POST(request: NextRequest) {
     additional_notes: cleanText(payload.additional_notes, 500),
   };
 
+  let submissionTokenHash = tokenHash(token);
+  if (internalRequest) {
+    const bearer = request.headers.get("authorization");
+    const accessToken = bearer?.startsWith("Bearer ") ? bearer.slice(7) : "";
+    if (!accessToken) {
+      return NextResponse.json({ error: "Nav autorizācijas." }, { status: 401 });
+    }
+
+    const { data: authData } = await adminClient.auth.getUser(accessToken);
+    if (!authData.user) {
+      return NextResponse.json({ error: "Nederīga sesija." }, { status: 401 });
+    }
+
+    const { data: profile } = await adminClient
+      .from("profiles")
+      .select("role, can_access_planned_tasks")
+      .eq("id", authData.user.id)
+      .single();
+    if (
+      profile?.role !== "admin" &&
+      profile?.can_access_planned_tasks !== true
+    ) {
+      return NextResponse.json(
+        { error: "Nav pieejas plānoto uzdevumu sadaļai." },
+        { status: 403 },
+      );
+    }
+
+    submissionTokenHash = tokenHash(randomBytes(32).toString("base64url"));
+    const { error: linkError } = await adminClient
+      .from("transport_request_links")
+      .insert({
+        token_hash: submissionTokenHash,
+        created_by: authData.user.id,
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    if (linkError) {
+      return NextResponse.json(
+        { error: "Braucienu neizdevās sagatavot." },
+        { status: 500 },
+      );
+    }
+  }
+
   const { data, error } = await adminClient.rpc("submit_transport_request", {
-    target_token_hash: tokenHash(token),
+    target_token_hash: submissionTokenHash,
     payload: safePayload,
   });
   const submission = data as

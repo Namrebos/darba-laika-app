@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import imageCompression from "browser-image-compression";
 import {
@@ -15,6 +16,7 @@ import {
   Truck,
 } from "lucide-react";
 import AddressField from "@/app/components/AddressField";
+import { supabase } from "@/lib/supabaseClient";
 
 const LocationPicker = dynamic(
   () => import("@/app/components/LocationPicker"),
@@ -247,9 +249,11 @@ function FormCard({
 export default function RequestForm({
   token,
   initiallyValid,
+  internal = false,
 }: {
   token: string;
   initiallyValid: boolean;
+  internal?: boolean;
 }) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [pickupPoint, setPickupPoint] = useState<Point | null>(null);
@@ -262,6 +266,33 @@ export default function RequestForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [internalAccess, setInternalAccess] = useState<
+    "checking" | "allowed" | "denied"
+  >(internal ? "checking" : "allowed");
+
+  useEffect(() => {
+    if (!internal) return;
+
+    async function checkInternalAccess() {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        setInternalAccess("denied");
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, can_access_planned_tasks")
+        .eq("id", authData.user.id)
+        .single();
+      setInternalAccess(
+        profile?.role === "admin" || profile?.can_access_planned_tasks === true
+          ? "allowed"
+          : "denied",
+      );
+    }
+
+    void checkInternalAccess();
+  }, [internal]);
 
   const previews = useMemo(
     () => images.map((file) => ({ file, url: URL.createObjectURL(file) })),
@@ -371,12 +402,24 @@ export default function RequestForm({
       dropoff_lng: dropoffPoint.lng,
     };
     const body = new FormData();
-    body.set("token", token);
+    if (internal) {
+      body.set("mode", "internal");
+    } else {
+      body.set("token", token);
+    }
     body.set("payload", JSON.stringify(payload));
     images.forEach((file) => body.append("images", file));
 
+    const { data: sessionData } = internal
+      ? await supabase.auth.getSession()
+      : { data: { session: null } };
     const response = await fetch("/api/transport-requests", {
       method: "POST",
+      headers: internal
+        ? {
+            Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
+          }
+        : undefined,
       body,
     });
     const result = await response.json();
@@ -388,7 +431,26 @@ export default function RequestForm({
     setSubmitted(true);
   };
 
-  if (!initiallyValid) {
+  if (internalAccess === "checking") {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl bg-white p-8 text-center shadow">
+        <p className="text-slate-600">Pārbauda piekļuvi...</p>
+      </div>
+    );
+  }
+
+  if (internalAccess === "denied") {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl bg-white p-8 text-center shadow">
+        <h1 className="text-2xl font-bold">Nav pieejas</h1>
+        <p className="mt-3 text-slate-600">
+          Šo formu var izmantot lietotāji ar pieeju plānotajiem uzdevumiem.
+        </p>
+      </div>
+    );
+  }
+
+  if (!internal && !initiallyValid) {
     return (
       <div className="mx-auto max-w-lg rounded-2xl bg-white p-8 text-center shadow">
         <h1 className="text-2xl font-bold">Pieteikuma saite nav derīga</h1>
@@ -403,10 +465,22 @@ export default function RequestForm({
     return (
       <div className="mx-auto max-w-lg rounded-2xl bg-white p-8 text-center shadow">
         <CheckCircle2 className="mx-auto text-green-600" size={56} />
-        <h1 className="mt-4 text-2xl font-bold">Pieteikums nosūtīts!</h1>
+        <h1 className="mt-4 text-2xl font-bold">
+          {internal ? "Brauciens izveidots!" : "Pieteikums nosūtīts!"}
+        </h1>
         <p className="mt-3 text-slate-600">
-          Paldies! Pakalpojuma sniedzējs ir saņēmis jūsu informāciju.
+          {internal
+            ? "Jaunā brauciena kartīte ir pievienota plānotajiem uzdevumiem."
+            : "Paldies! Pakalpojuma sniedzējs ir saņēmis jūsu informāciju."}
         </p>
+        {internal && (
+          <Link
+            href="/planned-tasks"
+            className="mt-5 inline-flex rounded-xl bg-blue-800 px-5 py-3 font-semibold text-white"
+          >
+            Atgriezties pie plānotajiem uzdevumiem
+          </Link>
+        )}
       </div>
     );
   }
@@ -740,7 +814,11 @@ export default function RequestForm({
             className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-800 px-5 py-3 font-semibold text-white disabled:opacity-60 md:hidden"
           >
             <Send size={18} />
-            {submitting ? "Nosūta..." : "Nosūtīt pieprasījumu"}
+            {submitting
+              ? "Saglabā..."
+              : internal
+                ? "Izveidot braucienu"
+                : "Nosūtīt pieprasījumu"}
           </button>
         )}
         <button
@@ -750,7 +828,11 @@ export default function RequestForm({
           className="hidden flex-1 items-center justify-center gap-2 rounded-xl bg-blue-800 px-5 py-3 font-semibold text-white disabled:opacity-60 md:flex"
         >
           <Send size={18} />
-          {submitting ? "Nosūta..." : "Nosūtīt pieprasījumu"}
+          {submitting
+            ? "Saglabā..."
+            : internal
+              ? "Izveidot braucienu"
+              : "Nosūtīt pieprasījumu"}
         </button>
       </div>
     </div>
