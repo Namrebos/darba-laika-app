@@ -14,6 +14,7 @@ type DictionaryWord = {
 export default function ProfilePage() {
   const [userId, setUserId] = useState("");
   const [email, setEmail] = useState("");
+  const [originalEmail, setOriginalEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [image, setImage] = useState<File | null>(null);
@@ -21,19 +22,23 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [dictionaryOpen, setDictionaryOpen] = useState(false);
   const [dictionaryWords, setDictionaryWords] = useState<DictionaryWord[]>([]);
+  const [newPassword, setNewPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
 
   useEffect(() => {
     async function load() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) return;
       setUserId(authData.user.id);
+      const authEmail = authData.user.email || "";
+      setEmail(authEmail);
+      setOriginalEmail(authEmail);
       const { data } = await supabase
         .from("profiles")
-        .select("email, display_name, avatar_url")
+        .select("display_name, avatar_url")
         .eq("id", authData.user.id)
         .single();
       if (data) {
-        setEmail(data.email || "");
         setDisplayName(data.display_name || "");
         setAvatarUrl(data.avatar_url);
       }
@@ -95,7 +100,15 @@ export default function ProfilePage() {
   async function save(event: React.FormEvent) {
     event.preventDefault();
     const name = displayName.trim();
+    const nextEmail = email.trim().toLowerCase();
     if (!name) return setMessage("Ievadi vārdu vai lietotājvārdu.");
+    if (!nextEmail) return setMessage("Ievadi e-pasta adresi.");
+    if (newPassword && newPassword.length < 8) {
+      return setMessage("Jaunajai parolei jābūt vismaz 8 rakstzīmes garai.");
+    }
+    if (newPassword !== repeatPassword) {
+      return setMessage("Ievadītās paroles nesakrīt.");
+    }
     setSaving(true);
     setMessage("");
     let nextAvatarUrl = avatarUrl;
@@ -117,6 +130,18 @@ export default function ProfilePage() {
       nextAvatarUrl = supabase.storage.from("profile-images").getPublicUrl(path).data.publicUrl;
     }
 
+    const emailChanged = nextEmail !== originalEmail.toLowerCase();
+    if (emailChanged || newPassword) {
+      const { error: authError } = await supabase.auth.updateUser({
+        ...(emailChanged ? { email: nextEmail } : {}),
+        ...(newPassword ? { password: newPassword } : {}),
+      });
+      if (authError) {
+        setSaving(false);
+        return setMessage(`Piekļuves datus neizdevās mainīt: ${authError.message}`);
+      }
+    }
+
     const { error } = await supabase.rpc("update_own_profile", {
       new_display_name: name,
       new_avatar_url: nextAvatarUrl,
@@ -125,7 +150,15 @@ export default function ProfilePage() {
     if (error) return setMessage("Profila izmaiņas neizdevās saglabāt.");
     setAvatarUrl(nextAvatarUrl);
     setImage(null);
-    setMessage("Profils saglabāts.");
+    setNewPassword("");
+    setRepeatPassword("");
+    setMessage(
+      emailChanged
+        ? "Profils saglabāts. Apstiprini e-pasta maiņu saitē, kas nosūtīta uz e-pastu."
+        : newPassword
+          ? "Profils un jaunā parole saglabāti."
+          : "Profils saglabāts.",
+    );
   }
 
   return (
@@ -149,8 +182,41 @@ export default function ProfilePage() {
         </label>
         <label className="block space-y-1">
           <span className="text-sm font-medium">E-pasts</span>
-          <input disabled value={email} className="w-full rounded border border-zinc-300 bg-zinc-100 px-3 py-2 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900" />
+          <input
+            required
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+          />
         </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block space-y-1">
+            <span className="text-sm font-medium">Jaunā parole</span>
+            <input
+              type="password"
+              minLength={8}
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              placeholder="Atstāj tukšu, ja nemaini"
+              className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-sm font-medium">Atkārtot jauno paroli</span>
+            <input
+              type="password"
+              minLength={8}
+              autoComplete="new-password"
+              value={repeatPassword}
+              onChange={(event) => setRepeatPassword(event.target.value)}
+              placeholder="Atkārto jauno paroli"
+              className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+            />
+          </label>
+        </div>
         <div className="flex flex-wrap gap-3">
           <button disabled={saving} className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50">
             {saving ? "Saglabā..." : "Saglabāt"}
