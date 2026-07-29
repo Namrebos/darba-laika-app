@@ -76,7 +76,7 @@ export default function DictionaryModal({
   }
 
   const normalizeWord = (value: string) => {
-    return value.trim().replace(/^#+/, '')
+    return value.trim().replace(/^#+/, '').replace(/\s+/g, '_')
   }
 
   const handleAdd = async () => {
@@ -163,7 +163,7 @@ export default function DictionaryModal({
                   handleAdd()
                 }
               }}
-              placeholder="Pievienot jaunu vārdu"
+              placeholder="Vārds vai vārdu_salikumus"
               className="flex-1 rounded border p-2 bg-white text-black dark:bg-zinc-800 dark:text-white"
             />
           </div>

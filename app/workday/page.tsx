@@ -116,7 +116,7 @@ export default function WorkdayPage() {
   }, [tasks, savingTasks]);
 
   const normalizeDictionaryWord = (value: string) => {
-    return value.trim().replace(/^#+/, "");
+    return value.trim().replace(/^#+/, "").replace(/\s+/g, "_");
   };
 
   const loadSavedTasks = async (userId: string, activeSessionId: number) => {
@@ -312,21 +312,6 @@ export default function WorkdayPage() {
         });
       }
     }
-
-    await loadDictionary(userId);
-  };
-
-  const deleteDictionaryWords = async (
-    userId: string,
-    wordsToDelete: string[],
-  ) => {
-    if (wordsToDelete.length === 0) return;
-
-    await supabase
-      .from("tags")
-      .delete()
-      .eq("user_id", userId)
-      .in("name", wordsToDelete);
 
     await loadDictionary(userId);
   };
@@ -710,10 +695,6 @@ export default function WorkdayPage() {
               onSaveDictionaryWords={async (words) => {
                 if (!user) return;
                 await saveDictionaryWords(user.id, words);
-              }}
-              onDeleteDictionaryWords={async (words) => {
-                if (!user) return;
-                await deleteDictionaryWords(user.id, words);
               }}
               setSavingTasks={setSavingTasks}
               savingTasks={savingTasks}

@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
-  BookOpenText,
   Clipboard,
   ExternalLink,
   ImagePlus,
@@ -19,7 +18,6 @@ import {
   Send,
   X,
 } from "lucide-react";
-import DictionaryModal from "@/app/components/DictionaryModal";
 import TransportRequestModal from "@/app/components/TransportRequestModal";
 import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
 import { supabase } from "@/lib/supabaseClient";
@@ -93,7 +91,6 @@ export default function PlannedTasksPage() {
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [dictionaryWords, setDictionaryWords] = useState<DictionaryWord[]>([]);
-  const [dictionaryOpen, setDictionaryOpen] = useState(false);
   const [activeDictionaryField, setActiveDictionaryField] = useState<{
     taskId: number;
     field: DictionaryField;
@@ -253,20 +250,6 @@ export default function PlannedTasksPage() {
 
     if (error) {
       setMessage("Vārdu neizdevās saglabāt vārdnīcā.");
-      return;
-    }
-    await reloadDictionary();
-  }
-
-  async function deleteDictionaryWords(words: string[]) {
-    if (!userId || words.length === 0) return;
-    const { error } = await supabase
-      .from("tags")
-      .delete()
-      .eq("user_id", userId)
-      .in("name", words);
-    if (error) {
-      setMessage("Vārdus neizdevās izdzēst.");
       return;
     }
     await reloadDictionary();
@@ -654,14 +637,6 @@ export default function PlannedTasksPage() {
         >
           <Link2 size={18} />
           {creatingRequestLink ? "Veido..." : "Klienta saite"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setDictionaryOpen(true)}
-          className="flex shrink-0 items-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 font-medium text-white hover:bg-cyan-700"
-        >
-          <BookOpenText size={18} />
-          Vārdnīca
         </button>
         <button
           type="button"
@@ -1104,13 +1079,6 @@ export default function PlannedTasksPage() {
           </div>
         )}
       </section>
-      <DictionaryModal
-        open={dictionaryOpen}
-        onClose={() => setDictionaryOpen(false)}
-        words={dictionaryWords}
-        onAddWord={addDictionaryWord}
-        onDeleteWords={deleteDictionaryWords}
-      />
       <TransportRequestModal
         requestId={openedRequestId}
         onClose={() => setOpenedRequestId(null)}

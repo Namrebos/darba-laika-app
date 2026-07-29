@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BookOpenText } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import DictionaryModal from "@/app/components/DictionaryModal";
 import UserAvatar from "@/app/components/UserAvatar";
+
+type DictionaryWord = {
+  name: string;
+  usageCount: number;
+};
 
 export default function ProfilePage() {
   const [userId, setUserId] = useState("");
@@ -12,6 +19,8 @@ export default function ProfilePage() {
   const [image, setImage] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [dictionaryOpen, setDictionaryOpen] = useState(false);
+  const [dictionaryWords, setDictionaryWords] = useState<DictionaryWord[]>([]);
 
   useEffect(() => {
     async function load() {
@@ -28,9 +37,60 @@ export default function ProfilePage() {
         setDisplayName(data.display_name || "");
         setAvatarUrl(data.avatar_url);
       }
+      await loadDictionary(authData.user.id);
     }
     load();
   }, []);
+
+  async function loadDictionary(id: string) {
+    const { data } = await supabase
+      .from("tags")
+      .select("name, usage_count")
+      .eq("user_id", id)
+      .order("usage_count", { ascending: false });
+    setDictionaryWords(
+      (data || []).map((word) => ({
+        name: word.name,
+        usageCount: word.usage_count || 0,
+      })),
+    );
+  }
+
+  async function addDictionaryWord(word: string) {
+    const clean = word.trim().replace(/^#+/, "").replace(/\s+/g, "_");
+    if (!clean || !userId) return;
+    const existing = dictionaryWords.find(
+      (item) => item.name.toLowerCase() === clean.toLowerCase(),
+    );
+    const { error } = existing
+      ? await supabase
+          .from("tags")
+          .update({ usage_count: existing.usageCount + 1 })
+          .eq("user_id", userId)
+          .eq("name", existing.name)
+      : await supabase
+          .from("tags")
+          .insert({ user_id: userId, name: clean, usage_count: 1 });
+    if (error) {
+      setMessage("Vārdu neizdevās saglabāt vārdnīcā.");
+      return;
+    }
+    await loadDictionary(userId);
+  }
+
+  async function deleteDictionaryWords(words: string[]) {
+    if (!userId || words.length === 0) return;
+    const { error } = await supabase
+      .from("tags")
+      .delete()
+      .eq("user_id", userId)
+      .in("name", words);
+    if (error) {
+      setMessage("Vārdus neizdevās izdzēst.");
+      return;
+    }
+    await loadDictionary(userId);
+  }
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -91,10 +151,27 @@ export default function ProfilePage() {
           <span className="text-sm font-medium">E-pasts</span>
           <input disabled value={email} className="w-full rounded border border-zinc-300 bg-zinc-100 px-3 py-2 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900" />
         </label>
-        <button disabled={saving} className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50">
-          {saving ? "Saglabā..." : "Saglabāt"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button disabled={saving} className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50">
+            {saving ? "Saglabā..." : "Saglabāt"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDictionaryOpen(true)}
+            className="inline-flex items-center gap-2 rounded bg-cyan-600 px-4 py-2 font-medium text-white hover:bg-cyan-700"
+          >
+            <BookOpenText size={18} />
+            Vārdnīca
+          </button>
+        </div>
       </form>
+      <DictionaryModal
+        open={dictionaryOpen}
+        onClose={() => setDictionaryOpen(false)}
+        words={dictionaryWords}
+        onAddWord={addDictionaryWord}
+        onDeleteWords={deleteDictionaryWords}
+      />
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import imageCompression from "browser-image-compression";
 import {
-  BookOpenText,
   CirclePlay,
   Clock3,
   ExternalLink,
@@ -24,7 +23,6 @@ import {
 import ImageGalleryModal from "@/app/components/ImageGalleryModal";
 import TaskPreviewCard from "@/app/components/TaskPreviewCard";
 import TaskDetailsCard from "@/app/components/TaskDetailsCard";
-import DictionaryModal from "@/app/components/DictionaryModal";
 import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
 import TransportRequestModal from "@/app/components/TransportRequestModal";
 
@@ -70,7 +68,6 @@ type Props = {
   dictionaryWords: DictionaryWord[];
   onAddDictionaryWord: (word: string) => Promise<void>;
   onSaveDictionaryWords: (words: string[]) => Promise<void>;
-  onDeleteDictionaryWords: (words: string[]) => Promise<void>;
   setSavingTasks: (
     s: (prev: Record<string, boolean>) => Record<string, boolean>,
   ) => void;
@@ -156,7 +153,6 @@ export default function TaskCard({
   dictionaryWords,
   onAddDictionaryWord,
   onSaveDictionaryWords,
-  onDeleteDictionaryWords,
   setSavingTasks,
   savingTasks,
 }: Props) {
@@ -182,7 +178,6 @@ export default function TaskCard({
   const [activeTrackingTab, setActiveTrackingTab] =
     useState<TrackingTab>("timeline");
 
-  const [dictionaryOpen, setDictionaryOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
   const [activeField, setActiveField] = useState<ActiveField>(null);
   const [titleCursor, setTitleCursor] = useState(0);
@@ -1404,15 +1399,6 @@ export default function TaskCard({
 
           {!readonly && (
             <>
-              <button
-                type="button"
-                onClick={() => setDictionaryOpen(true)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700"
-                title="Atvērt vārdnīcu"
-              >
-                <BookOpenText size={18} />
-              </button>
-
               {task.transportRequestId && (
                 <button
                   type="button"
@@ -1579,13 +1565,6 @@ export default function TaskCard({
         </div>
       </div>
 
-      <DictionaryModal
-        open={dictionaryOpen}
-        onClose={() => setDictionaryOpen(false)}
-        words={dictionaryWords}
-        onAddWord={onAddDictionaryWord}
-        onDeleteWords={onDeleteDictionaryWords}
-      />
       <TransportRequestModal
         requestId={requestOpen ? task.transportRequestId || null : null}
         onClose={() => setRequestOpen(false)}
