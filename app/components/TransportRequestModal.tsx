@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
@@ -10,6 +11,10 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+
+const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), {
+  ssr: false,
+});
 
 type TransportRequest = {
   id: number;
@@ -46,17 +51,6 @@ type RequestImage = {
   fileName: string;
   url: string;
 };
-
-function partyName(
-  type: "private" | "company",
-  firstName: string | null,
-  lastName: string | null,
-  companyName: string | null,
-) {
-  return type === "company"
-    ? companyName || "Uzņēmums"
-    : [firstName, lastName].filter(Boolean).join(" ") || "Privātpersona";
-}
 
 function NavigationMenu({ lat, lng }: { lat: number; lng: number }) {
   const [open, setOpen] = useState(false);
@@ -106,7 +100,113 @@ function NavigationMenu({ lat, lng }: { lat: number; lng: number }) {
   );
 }
 
-function LocationBlock({
+function ReadonlyField({
+  label,
+  value,
+  multiline = false,
+}: {
+  label: string;
+  value: string | null;
+  multiline?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-semibold text-slate-800">
+        {label}
+      </span>
+      {multiline ? (
+        <textarea
+          readOnly
+          value={value || ""}
+          className="form-input min-h-24 resize-none bg-slate-50"
+        />
+      ) : (
+        <input
+          readOnly
+          value={value || ""}
+          className="form-input bg-slate-50"
+        />
+      )}
+    </label>
+  );
+}
+
+function PartySection({
+  title,
+  type,
+  firstName,
+  lastName,
+  companyName,
+  registrationNumber,
+  phone,
+}: {
+  title: string;
+  type: "private" | "company";
+  firstName: string | null;
+  lastName: string | null;
+  companyName: string | null;
+  registrationNumber: string | null;
+  phone: string;
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h3 className="mb-4 text-xl font-bold text-slate-900">{title}</h3>
+      <div className="space-y-4">
+        <div>
+          <span className="mb-2 block text-sm font-semibold text-slate-800">
+            Klienta veids
+          </span>
+          <div className="flex gap-5 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="radio" checked={type === "private"} readOnly />
+              Privātpersona
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" checked={type === "company"} readOnly />
+              Juridiska persona
+            </label>
+          </div>
+        </div>
+        {type === "company" ? (
+          <>
+            <ReadonlyField label="Uzņēmuma nosaukums" value={companyName} />
+            <ReadonlyField
+              label="Reģistrācijas/PVN numurs"
+              value={registrationNumber}
+            />
+          </>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ReadonlyField label="Vārds" value={firstName} />
+            <ReadonlyField label="Uzvārds" value={lastName} />
+          </div>
+        )}
+        <div>
+          <span className="mb-1 block text-sm font-semibold text-slate-800">
+            Tālrunis
+          </span>
+          <div className="flex gap-2">
+            <input
+              readOnly
+              value={phone}
+              className="form-input min-w-0 flex-1 bg-slate-50"
+            />
+            <a
+              href={`tel:${phone.replace(/\s/g, "")}`}
+              className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 font-semibold text-white"
+              aria-label={`Zvanīt ${phone}`}
+            >
+              <Phone size={18} />
+              Zvanīt
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LocationSection({
   title,
   address,
   lat,
@@ -114,6 +214,7 @@ function LocationBlock({
   date,
   time,
   notes,
+  markerColor,
 }: {
   title: string;
   address: string | null;
@@ -122,22 +223,34 @@ function LocationBlock({
   date: string;
   time: string | null;
   notes: string;
+  markerColor: "blue" | "red";
 }) {
   return (
-    <section className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-      <h3 className="flex items-center gap-2 font-bold">
-        <MapPin size={18} className="text-blue-600" />
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h3 className="mb-4 flex items-center gap-2 text-xl font-bold text-slate-900">
+        <MapPin size={20} className="text-blue-600" />
         {title}
       </h3>
-      <div className="text-sm">
-        <p>{address || "Adrese nav norādīta"}</p>
-        <p className="mt-1 text-zinc-500">
-          {date}
-          {time ? ` · ${time.slice(0, 5)}` : ""}
-        </p>
-        {notes && <p className="mt-2 whitespace-pre-wrap">{notes}</p>}
+      <div className="space-y-4">
+        <ReadonlyField label="Adrese" value={address} />
+        <div>
+          <span className="mb-1 block text-sm font-semibold text-slate-800">
+            Precīza vieta kartē
+          </span>
+          <LocationPicker
+            point={{ lat, lng }}
+            onChange={() => undefined}
+            markerColor={markerColor}
+            readOnly
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ReadonlyField label="Datums" value={date} />
+          <ReadonlyField label="Laiks" value={time?.slice(0, 5) || ""} />
+        </div>
+        <ReadonlyField label="Piezīmes" value={notes} multiline />
+        <NavigationMenu lat={lat} lng={lng} />
       </div>
-      <NavigationMenu lat={lat} lng={lng} />
     </section>
   );
 }
@@ -184,8 +297,8 @@ export default function TransportRequestModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3">
-      <div className="max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white text-zinc-950 shadow-2xl dark:bg-zinc-950 dark:text-white">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-200 bg-white px-5 py-4 dark:border-zinc-700 dark:bg-zinc-950">
+      <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-slate-50 text-slate-950 shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
           <h2 className="text-xl font-bold">Pārvadājuma pieteikums</h2>
           <button
             type="button"
@@ -204,57 +317,32 @@ export default function TransportRequestModal({
           {transportRequest && (
             <>
               <div className="grid gap-4 md:grid-cols-2">
-                <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-                  <h3 className="font-bold">Nosūtītājs</h3>
-                  <p className="mt-2">
-                    {partyName(
-                      transportRequest.sender_type,
-                      transportRequest.sender_first_name,
-                      transportRequest.sender_last_name,
-                      transportRequest.sender_company_name,
-                    )}
-                  </p>
-                  {transportRequest.sender_registration_number && (
-                    <p className="text-sm text-zinc-500">
-                      Reģ. Nr. {transportRequest.sender_registration_number}
-                    </p>
-                  )}
-                  <a
-                    href={`tel:${transportRequest.sender_phone.replace(/\s/g, "")}`}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white"
-                  >
-                    <Phone size={16} />
-                    {transportRequest.sender_phone}
-                  </a>
-                </section>
-
-                <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-                  <h3 className="font-bold">Saņēmējs</h3>
-                  <p className="mt-2">
-                    {partyName(
-                      transportRequest.recipient_type,
-                      transportRequest.recipient_first_name,
-                      transportRequest.recipient_last_name,
-                      transportRequest.recipient_company_name,
-                    )}
-                  </p>
-                  {transportRequest.recipient_registration_number && (
-                    <p className="text-sm text-zinc-500">
-                      Reģ. Nr. {transportRequest.recipient_registration_number}
-                    </p>
-                  )}
-                  <a
-                    href={`tel:${transportRequest.recipient_phone.replace(/\s/g, "")}`}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white"
-                  >
-                    <Phone size={16} />
-                    {transportRequest.recipient_phone}
-                  </a>
-                </section>
+                <PartySection
+                  title="Nosūtītājs"
+                  type={transportRequest.sender_type}
+                  firstName={transportRequest.sender_first_name}
+                  lastName={transportRequest.sender_last_name}
+                  companyName={transportRequest.sender_company_name}
+                  registrationNumber={
+                    transportRequest.sender_registration_number
+                  }
+                  phone={transportRequest.sender_phone}
+                />
+                <PartySection
+                  title="Saņēmējs"
+                  type={transportRequest.recipient_type}
+                  firstName={transportRequest.recipient_first_name}
+                  lastName={transportRequest.recipient_last_name}
+                  companyName={transportRequest.recipient_company_name}
+                  registrationNumber={
+                    transportRequest.recipient_registration_number
+                  }
+                  phone={transportRequest.recipient_phone}
+                />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <LocationBlock
+                <LocationSection
                   title="Uzkraušana"
                   address={transportRequest.pickup_address}
                   lat={transportRequest.pickup_lat}
@@ -262,8 +350,9 @@ export default function TransportRequestModal({
                   date={transportRequest.pickup_date}
                   time={transportRequest.pickup_time}
                   notes={transportRequest.pickup_notes}
+                  markerColor="blue"
                 />
-                <LocationBlock
+                <LocationSection
                   title="Izkraušana"
                   address={transportRequest.dropoff_address}
                   lat={transportRequest.dropoff_lat}
@@ -271,21 +360,27 @@ export default function TransportRequestModal({
                   date={transportRequest.dropoff_date}
                   time={transportRequest.dropoff_time}
                   notes={transportRequest.dropoff_notes}
+                  markerColor="red"
                 />
               </div>
 
-              <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-                <h3 className="font-bold">Krava</h3>
-                <p className="mt-2">{transportRequest.cargo_type}</p>
-                {transportRequest.additional_notes && (
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">
-                    {transportRequest.additional_notes}
-                  </p>
-                )}
+              <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-xl font-bold text-slate-900">
+                  Kravas informācija
+                </h3>
+                <ReadonlyField
+                  label="Kravas veids"
+                  value={transportRequest.cargo_type}
+                />
+                <ReadonlyField
+                  label="Papildu piezīmes"
+                  value={transportRequest.additional_notes}
+                  multiline
+                />
               </section>
 
               {images.length > 0 && (
-                <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <h3 className="mb-3 font-bold">Attēli</h3>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                     {images.map((image) => (

@@ -89,7 +89,13 @@ const cargoTypes = [
 
 function isValidLatvianPhone(value: string) {
   const compact = value.replace(/[\s()-]/g, "");
-  return /^\d{8}$/.test(compact) || /^\+371\d{8}$/.test(compact);
+  return /^\d{8}$/.test(compact) || /^\+[1-9]\d{7,14}$/.test(compact);
+}
+
+function limitPhoneInput(value: string) {
+  const compact = value.trimStart();
+  const digitLimit = compact.startsWith("+") ? 15 : 8;
+  return compact.replace(/\D/g, "").length <= digitLimit;
 }
 
 function FieldLabel({
@@ -208,18 +214,21 @@ function PartyFields({
           type="tel"
           inputMode="tel"
           value={phone}
-          onChange={(event) =>
-            update({ [field("phone")]: event.target.value })
-          }
+          onChange={(event) => {
+            if (limitPhoneInput(event.target.value)) {
+              update({ [field("phone")]: event.target.value });
+            }
+          }}
           className="form-input"
           placeholder="+371 20 123 456"
-          maxLength={16}
+          maxLength={24}
           aria-invalid={phoneInvalid}
           aria-describedby={phoneInvalid ? phoneErrorId : undefined}
         />
         {phoneInvalid && (
           <span id={phoneErrorId} className="mt-1 block text-sm text-red-600">
-            Ievadiet 8 ciparu Latvijas tālruņa numuru, piemēram, +371 20 123 456.
+            Ievadiet 8 ciparus vai starptautisku numuru ar valsts kodu,
+            piemēram, +371 20 123 456.
           </span>
         )}
       </label>
@@ -317,6 +326,14 @@ export default function RequestForm({
         );
   };
 
+  const dropoffNotBeforePickup = () => {
+    if (!form.pickup_date || !form.dropoff_date) return true;
+    if (form.dropoff_date > form.pickup_date) return true;
+    if (form.dropoff_date < form.pickup_date) return false;
+    if (!form.pickup_time || !form.dropoff_time) return true;
+    return form.dropoff_time >= form.pickup_time;
+  };
+
   const stepValid = (targetStep: number): boolean => {
     if (targetStep === 1) {
       return Boolean(
@@ -333,7 +350,8 @@ export default function RequestForm({
           isValidLatvianPhone(form.recipient_phone) &&
           form.dropoff_address.trim() &&
           dropoffPoint &&
-          form.dropoff_date,
+          form.dropoff_date &&
+          dropoffNotBeforePickup(),
       );
     }
     return Boolean(
@@ -356,11 +374,17 @@ export default function RequestForm({
   };
 
   const focusPickupMap = useCallback(
-    (point: Point) => setPickupFocus(point),
+    (point: Point) => {
+      setPickupFocus(point);
+      setPickupPoint(point);
+    },
     [],
   );
   const focusDropoffMap = useCallback(
-    (point: Point) => setDropoffFocus(point),
+    (point: Point) => {
+      setDropoffFocus(point);
+      setDropoffPoint(point);
+    },
     [],
   );
 
@@ -385,6 +409,10 @@ export default function RequestForm({
   };
 
   const submit = async () => {
+    if (!dropoffNotBeforePickup()) {
+      setError("Izkraušanas datums un laiks nevar būt agrāks par uzkraušanu.");
+      return;
+    }
     if (!pickupPoint || !dropoffPoint || !stepValid(3)) {
       setError("Aizpildi visus obligātos laukus.");
       return;
@@ -622,6 +650,7 @@ export default function RequestForm({
                   <FieldLabel required>Izkraušanas datums</FieldLabel>
                   <input
                     type="date"
+                    min={form.pickup_date || undefined}
                     value={form.dropoff_date}
                     onChange={(event) =>
                       update({ dropoff_date: event.target.value })
@@ -633,6 +662,11 @@ export default function RequestForm({
                   <FieldLabel>Laiks</FieldLabel>
                   <input
                     type="time"
+                    min={
+                      form.dropoff_date === form.pickup_date
+                        ? form.pickup_time || undefined
+                        : undefined
+                    }
                     value={form.dropoff_time}
                     onChange={(event) =>
                       update({ dropoff_time: event.target.value })

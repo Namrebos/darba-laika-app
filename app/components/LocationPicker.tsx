@@ -21,6 +21,7 @@ type Props = {
   onChange: (point: Point) => void;
   markerColor?: "blue" | "red";
   active?: boolean;
+  readOnly?: boolean;
 };
 
 const defaultCenter: [number, number] = [56.9496, 24.1052];
@@ -34,9 +35,13 @@ function markerIcon(color: "blue" | "red") {
   });
 }
 
-function MapEvents({ onChange }: Pick<Props, "onChange">) {
+function MapEvents({
+  onChange,
+  readOnly,
+}: Pick<Props, "onChange" | "readOnly">) {
   useMapEvents({
     click(event) {
+      if (readOnly) return;
       onChange({ lat: event.latlng.lat, lng: event.latlng.lng });
     },
   });
@@ -57,7 +62,7 @@ function MapUpdater({
   useEffect(() => {
     const timeout = window.setTimeout(() => map.invalidateSize(), 80);
     if (point) {
-      map.setView([point.lat, point.lng], Math.max(map.getZoom(), 16));
+      map.setView([point.lat, point.lng], Math.max(map.getZoom(), 18));
     } else if (focusPoint) {
       map.setView(
         [focusPoint.lat, focusPoint.lng],
@@ -76,6 +81,7 @@ export default function LocationPicker({
   onChange,
   markerColor = "blue",
   active = true,
+  readOnly = false,
 }: Props) {
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -102,7 +108,7 @@ export default function LocationPicker({
       <div className="h-64 overflow-hidden rounded-xl border border-slate-200">
         <MapContainer
           center={point ? [point.lat, point.lng] : defaultCenter}
-          zoom={point ? 14 : 7}
+          zoom={point ? 18 : 7}
           scrollWheelZoom
           className="h-full w-full"
         >
@@ -110,13 +116,13 @@ export default function LocationPicker({
             attribution="&copy; OpenStreetMap contributors"
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <MapEvents onChange={onChange} />
+          <MapEvents onChange={onChange} readOnly={readOnly} />
           <MapUpdater point={point} focusPoint={focusPoint} active={active} />
           {point && (
             <Marker
               position={[point.lat, point.lng]}
               icon={markerIcon(markerColor)}
-              draggable
+              draggable={!readOnly}
               eventHandlers={{
                 dragend(event) {
                   const next = event.target.getLatLng();
@@ -128,18 +134,22 @@ export default function LocationPicker({
         </MapContainer>
       </div>
 
-      <button
-        type="button"
-        onClick={useCurrentLocation}
-        className="w-full rounded-lg border border-blue-500 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
-      >
-        Mana atrašanās vieta
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={useCurrentLocation}
+          className="w-full rounded-lg border border-blue-500 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+        >
+          Mana atrašanās vieta
+        </button>
+      )}
 
       <p className="text-xs text-slate-500">
         {point
           ? `Punkts: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`
-          : "Pieskaries kartei, lai atzīmētu precīzu vietu."}
+          : readOnly
+            ? "Punkts nav norādīts."
+            : "Pieskaries kartei, lai atzīmētu precīzu vietu."}
       </p>
     </div>
   );

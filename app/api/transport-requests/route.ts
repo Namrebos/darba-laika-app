@@ -25,7 +25,17 @@ function validCoordinate(value: unknown, min: number, max: number) {
 
 function validLatvianPhone(value: unknown) {
   const compact = cleanText(value, 30).replace(/[\s()-]/g, "");
-  return /^\d{8}$/.test(compact) || /^\+371\d{8}$/.test(compact);
+  return /^\d{8}$/.test(compact) || /^\+[1-9]\d{7,14}$/.test(compact);
+}
+
+function validDropoffOrder(input: Record<string, unknown>) {
+  const pickupDate = cleanText(input.pickup_date, 10);
+  const dropoffDate = cleanText(input.dropoff_date, 10);
+  const pickupTime = cleanText(input.pickup_time, 5);
+  const dropoffTime = cleanText(input.dropoff_time, 5);
+  if (dropoffDate > pickupDate) return true;
+  if (dropoffDate < pickupDate) return false;
+  return !pickupTime || !dropoffTime || dropoffTime >= pickupTime;
 }
 
 function validatePayload(input: Record<string, unknown>) {
@@ -55,6 +65,7 @@ function validatePayload(input: Record<string, unknown>) {
       cleanText(input.pickup_date, 10) &&
       cleanText(input.dropoff_date, 10) &&
       cleanText(input.cargo_type, 100) &&
+      validDropoffOrder(input) &&
       validCoordinate(input.pickup_lat, -90, 90) &&
       validCoordinate(input.pickup_lng, -180, 180) &&
       validCoordinate(input.dropoff_lat, -90, 90) &&
