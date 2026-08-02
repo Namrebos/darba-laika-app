@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
-import { Menu, X, Sun, Moon, Laptop, Power } from "lucide-react";
+import {
+  Laptop,
+  Menu,
+  Moon,
+  Power,
+  Sun,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import "./globals.css";
 import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister";
 import {
@@ -39,6 +47,7 @@ export default function RootLayout({
   });
   const [summaryUsers, setSummaryUsers] = useState<SummaryUser[]>([]);
   const [selectedSummaryUser, setSelectedSummaryUser] = useState("");
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -156,6 +165,17 @@ export default function RootLayout({
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const handleUpdateStatus = (event: Event) => {
+      const detail = (event as CustomEvent<{ updateAvailable?: boolean }>).detail;
+      setUpdateAvailable(detail?.updateAvailable === true);
+    };
+
+    window.addEventListener("app-update-status", handleUpdateStatus);
+    return () =>
+      window.removeEventListener("app-update-status", handleUpdateStatus);
   }, []);
 
   const applyTheme = (mode: "light" | "dark") => {
@@ -342,8 +362,15 @@ export default function RootLayout({
               </div>
 
               <div className="space-y-2 border-t border-zinc-300 pt-4 dark:border-zinc-700">
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Versija: {APP_VERSION}
+                <p className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span>Versija: {APP_VERSION}</span>
+                  {updateAvailable && (
+                    <TriangleAlert
+                      size={15}
+                      className="fill-yellow-400 text-yellow-700"
+                      aria-label="Pieejama jaunāka lietotnes versija"
+                    />
+                  )}
                 </p>
                 <button
                   type="button"

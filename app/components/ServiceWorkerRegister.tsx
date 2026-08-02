@@ -25,6 +25,11 @@ export default function ServiceWorkerRegister() {
         data.version !== APP_VERSION;
 
       setUpdateAvailable(hasUpdate);
+      window.dispatchEvent(
+        new CustomEvent("app-update-status", {
+          detail: { updateAvailable: hasUpdate },
+        }),
+      );
       if (manual && !hasUpdate) {
         setMessage("Jums jau ir jaunākā lietotnes versija.");
       }
