@@ -25,6 +25,11 @@ const LocationPicker = dynamic(
 
 type PartyType = "private" | "company";
 type Point = { lat: number; lng: number };
+type CompanySuggestion = {
+  name: string;
+  registrationNumber: string;
+  address: string;
+};
 
 type FormState = {
   sender_type: PartyType;
@@ -32,12 +37,14 @@ type FormState = {
   sender_last_name: string;
   sender_company_name: string;
   sender_registration_number: string;
+  sender_phone_code: string;
   sender_phone: string;
   recipient_type: PartyType;
   recipient_first_name: string;
   recipient_last_name: string;
   recipient_company_name: string;
   recipient_registration_number: string;
+  recipient_phone_code: string;
   recipient_phone: string;
   pickup_address: string;
   pickup_date: string;
@@ -57,12 +64,14 @@ const initialForm: FormState = {
   sender_last_name: "",
   sender_company_name: "",
   sender_registration_number: "",
+  sender_phone_code: "+371",
   sender_phone: "",
   recipient_type: "private",
   recipient_first_name: "",
   recipient_last_name: "",
   recipient_company_name: "",
   recipient_registration_number: "",
+  recipient_phone_code: "+371",
   recipient_phone: "",
   pickup_address: "",
   pickup_date: "",
@@ -77,25 +86,41 @@ const initialForm: FormState = {
 };
 
 const cargoTypes = [
-  "Paletes",
-  "Mēbeles",
   "Būvmateriāli",
-  "Sadzīves tehnika",
   "Lauksaimniecības tehnika",
-  "Metāla konstrukcijas",
-  "Sūtījumi",
+  "Celtniecības tehnika",
+  "Automašīna",
   "Cits",
 ];
 
-function isValidLatvianPhone(value: string) {
-  const compact = value.replace(/[\s()-]/g, "");
-  return /^\d{8}$/.test(compact) || /^\+[1-9]\d{7,14}$/.test(compact);
+const countryCodes = [
+  ["+371", "Latvija"],
+  ["+370", "Lietuva"],
+  ["+372", "Igaunija"],
+  ["+358", "Somija"],
+  ["+46", "Zviedrija"],
+  ["+47", "Norvēģija"],
+  ["+45", "Dānija"],
+  ["+48", "Polija"],
+  ["+49", "Vācija"],
+  ["+44", "Apvienotā Karaliste"],
+  ["+353", "Īrija"],
+  ["+31", "Nīderlande"],
+  ["+32", "Beļģija"],
+  ["+33", "Francija"],
+  ["+34", "Spānija"],
+  ["+39", "Itālija"],
+] as const;
+
+function phoneDigits(value: string) {
+  return value.replace(/\D/g, "");
 }
 
-function limitPhoneInput(value: string) {
-  const compact = value.trimStart();
-  const digitLimit = compact.startsWith("+") ? 15 : 8;
-  return compact.replace(/\D/g, "").length <= digitLimit;
+function isValidPhone(code: string, value: string) {
+  const subscriber = phoneDigits(value);
+  if (code === "+371") return /^\d{8}$/.test(subscriber);
+  const fullNumber = `${code}${subscriber}`;
+  return /^\+[1-9]\d{7,14}$/.test(fullNumber);
 }
 
 function FieldLabel({
@@ -127,8 +152,53 @@ function PartyFields({
   const field = (name: string) =>
     `${prefix}_${name}` as keyof FormState;
   const phone = String(form[field("phone")]);
-  const phoneInvalid = phone.length > 0 && !isValidLatvianPhone(phone);
+  const phoneCode = String(form[field("phone_code")]);
+  const phoneInvalid = phone.length > 0 && !isValidPhone(phoneCode, phone);
   const phoneErrorId = `${prefix}-phone-error`;
+  const companyName = String(form[field("company_name")]);
+  const [companySuggestions, setCompanySuggestions] = useState<
+    CompanySuggestion[]
+  >([]);
+  const [companySearchLoading, setCompanySearchLoading] = useState(false);
+
+  useEffect(() => {
+    const query = companyName.trim();
+    if (partyType !== "company" || query.length < 2) {
+      setCompanySuggestions([]);
+      setCompanySearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setCompanySearchLoading(true);
+      try {
+        const response = await fetch(
+          `/api/companies?q=${encodeURIComponent(query)}`,
+          { signal: controller.signal },
+        );
+        if (!response.ok) {
+          setCompanySuggestions([]);
+          return;
+        }
+        const payload = (await response.json()) as {
+          companies?: CompanySuggestion[];
+        };
+        setCompanySuggestions(payload.companies || []);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setCompanySuggestions([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) setCompanySearchLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [companyName, partyType]);
 
   return (
     <div className="space-y-4">
@@ -168,7 +238,7 @@ function PartyFields({
             />
           </label>
           <label>
-            <FieldLabel required>Uzvārds</FieldLabel>
+            <FieldLabel>Uzvārds</FieldLabel>
             <input
               value={String(form[field("last_name")])}
               onChange={(event) =>
@@ -181,16 +251,61 @@ function PartyFields({
         </div>
       ) : (
         <div className="space-y-3">
-          <label>
+          <label className="relative block">
             <FieldLabel required>Uzņēmuma nosaukums</FieldLabel>
             <input
-              value={String(form[field("company_name")])}
+              value={companyName}
               onChange={(event) =>
-                update({ [field("company_name")]: event.target.value })
+                update({
+                  [field("company_name")]: event.target.value,
+                  [field("registration_number")]: "",
+                })
               }
               className="form-input"
               maxLength={120}
+              autoComplete="off"
+              aria-autocomplete="list"
             />
+            {companySearchLoading && (
+              <span className="mt-1 block text-xs text-slate-500">
+                Meklē uzņēmumu...
+              </span>
+            )}
+            {companySuggestions.length > 0 && (
+              <div
+                role="listbox"
+                className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+              >
+                {companySuggestions.map((company) => (
+                  <button
+                    key={`${company.registrationNumber}-${company.name}`}
+                    type="button"
+                    role="option"
+                    aria-selected="false"
+                    onClick={() => {
+                      update({
+                        [field("company_name")]: company.name,
+                        [field("registration_number")]:
+                          company.registrationNumber,
+                      });
+                      setCompanySuggestions([]);
+                    }}
+                    className="block w-full rounded-lg px-3 py-2 text-left hover:bg-blue-50"
+                  >
+                    <span className="block text-sm font-semibold text-slate-900">
+                      {company.name}
+                    </span>
+                    <span className="block text-xs text-slate-600">
+                      Reģ. Nr. {company.registrationNumber}
+                      {company.address ? ` · ${company.address}` : ""}
+                    </span>
+                  </button>
+                ))}
+                <p className="px-3 py-1 text-[11px] text-slate-500">
+                  Datu avots: Latvijas Republikas Uzņēmumu reģistra atvērtie dati
+                </p>
+              </div>
+            )}
           </label>
           <label>
             <FieldLabel>Reģistrācijas/PVN numurs</FieldLabel>
@@ -208,30 +323,47 @@ function PartyFields({
         </div>
       )}
 
-      <label>
+      <div>
         <FieldLabel required>Tālrunis</FieldLabel>
-        <input
-          type="tel"
-          inputMode="tel"
-          value={phone}
-          onChange={(event) => {
-            if (limitPhoneInput(event.target.value)) {
-              update({ [field("phone")]: event.target.value });
+        <div className="grid grid-cols-[minmax(8rem,auto)_1fr] gap-2">
+          <select
+            value={phoneCode}
+            onChange={(event) =>
+              update({ [field("phone_code")]: event.target.value })
             }
-          }}
-          className="form-input"
-          placeholder="+371 20 123 456"
-          maxLength={24}
-          aria-invalid={phoneInvalid}
-          aria-describedby={phoneInvalid ? phoneErrorId : undefined}
-        />
+            className="form-input"
+            aria-label="Valsts tālruņa kods"
+          >
+            {countryCodes.map(([code, country]) => (
+              <option key={code} value={code}>
+                {code} {country}
+              </option>
+            ))}
+          </select>
+          <input
+            type="tel"
+            inputMode="numeric"
+            value={phone}
+            onChange={(event) => {
+              const digits = phoneDigits(event.target.value);
+              const maxDigits = phoneCode === "+371" ? 8 : 15 - phoneDigits(phoneCode).length;
+              update({ [field("phone")]: digits.slice(0, maxDigits) });
+            }}
+            className="form-input"
+            placeholder="20 123 456"
+            maxLength={15}
+            aria-invalid={phoneInvalid}
+            aria-describedby={phoneInvalid ? phoneErrorId : undefined}
+          />
+        </div>
         {phoneInvalid && (
           <span id={phoneErrorId} className="mt-1 block text-sm text-red-600">
-            Ievadiet 8 ciparus vai starptautisku numuru ar valsts kodu,
-            piemēram, +371 20 123 456.
+            {phoneCode === "+371"
+              ? "Ievadiet tieši 8 tālruņa numura ciparus."
+              : "Ievadiet korektu tālruņa numuru."}
           </span>
         )}
-      </label>
+      </div>
     </div>
   );
 }
@@ -320,10 +452,7 @@ export default function RequestForm({
     const type = form[`${prefix}_type`];
     return type === "company"
       ? Boolean(form[`${prefix}_company_name`].trim())
-      : Boolean(
-          form[`${prefix}_first_name`].trim() &&
-            form[`${prefix}_last_name`].trim(),
-        );
+      : Boolean(form[`${prefix}_first_name`].trim());
   };
 
   const dropoffNotBeforePickup = () => {
@@ -338,7 +467,7 @@ export default function RequestForm({
     if (targetStep === 1) {
       return Boolean(
         identityComplete("sender") &&
-          isValidLatvianPhone(form.sender_phone) &&
+          isValidPhone(form.sender_phone_code, form.sender_phone) &&
           form.pickup_address.trim() &&
           pickupPoint &&
           form.pickup_date,
@@ -347,7 +476,7 @@ export default function RequestForm({
     if (targetStep === 2) {
       return Boolean(
         identityComplete("recipient") &&
-          isValidLatvianPhone(form.recipient_phone) &&
+          isValidPhone(form.recipient_phone_code, form.recipient_phone) &&
           form.dropoff_address.trim() &&
           dropoffPoint &&
           form.dropoff_date &&
@@ -422,6 +551,8 @@ export default function RequestForm({
     setError("");
     const payload = {
       ...form,
+      sender_phone: `${form.sender_phone_code}${phoneDigits(form.sender_phone)}`,
+      recipient_phone: `${form.recipient_phone_code}${phoneDigits(form.recipient_phone)}`,
       cargo_type:
         form.cargo_type === "Cits" ? customCargo.trim() : form.cargo_type,
       pickup_lat: pickupPoint.lat,
@@ -725,7 +856,7 @@ export default function RequestForm({
                   <option value="">Izvēlieties</option>
                   {cargoTypes.map((type) => (
                     <option key={type} value={type}>
-                      {type}
+                      {type === "Cits" ? "Cits..." : type}
                     </option>
                   ))}
                 </select>

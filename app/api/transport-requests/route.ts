@@ -23,9 +23,9 @@ function validCoordinate(value: unknown, min: number, max: number) {
   return Number.isFinite(number) && number >= min && number <= max;
 }
 
-function validLatvianPhone(value: unknown) {
+function validInternationalPhone(value: unknown) {
   const compact = cleanText(value, 30).replace(/[\s()-]/g, "");
-  return /^\d{8}$/.test(compact) || /^\+[1-9]\d{7,14}$/.test(compact);
+  return /^\+[1-9]\d{7,14}$/.test(compact);
 }
 
 function validDropoffOrder(input: Record<string, unknown>) {
@@ -47,19 +47,17 @@ function validatePayload(input: Record<string, unknown>) {
   const senderIdentity =
     senderType === "company"
       ? cleanText(input.sender_company_name, 120)
-      : cleanText(input.sender_first_name, 60) &&
-        cleanText(input.sender_last_name, 60);
+      : cleanText(input.sender_first_name, 60);
   const recipientIdentity =
     recipientType === "company"
       ? cleanText(input.recipient_company_name, 120)
-      : cleanText(input.recipient_first_name, 60) &&
-        cleanText(input.recipient_last_name, 60);
+      : cleanText(input.recipient_first_name, 60);
 
   return Boolean(
     senderIdentity &&
       recipientIdentity &&
-      validLatvianPhone(input.sender_phone) &&
-      validLatvianPhone(input.recipient_phone) &&
+      validInternationalPhone(input.sender_phone) &&
+      validInternationalPhone(input.recipient_phone) &&
       cleanText(input.pickup_address, 250) &&
       cleanText(input.dropoff_address, 250) &&
       cleanText(input.pickup_date, 10) &&
