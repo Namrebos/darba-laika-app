@@ -111,6 +111,7 @@ export default function SummaryPage() {
   const [searchableTasks, setSearchableTasks] = useState<TaskLogRow[]>([]);
   const [ownerId, setOwnerId] = useState("");
   const [showWorkTime, setShowWorkTime] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [eightHourWorkday, setEightHourWorkday] = useState(true);
 
   useEffect(() => {
@@ -123,6 +124,7 @@ export default function SummaryPage() {
           .eq("id", authData.user.id)
           .single();
         setShowWorkTime(profile?.role !== "viewer");
+        setIsAdmin(profile?.role === "admin");
       }
       const { data } = await supabase.rpc("get_accessible_summary_users");
       const users = (data || []) as { id: string; email: string | null }[];
@@ -466,6 +468,8 @@ export default function SummaryPage() {
             date={selectedDate}
             ownerId={ownerId}
             showWorkTime={showWorkTime}
+            isAdmin={isAdmin}
+            onWorkTimeChanged={() => loadData(ownerId)}
             onClose={() => setSelectedDate(null)}
           />
         )}

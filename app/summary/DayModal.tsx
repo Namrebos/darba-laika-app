@@ -13,12 +13,25 @@ type DayModalProps = {
   date: string;
   ownerId: string;
   showWorkTime: boolean;
+  isAdmin: boolean;
+  onWorkTimeChanged: () => void | Promise<void>;
   onClose: () => void;
 };
 
 type WorkLog = {
+  id: number;
   start_time: string;
-  end_time: string;
+  end_time: string | null;
+};
+
+type WorkLogCorrection = {
+  id: number;
+  action: "created" | "updated";
+  previous_start_time: string | null;
+  previous_end_time: string | null;
+  new_start_time: string;
+  new_end_time: string;
+  created_at: string;
 };
 
 type Task = {
@@ -100,10 +113,20 @@ function buildTimeRangeText(start: string, end: string | null) {
   return `${format(startDate, "HH:mm")}-${format(endDate, "HH:mm")} (${durationText})`;
 }
 
+function toDateTimeLocalValue(value: string | Date) {
+  const dateValue = value instanceof Date ? value : new Date(value);
+  const pad = (number: number) => String(number).padStart(2, "0");
+  return `${dateValue.getFullYear()}-${pad(dateValue.getMonth() + 1)}-${pad(
+    dateValue.getDate(),
+  )}T${pad(dateValue.getHours())}:${pad(dateValue.getMinutes())}`;
+}
+
 export default function DayModal({
   date,
   ownerId,
   showWorkTime,
+  isAdmin,
+  onWorkTimeChanged,
   onClose,
 }: DayModalProps) {
   const [workLog, setWorkLog] = useState<WorkLog | null>(null);
@@ -129,6 +152,12 @@ export default function DayModal({
     baseHours: 0,
     overtimeHours: 0,
   });
+  const [editingWorkTime, setEditingWorkTime] = useState(false);
+  const [workStart, setWorkStart] = useState("");
+  const [workEnd, setWorkEnd] = useState("");
+  const [savingWorkTime, setSavingWorkTime] = useState(false);
+  const [workTimeError, setWorkTimeError] = useState("");
+  const [corrections, setCorrections] = useState<WorkLogCorrection[]>([]);
 
   useEffect(() => {
     loadData();
@@ -148,7 +177,7 @@ export default function DayModal({
 
     const { data: workLogs, error: workError } = await supabase
       .from("work_logs")
-      .select("*")
+      .select("id, start_time, end_time")
       .eq("user_id", ownerId)
       .gte("start_time", from)
       .lte("start_time", to)
@@ -191,6 +220,17 @@ export default function DayModal({
     const taskRows = (taskLogs || []) as Task[];
 
     setWorkLog(work);
+    if (work) {
+      setWorkStart(toDateTimeLocalValue(work.start_time));
+      setWorkEnd(
+        work.end_time
+          ? toDateTimeLocalValue(work.end_time)
+          : toDateTimeLocalValue(new Date()),
+      );
+    } else {
+      setWorkStart(`${date}T08:00`);
+      setWorkEnd(`${date}T17:00`);
+    }
     setTasks(taskRows);
     setPlannedTasks((plannedRows || []) as PlannedTask[]);
 
@@ -285,12 +325,94 @@ export default function DayModal({
       setTimelineByTask({});
     }
 
-    const { baseHours, overtimeHours } = work
+    const { baseHours, overtimeHours } = work?.end_time
       ? calculateWorkHours(new Date(work.start_time), new Date(work.end_time))
       : { baseHours: 0, overtimeHours: 0 };
 
     setHours({ baseHours, overtimeHours });
+    if (isAdmin) await loadCorrections();
     setLoading(false);
+  }
+
+  async function loadCorrections() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return;
+
+    const response = await fetch(
+      `/api/admin/work-time?ownerId=${encodeURIComponent(ownerId)}&date=${encodeURIComponent(date)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) return;
+    const payload = (await response.json()) as {
+      corrections?: WorkLogCorrection[];
+    };
+    setCorrections(payload.corrections || []);
+  }
+
+  async function saveWorkTime(confirmTaskConflict = false) {
+    setWorkTimeError("");
+    if (!workStart || !workEnd) {
+      setWorkTimeError("Aizpildi sākuma un beigu laiku.");
+      return;
+    }
+
+    const start = new Date(workStart);
+    const end = new Date(workEnd);
+    if (end <= start) {
+      setWorkTimeError("Beigu laikam jābūt pēc sākuma laika.");
+      return;
+    }
+
+    setSavingWorkTime(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setWorkTimeError("Nederīga sesija.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/work-time", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ownerId,
+          date,
+          workLogId: workLog?.id || null,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          confirmTaskConflict,
+        }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        requiresConfirmation?: boolean;
+      };
+
+      if (!response.ok) {
+        if (
+          payload.requiresConfirmation &&
+          window.confirm(
+            `${payload.error || "Daļa uzdevumu neiekļaujas darba laikā."}\n\nVai tomēr saglabāt darba laiku?`,
+          )
+        ) {
+          await saveWorkTime(true);
+          return;
+        }
+        setWorkTimeError(payload.error || "Darba laiku neizdevās saglabāt.");
+        return;
+      }
+
+      setEditingWorkTime(false);
+      await loadData();
+      await onWorkTimeChanged();
+    } finally {
+      setSavingWorkTime(false);
+    }
   }
 
   const closeImageModal = () => {
@@ -392,10 +514,11 @@ export default function DayModal({
                       <p>
                         <span className="font-medium">Darba laiks:</span>{" "}
                         {workLog
-                          ? `${format(new Date(workLog.start_time), "HH:mm")} – ${format(
-                              new Date(workLog.end_time),
-                              "HH:mm",
-                            )}`
+                          ? `${format(new Date(workLog.start_time), "HH:mm")} – ${
+                              workLog.end_time
+                                ? format(new Date(workLog.end_time), "HH:mm")
+                                : "Nav noslēgta"
+                            }`
                           : "Nav datu"}
                       </p>
 
@@ -406,7 +529,97 @@ export default function DayModal({
                         <span className="font-medium">Virsstundas:</span>{" "}
                         {formatHours(hours.overtimeHours)}
                       </p>
+
+                      {isAdmin && !editingWorkTime && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorkTimeError("");
+                            setEditingWorkTime(true);
+                          }}
+                          className="mt-2 rounded-lg bg-blue-600 px-3 py-2 font-medium text-white hover:bg-blue-700"
+                        >
+                          {workLog ? "Labot laikus" : "Izveidot darba dienu"}
+                        </button>
+                      )}
                     </div>
+
+                    {isAdmin && editingWorkTime && (
+                      <div className="mt-4 space-y-3 border-t border-zinc-300 pt-4 dark:border-zinc-700">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="space-y-1 text-sm font-medium">
+                            <span>Sākuma datums un laiks</span>
+                            <input
+                              type="datetime-local"
+                              value={workStart}
+                              onChange={(event) => setWorkStart(event.target.value)}
+                              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-white"
+                            />
+                          </label>
+                          <label className="space-y-1 text-sm font-medium">
+                            <span>Beigu datums un laiks</span>
+                            <input
+                              type="datetime-local"
+                              value={workEnd}
+                              onChange={(event) => setWorkEnd(event.target.value)}
+                              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-white"
+                            />
+                          </label>
+                        </div>
+                        {workTimeError && (
+                          <p className="text-sm font-medium text-red-600 dark:text-red-400">
+                            {workTimeError}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={savingWorkTime}
+                            onClick={() => saveWorkTime()}
+                            className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
+                          >
+                            {savingWorkTime ? "Saglabā..." : "Saglabāt"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={savingWorkTime}
+                            onClick={() => setEditingWorkTime(false)}
+                            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600"
+                          >
+                            Atcelt
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {isAdmin && corrections.length > 0 && (
+                      <details className="mt-4 border-t border-zinc-300 pt-3 text-sm dark:border-zinc-700">
+                        <summary className="cursor-pointer font-medium">
+                          Labojumu vēsture ({corrections.length})
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          {corrections.map((correction) => (
+                            <div
+                              key={correction.id}
+                              className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950"
+                            >
+                              <p className="font-medium">
+                                {correction.action === "created"
+                                  ? "Darba diena izveidota"
+                                  : "Darba laiks labots"}
+                              </p>
+                              <p className="text-zinc-600 dark:text-zinc-300">
+                                {format(new Date(correction.new_start_time), "yyyy-MM-dd HH:mm")} –{" "}
+                                {format(new Date(correction.new_end_time), "yyyy-MM-dd HH:mm")}
+                              </p>
+                              <p className="text-xs text-zinc-500">
+                                {format(new Date(correction.created_at), "yyyy-MM-dd HH:mm")}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
                   </div>
                 )}
 
