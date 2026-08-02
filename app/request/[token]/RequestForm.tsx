@@ -160,10 +160,11 @@ function PartyFields({
     CompanySuggestion[]
   >([]);
   const [companySearchLoading, setCompanySearchLoading] = useState(false);
+  const [companySearchFocused, setCompanySearchFocused] = useState(false);
 
   useEffect(() => {
     const query = companyName.trim();
-    if (partyType !== "company" || query.length < 2) {
+    if (!companySearchFocused || partyType !== "company" || query.length < 2) {
       setCompanySuggestions([]);
       setCompanySearchLoading(false);
       return;
@@ -198,7 +199,7 @@ function PartyFields({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [companyName, partyType]);
+  }, [companyName, companySearchFocused, partyType]);
 
   return (
     <div className="space-y-4">
@@ -251,10 +252,22 @@ function PartyFields({
         </div>
       ) : (
         <div className="space-y-3">
-          <label className="relative block">
-            <FieldLabel required>Uzņēmuma nosaukums</FieldLabel>
+          <div
+            className="relative"
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setCompanySearchFocused(false);
+                setCompanySuggestions([]);
+              }
+            }}
+          >
+            <label htmlFor={`${prefix}-company-name`}>
+              <FieldLabel required>Uzņēmuma nosaukums</FieldLabel>
+            </label>
             <input
+              id={`${prefix}-company-name`}
               value={companyName}
+              onFocus={() => setCompanySearchFocused(true)}
               onChange={(event) =>
                 update({
                   [field("company_name")]: event.target.value,
@@ -306,7 +319,7 @@ function PartyFields({
                 </p>
               </div>
             )}
-          </label>
+          </div>
           <label>
             <FieldLabel>Reģistrācijas/PVN numurs</FieldLabel>
             <input
