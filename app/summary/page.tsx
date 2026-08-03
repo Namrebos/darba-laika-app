@@ -113,6 +113,8 @@ export default function SummaryPage() {
   const [showWorkTime, setShowWorkTime] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [eightHourWorkday, setEightHourWorkday] = useState(true);
+  const [regularWorkStart, setRegularWorkStart] = useState("09:00");
+  const [regularWorkEnd, setRegularWorkEnd] = useState("18:00");
 
   useEffect(() => {
     async function resolveOwner() {
@@ -141,12 +143,22 @@ export default function SummaryPage() {
       if (selected && storageKey) localStorage.setItem(storageKey, selected);
       setOwnerId(selected);
       if (selected) {
-        const { data: financeSettings } = await supabase
-          .from("user_finance_settings")
-          .select("eight_hour_workday")
-          .eq("user_id", selected)
-          .maybeSingle();
+        const [{ data: financeSettings }, { data: workSchedule }] =
+          await Promise.all([
+            supabase
+              .from("user_finance_settings")
+              .select("eight_hour_workday")
+              .eq("user_id", selected)
+              .maybeSingle(),
+            supabase
+              .from("user_work_schedule_settings")
+              .select("regular_start, regular_end")
+              .eq("user_id", selected)
+              .maybeSingle(),
+          ]);
         setEightHourWorkday(financeSettings?.eight_hour_workday ?? true);
+        setRegularWorkStart(workSchedule?.regular_start?.slice(0, 5) || "09:00");
+        setRegularWorkEnd(workSchedule?.regular_end?.slice(0, 5) || "18:00");
       }
       if (selected) await loadAvailableMonths(selected);
       else setLoading(false);
@@ -309,7 +321,12 @@ export default function SummaryPage() {
       const end = new Date(log.end_time);
       const date = format(start, "yyyy-MM-dd");
 
-      const { baseHours, overtimeHours } = calculateWorkHours(start, end);
+      const { baseHours, overtimeHours } = calculateWorkHours(
+        start,
+        end,
+        regularWorkStart,
+        regularWorkEnd,
+      );
       const entry = ensureDayEntry(dataMap, date);
 
       entry.baseHours += baseHours;
@@ -469,6 +486,8 @@ export default function SummaryPage() {
             ownerId={ownerId}
             showWorkTime={showWorkTime}
             isAdmin={isAdmin}
+            regularWorkStart={regularWorkStart}
+            regularWorkEnd={regularWorkEnd}
             onWorkTimeChanged={() => loadData(ownerId)}
             onClose={() => setSelectedDate(null)}
           />

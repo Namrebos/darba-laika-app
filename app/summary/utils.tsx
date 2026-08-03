@@ -5,23 +5,43 @@ export function roundToQuarterHour(minutes: number): number {
 export function calculateWorkHours(
   start: Date,
   end: Date,
+  regularStart = "09:00",
+  regularEnd = "18:00",
 ): { baseHours: number; overtimeHours: number } {
-  const BASE_START = 9;
-  const BASE_END = 18;
+  const timeToMinutes = (value: string, fallback: number) => {
+    const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
+    if (
+      !Number.isInteger(hours) ||
+      !Number.isInteger(minutes) ||
+      hours < 0 ||
+      hours > 23 ||
+      minutes < 0 ||
+      minutes > 59
+    ) {
+      return fallback;
+    }
+    return hours * 60 + minutes;
+  };
+  const baseStartMinutes = timeToMinutes(regularStart, 9 * 60);
+  const baseEndMinutes = timeToMinutes(regularEnd, 18 * 60);
 
   let baseMinutes = 0;
   let overtimeMinutes = 0;
   const cur = new Date(start);
 
   while (cur < end) {
-    const hour = cur.getHours();
+    const minuteOfDay = cur.getHours() * 60 + cur.getMinutes();
     const day = cur.getDay();
     const isWeekend = day === 0 || day === 6;
     const next = new Date(cur.getTime() + 15 * 60 * 1000);
 
     if (next > end) break;
 
-    if (!isWeekend && hour >= BASE_START && hour < BASE_END) {
+    if (
+      !isWeekend &&
+      minuteOfDay >= baseStartMinutes &&
+      minuteOfDay < baseEndMinutes
+    ) {
       baseMinutes += 15;
     } else {
       overtimeMinutes += 15;

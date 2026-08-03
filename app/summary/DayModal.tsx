@@ -14,6 +14,8 @@ type DayModalProps = {
   ownerId: string;
   showWorkTime: boolean;
   isAdmin: boolean;
+  regularWorkStart: string;
+  regularWorkEnd: string;
   onWorkTimeChanged: () => void | Promise<void>;
   onClose: () => void;
 };
@@ -126,6 +128,8 @@ export default function DayModal({
   ownerId,
   showWorkTime,
   isAdmin,
+  regularWorkStart,
+  regularWorkEnd,
   onWorkTimeChanged,
   onClose,
 }: DayModalProps) {
@@ -326,7 +330,12 @@ export default function DayModal({
     }
 
     const { baseHours, overtimeHours } = work?.end_time
-      ? calculateWorkHours(new Date(work.start_time), new Date(work.end_time))
+      ? calculateWorkHours(
+          new Date(work.start_time),
+          new Date(work.end_time),
+          regularWorkStart,
+          regularWorkEnd,
+        )
       : { baseHours: 0, overtimeHours: 0 };
 
     setHours({ baseHours, overtimeHours });

@@ -26,6 +26,8 @@ export default function ProfilePage() {
   const [repeatPassword, setRepeatPassword] = useState("");
   const [editingEmail, setEditingEmail] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [regularWorkStart, setRegularWorkStart] = useState("09:00");
+  const [regularWorkEnd, setRegularWorkEnd] = useState("18:00");
 
   useEffect(() => {
     async function load() {
@@ -43,6 +45,15 @@ export default function ProfilePage() {
       if (data) {
         setDisplayName(data.display_name || "");
         setAvatarUrl(data.avatar_url);
+      }
+      const { data: workSchedule } = await supabase
+        .from("user_work_schedule_settings")
+        .select("regular_start, regular_end")
+        .eq("user_id", authData.user.id)
+        .maybeSingle();
+      if (workSchedule) {
+        setRegularWorkStart(workSchedule.regular_start.slice(0, 5));
+        setRegularWorkEnd(workSchedule.regular_end.slice(0, 5));
       }
       await loadDictionary(authData.user.id);
     }
@@ -105,6 +116,12 @@ export default function ProfilePage() {
     const nextEmail = email.trim().toLowerCase();
     if (!name) return setMessage("Ievadi vārdu vai lietotājvārdu.");
     if (!nextEmail) return setMessage("Ievadi e-pasta adresi.");
+    if (!regularWorkStart || !regularWorkEnd) {
+      return setMessage("Norādi parastās darba dienas sākumu un beigas.");
+    }
+    if (regularWorkEnd <= regularWorkStart) {
+      return setMessage("Darba dienas beigām jābūt pēc sākuma laika.");
+    }
     if (newPassword && newPassword.length < 8) {
       return setMessage("Jaunajai parolei jābūt vismaz 8 rakstzīmes garai.");
     }
@@ -148,8 +165,22 @@ export default function ProfilePage() {
       new_display_name: name,
       new_avatar_url: nextAvatarUrl,
     });
+    if (error) {
+      setSaving(false);
+      return setMessage("Profila izmaiņas neizdevās saglabāt.");
+    }
+    const { error: scheduleError } = await supabase
+      .from("user_work_schedule_settings")
+      .upsert({
+        user_id: userId,
+        regular_start: regularWorkStart,
+        regular_end: regularWorkEnd,
+        updated_at: new Date().toISOString(),
+      });
     setSaving(false);
-    if (error) return setMessage("Profila izmaiņas neizdevās saglabāt.");
+    if (scheduleError) {
+      return setMessage("Darba laika robežas neizdevās saglabāt.");
+    }
     setAvatarUrl(nextAvatarUrl);
     setImage(null);
     setNewPassword("");
@@ -187,6 +218,38 @@ export default function ProfilePage() {
           <span className="text-sm font-medium">Vārds vai lietotājvārds</span>
           <input required maxLength={50} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800" />
         </label>
+        <div className="space-y-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+          <div>
+            <h2 className="font-semibold">Parastais darba laiks</h2>
+            <p className="text-sm text-zinc-500">
+              Darbs ārpus šīm robežām tiek skaitīts kā virsstundas. Sestdienās un svētdienās viss darba laiks ir virsstundas.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1">
+              <span className="text-sm font-medium">Darba dienas sākums</span>
+              <input
+                required
+                type="time"
+                step={900}
+                value={regularWorkStart}
+                onChange={(event) => setRegularWorkStart(event.target.value)}
+                className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-sm font-medium">Darba dienas beigas</span>
+              <input
+                required
+                type="time"
+                step={900}
+                value={regularWorkEnd}
+                onChange={(event) => setRegularWorkEnd(event.target.value)}
+                className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+              />
+            </label>
+          </div>
+        </div>
         <div className="space-y-2">
           <span className="text-sm font-medium">E-pasts</span>
           <div className="flex flex-col gap-2 sm:flex-row">

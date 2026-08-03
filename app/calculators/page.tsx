@@ -142,12 +142,19 @@ export default function CalculatorsPage() {
 
     async function loadHours() {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("work_logs")
-        .select("start_time, end_time")
-        .eq("user_id", selectedUserId)
-        .gte("start_time", new Date(2026, 0, 1).toISOString())
-        .lt("start_time", new Date(2027, 0, 1).toISOString());
+      const [{ data, error }, { data: workSchedule }] = await Promise.all([
+        supabase
+          .from("work_logs")
+          .select("start_time, end_time")
+          .eq("user_id", selectedUserId)
+          .gte("start_time", new Date(2026, 0, 1).toISOString())
+          .lt("start_time", new Date(2027, 0, 1).toISOString()),
+        supabase
+          .from("user_work_schedule_settings")
+          .select("regular_start, regular_end")
+          .eq("user_id", selectedUserId)
+          .maybeSingle(),
+      ]);
 
       if (error) {
         setHoursByMonth(
@@ -165,6 +172,8 @@ export default function CalculatorsPage() {
           { dayOfWeek: number; hours: number }
         >(),
       }));
+      const regularStart = workSchedule?.regular_start?.slice(0, 5) || "09:00";
+      const regularEnd = workSchedule?.regular_end?.slice(0, 5) || "18:00";
       ((data || []) as WorkLog[]).forEach((log) => {
         const start = new Date(log.start_time);
         if (Number.isNaN(start.getTime())) return;
@@ -179,7 +188,12 @@ export default function CalculatorsPage() {
         if (!log.end_time) return;
         const end = new Date(log.end_time);
         if (Number.isNaN(end.getTime())) return;
-        const calculated = calculateWorkHours(start, end);
+        const calculated = calculateWorkHours(
+          start,
+          end,
+          regularStart,
+          regularEnd,
+        );
         totals[month].regular += calculated.baseHours;
         totals[month].overtime += calculated.overtimeHours;
         workedDay.hours += calculated.baseHours + calculated.overtimeHours;
