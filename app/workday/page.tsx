@@ -174,7 +174,7 @@ export default function WorkdayPage() {
           : "starting";
 
       return {
-        id: makeLocalId(),
+        id: `task-log-${log.id}`,
         title: log.title ?? "",
         notes: log.note ?? "",
         tags: [],
@@ -625,6 +625,7 @@ export default function WorkdayPage() {
 
     deletingTaskIds.current.add(id);
     setSavingTasks((current) => ({ ...current, [id]: true }));
+    setTasks((current) => current.filter((task) => task.id !== id));
 
     try {
       if (taskToDelete.supabaseTaskId) {
@@ -633,11 +634,20 @@ export default function WorkdayPage() {
         });
         if (error || data !== true) {
           alert("Uzdevumu neizdevās pārvietot uz Miskasti.");
+          setTasks((current) => {
+            if (current.some((task) => task.id === taskToDelete.id)) {
+              return current;
+            }
+            return [...current, taskToDelete].sort((a, b) => {
+              const aTime = a.startTime?.getTime() ?? Number.MAX_SAFE_INTEGER;
+              const bTime = b.startTime?.getTime() ?? Number.MAX_SAFE_INTEGER;
+              return aTime - bTime;
+            });
+          });
           return;
         }
       }
 
-      setTasks((prev) => prev.filter((task) => task.id !== id));
       if (user) await loadDeletedTasks(user.id);
     } finally {
       deletingTaskIds.current.delete(id);
