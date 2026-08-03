@@ -170,7 +170,8 @@ export async function POST(request: NextRequest) {
   const taskQuery = admin.client
     .from("task_logs")
     .select("id, start_time, end_time")
-    .eq("user_id", ownerId);
+    .eq("user_id", ownerId)
+    .is("deleted_at", null);
   const { data: taskRows, error: taskError } = previous
     ? await taskQuery.eq("session_id", previous.id)
     : await taskQuery

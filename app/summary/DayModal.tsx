@@ -191,6 +191,7 @@ export default function DayModal({
       .from("task_logs")
       .select("*")
       .eq("user_id", ownerId)
+      .is("deleted_at", null)
       .gte("start_time", from)
       .lte("start_time", to)
       .order("start_time", { ascending: true });

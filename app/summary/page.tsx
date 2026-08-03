@@ -186,6 +186,7 @@ export default function SummaryPage() {
         .from("task_logs")
         .select("id, title, note, start_time, end_time, session_id")
         .eq("user_id", selectedOwnerId)
+        .is("deleted_at", null)
         .order("start_time", { ascending: false }),
       supabase
         .from("planned_tasks")
@@ -288,6 +289,7 @@ export default function SummaryPage() {
       .from("task_logs")
       .select("start_time, end_time, session_id")
       .eq("user_id", selectedOwnerId)
+      .is("deleted_at", null)
       .gte("start_time", from.toISOString())
       .lt("start_time", nextMonthStart.toISOString());
 
