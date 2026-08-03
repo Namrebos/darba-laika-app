@@ -225,27 +225,30 @@ export default function ProfilePage() {
               Darbs ārpus šīm robežām tiek skaitīts kā virsstundas. Sestdienās un svētdienās viss darba laiks ir virsstundas.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block space-y-1">
-              <span className="text-sm font-medium">Darba dienas sākums</span>
+          <div className="flex flex-nowrap items-center gap-2">
+            <label className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 text-sm font-medium">No</span>
               <input
                 required
                 type="time"
                 step={900}
                 value={regularWorkStart}
                 onChange={(event) => setRegularWorkStart(event.target.value)}
-                className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                aria-label="Darba dienas sākums"
+                className="w-[6.5rem] min-w-0 rounded border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-600 dark:bg-zinc-800"
               />
             </label>
-            <label className="block space-y-1">
-              <span className="text-sm font-medium">Darba dienas beigas</span>
+            <span aria-hidden="true" className="text-zinc-400">–</span>
+            <label className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 text-sm font-medium">līdz</span>
               <input
                 required
                 type="time"
                 step={900}
                 value={regularWorkEnd}
                 onChange={(event) => setRegularWorkEnd(event.target.value)}
-                className="w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                aria-label="Darba dienas beigas"
+                className="w-[6.5rem] min-w-0 rounded border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-600 dark:bg-zinc-800"
               />
             </label>
           </div>
