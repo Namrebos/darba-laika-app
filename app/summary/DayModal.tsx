@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { calculateWorkHours } from "./utils";
@@ -16,6 +16,7 @@ type DayModalProps = {
   isAdmin: boolean;
   regularWorkStart: string;
   regularWorkEnd: string;
+  initialTaskId?: number | null;
   onWorkTimeChanged: () => void | Promise<void>;
   onClose: () => void;
 };
@@ -130,6 +131,7 @@ export default function DayModal({
   isAdmin,
   regularWorkStart,
   regularWorkEnd,
+  initialTaskId = null,
   onWorkTimeChanged,
   onClose,
 }: DayModalProps) {
@@ -162,10 +164,16 @@ export default function DayModal({
   const [savingWorkTime, setSavingWorkTime] = useState(false);
   const [workTimeError, setWorkTimeError] = useState("");
   const [corrections, setCorrections] = useState<WorkLogCorrection[]>([]);
+  const openedInitialTaskId = useRef<number | null>(null);
 
   useEffect(() => {
     loadData();
   }, [date, ownerId]);
+
+  useEffect(() => {
+    openedInitialTaskId.current = null;
+    setSelectedTask(null);
+  }, [date, initialTaskId, ownerId]);
 
   async function loadData() {
     setLoading(true);
@@ -483,6 +491,27 @@ export default function DayModal({
     });
   };
 
+  useEffect(() => {
+    if (
+      !initialTaskId ||
+      loading ||
+      openedInitialTaskId.current === initialTaskId
+    ) {
+      return;
+    }
+    const task = tasks.find((item) => item.id === initialTaskId);
+    if (!task) return;
+    openedInitialTaskId.current = initialTaskId;
+    openTaskDetails(task);
+  }, [
+    imagesByTask,
+    initialTaskId,
+    loading,
+    tasks,
+    timelineByTask,
+    timersByTask,
+  ]);
+
   const previewCards = useMemo(() => {
     return tasks.map((task) => ({
       id: task.id,
@@ -744,7 +773,10 @@ export default function DayModal({
               timeline={selectedTask.timeline}
               imageUrls={selectedTask.imageUrls}
               onOpenImage={(index) => openTaskGallery(selectedTask.id, index)}
-              onClose={() => setSelectedTask(null)}
+              onClose={() => {
+                if (initialTaskId) onClose();
+                else setSelectedTask(null);
+              }}
               badgeText={selectedTask.badgeText}
             />
           </div>

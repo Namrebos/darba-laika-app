@@ -108,7 +108,9 @@ export default function SummaryPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchMonth, setSearchMonth] = useState("all");
   const [searchableTasks, setSearchableTasks] = useState<TaskLogRow[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [ownerId, setOwnerId] = useState("");
   const [showWorkTime, setShowWorkTime] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -256,10 +258,13 @@ export default function SummaryPage() {
 
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase("lv-LV");
-    if (!query) return [];
+    if (!query && searchMonth === "all") return [];
 
     return searchableTasks.filter((task) => {
       const date = new Date(task.start_time);
+      if (Number.isNaN(date.getTime())) return false;
+      const taskMonth = `${date.getFullYear()}-${date.getMonth()}`;
+      if (searchMonth !== "all" && taskMonth !== searchMonth) return false;
       const dateText = Number.isNaN(date.getTime())
         ? ""
         : format(date, "yyyy-MM-dd");
@@ -268,9 +273,11 @@ export default function SummaryPage() {
         .join(" ")
         .toLocaleLowerCase("lv-LV");
 
-      return searchableText.includes(query);
+      return !query || searchableText.includes(query);
     });
-  }, [searchQuery, searchableTasks]);
+  }, [searchMonth, searchQuery, searchableTasks]);
+
+  const searchActive = searchQuery.trim().length > 0 || searchMonth !== "all";
 
   async function loadData(selectedOwnerId: string) {
     setLoading(true);
@@ -393,33 +400,51 @@ export default function SummaryPage() {
         </div>
 
         <div className="space-y-3">
-          <div className="relative">
-            <Search
-              aria-hidden="true"
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
-              size={20}
-            />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Meklēt pēc darba nosaukuma, piezīmēm vai datuma..."
-              aria-label="Meklēt veiktajos darbos"
-              className="w-full rounded-xl border border-zinc-300 bg-white py-3 pl-11 pr-11 text-black shadow-sm outline-none placeholder:text-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                aria-label="Notīrīt meklēšanu"
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
-              >
-                <X size={18} />
-              </button>
-            )}
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+                size={20}
+              />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Meklēt pēc darba nosaukuma, piezīmēm vai datuma..."
+                aria-label="Meklēt veiktajos darbos"
+                className="w-full rounded-xl border border-zinc-300 bg-white py-3 pl-11 pr-11 text-black shadow-sm outline-none placeholder:text-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Notīrīt meklēšanu"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
+            <select
+              value={searchMonth}
+              onChange={(event) => setSearchMonth(event.target.value)}
+              aria-label="Meklēšanas mēnesis"
+              className="rounded-xl border border-zinc-300 bg-white px-3 py-3 text-black shadow-sm outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+            >
+              <option value="all">Visi mēneši</option>
+              {availableMonths.map(({ year, month }) => (
+                <option key={`${year}-${month}`} value={`${year}-${month}`}>
+                  {new Date(year, month).toLocaleString("lv-LV", {
+                    year: "numeric",
+                    month: "long",
+                  })}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {searchQuery.trim() && (
+          {searchActive && (
             <div className="overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
               <div className="border-b border-zinc-200 px-4 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
                 Atrasti ieraksti: {searchResults.length}
@@ -439,7 +464,10 @@ export default function SummaryPage() {
                       <button
                         key={task.id ?? `${task.start_time}-${task.title}`}
                         type="button"
-                        onClick={() => setSelectedDate(dateKey)}
+                        onClick={() => {
+                          setSelectedTaskId(task.id ?? null);
+                          setSelectedDate(dateKey);
+                        }}
                         className="block w-full px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -478,7 +506,10 @@ export default function SummaryPage() {
             year={selectedYear}
             month={selectedMonth}
             data={entries}
-            onDayClick={(date) => setSelectedDate(date)}
+            onDayClick={(date) => {
+              setSelectedTaskId(null);
+              setSelectedDate(date);
+            }}
           />
         )}
 
@@ -490,8 +521,12 @@ export default function SummaryPage() {
             isAdmin={isAdmin}
             regularWorkStart={regularWorkStart}
             regularWorkEnd={regularWorkEnd}
+            initialTaskId={selectedTaskId}
             onWorkTimeChanged={() => loadData(ownerId)}
-            onClose={() => setSelectedDate(null)}
+            onClose={() => {
+              setSelectedTaskId(null);
+              setSelectedDate(null);
+            }}
           />
         )}
       </div>

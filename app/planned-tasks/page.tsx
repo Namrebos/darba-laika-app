@@ -8,6 +8,8 @@ import {
   ArrowUp,
   CalendarClock,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clipboard,
   ExternalLink,
   ImagePlus,
@@ -31,6 +33,8 @@ type Profile = {
   id: string;
   display_name: string;
   email: string | null;
+  role: "admin" | "member" | "viewer";
+  can_access_workday: boolean;
 };
 
 type PlannedTask = {
@@ -60,6 +64,84 @@ type DictionaryWord = {
   name: string;
   usageCount: number;
 };
+
+type MultiDateMode = "manual" | "range" | "month";
+type MultiDateConfig = {
+  enabled: boolean;
+  mode: MultiDateMode;
+  manualMonth: string;
+  manualDates: string[];
+  from: string;
+  to: string;
+  month: string;
+  weekdays: number[];
+};
+
+function dateFromParts(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day, 12);
+}
+
+function dateKey(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+function shortDateLabel(value: string) {
+  const [year, month, day] = value.split("-");
+  return `${day}.${month}.${year}.`;
+}
+
+function calendarDays(monthValue: string) {
+  const [year, month] = monthValue.split("-").map(Number);
+  const firstWeekday = new Date(year, month - 1, 1, 12).getDay();
+  const leadingEmptyDays = firstWeekday === 0 ? 6 : firstWeekday - 1;
+  const daysInMonth = new Date(year, month, 0, 12).getDate();
+  return [
+    ...Array.from({ length: leadingEmptyDays }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, index) =>
+      dateKey(new Date(year, month - 1, index + 1, 12)),
+    ),
+  ];
+}
+
+function adjacentMonth(monthValue: string, offset: number) {
+  const [year, month] = monthValue.split("-").map(Number);
+  const result = new Date(year, month - 1 + offset, 1, 12);
+  return `${result.getFullYear()}-${String(result.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthLabel(monthValue: string) {
+  const [year, month] = monthValue.split("-").map(Number);
+  return new Intl.DateTimeFormat("lv-LV", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(year, month - 1, 1, 12));
+}
+
+function selectedDates(config: MultiDateConfig) {
+  if (config.mode === "manual") {
+    return [...new Set(config.manualDates)].sort();
+  }
+  let from = config.from;
+  let to = config.to;
+  if (config.mode === "month" && config.month) {
+    const [year, month] = config.month.split("-").map(Number);
+    from = `${config.month}-01`;
+    to = dateKey(new Date(year, month, 0, 12));
+  }
+  if (!from || !to || from > to) return [];
+  const result: string[] = [];
+  const cursor = dateFromParts(from);
+  const end = dateFromParts(to);
+  while (cursor <= end) {
+    const weekday = cursor.getDay();
+    if (weekday >= 1 && weekday <= 5 && config.weekdays.includes(weekday)) {
+      result.push(dateKey(cursor));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return result;
+}
 
 function todayInRiga() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -97,6 +179,7 @@ export default function PlannedTasksPage() {
   const [tasks, setTasks] = useState<PlannedTask[]>([]);
   const [images, setImages] = useState<Record<number, PlannedImage[]>>({});
   const [selectedDate, setSelectedDate] = useState(todayInRiga());
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [dayTab, setDayTab] = useState<DayTab>("planned");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -113,6 +196,9 @@ export default function PlannedTasksPage() {
   const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const scheduleInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [multiDateConfigs, setMultiDateConfigs] = useState<
+    Record<number, MultiDateConfig>
+  >({});
 
   useEffect(() => {
     async function load() {
@@ -144,7 +230,7 @@ export default function PlannedTasksPage() {
       ] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, display_name, email")
+          .select("id, display_name, email, role, can_access_workday")
           .order("display_name"),
         supabase
           .from("planned_tasks")
@@ -164,7 +250,17 @@ export default function PlannedTasksPage() {
       }
 
       setUserId(authData.user.id);
-      setProfiles((profileRows || []) as Profile[]);
+      const loadedProfiles = (profileRows || []) as Profile[];
+      setProfiles(loadedProfiles);
+      const employees = loadedProfiles.filter(
+        (profile) =>
+          profile.role === "admin" || profile.can_access_workday === true,
+      );
+      setSelectedEmployeeId(
+        employees.find((profile) => profile.id === authData.user.id)?.id ||
+          employees[0]?.id ||
+          "",
+      );
       setTasks((taskRows || []) as PlannedTask[]);
       setDictionaryWords(
         (tagRows || []).map((word) => ({
@@ -192,6 +288,32 @@ export default function PlannedTasksPage() {
     [tasks],
   );
 
+  const employeeProfiles = useMemo(() => {
+    const assignedEmployeeIds = new Set(
+      tasks
+        .filter((task) => task.scheduled_date === selectedDate)
+        .map((task) => task.assignee_id),
+    );
+
+    return profiles.filter(
+      (profile) =>
+        assignedEmployeeIds.has(profile.id) &&
+        (profile.role === "admin" || profile.can_access_workday === true),
+    );
+  }, [profiles, selectedDate, tasks]);
+
+  useEffect(() => {
+    if (
+      employeeProfiles.length > 0 &&
+      !employeeProfiles.some((profile) => profile.id === selectedEmployeeId)
+    ) {
+      setSelectedEmployeeId(employeeProfiles[0].id);
+    }
+    if (employeeProfiles.length === 0 && selectedEmployeeId) {
+      setSelectedEmployeeId("");
+    }
+  }, [employeeProfiles, selectedEmployeeId]);
+
   const selectedDayTasks = useMemo(() => {
     const statuses: PlannedStatus[] =
       dayTab === "planned"
@@ -203,13 +325,19 @@ export default function PlannedTasksPage() {
     return tasks
       .filter(
         (task) =>
-          task.scheduled_date === selectedDate && statuses.includes(task.status),
+          task.scheduled_date === selectedDate &&
+          task.assignee_id === selectedEmployeeId &&
+          statuses.includes(task.status),
       )
       .sort((a, b) => a.position - b.position);
-  }, [dayTab, selectedDate, tasks]);
+  }, [dayTab, selectedDate, selectedEmployeeId, tasks]);
 
   const dayCounts = useMemo(() => {
-    const dayTasks = tasks.filter((task) => task.scheduled_date === selectedDate);
+    const dayTasks = tasks.filter(
+      (task) =>
+        task.scheduled_date === selectedDate &&
+        task.assignee_id === selectedEmployeeId,
+    );
     return {
       planned: dayTasks.filter((task) =>
         ["planned", "started"].includes(task.status),
@@ -217,7 +345,7 @@ export default function PlannedTasksPage() {
       completed: dayTasks.filter((task) => task.status === "completed").length,
       canceled: dayTasks.filter((task) => task.status === "canceled").length,
     };
-  }, [selectedDate, tasks]);
+  }, [selectedDate, selectedEmployeeId, tasks]);
 
   function nextTimeForDate(date: string, excludedTaskId?: number) {
     const latestMinutes = tasks
@@ -460,7 +588,152 @@ export default function PlannedTasksPage() {
     await saveDraft(updated);
   }
 
+  function updateMultiDateConfig(
+    task: PlannedTask,
+    updates: Partial<MultiDateConfig>,
+  ) {
+    const baseDate = task.scheduled_date || selectedDate;
+    setMultiDateConfigs((current) => {
+      const defaults: MultiDateConfig = {
+        enabled: false,
+        mode: "manual",
+        manualMonth: baseDate.slice(0, 7),
+        manualDates: task.scheduled_date ? [task.scheduled_date] : [],
+        from: baseDate,
+        to: baseDate,
+        month: baseDate.slice(0, 7),
+        weekdays: [1, 2, 3, 4, 5],
+      };
+      return {
+        ...current,
+        [task.id]: {
+          ...(current[task.id] || defaults),
+        ...updates,
+        },
+      };
+    });
+  }
+
+  async function sendTaskToMultipleDates(
+    task: PlannedTask,
+    config: MultiDateConfig,
+  ) {
+    const dates = selectedDates(config);
+    if (!task.title.trim() || !task.note.trim() || !task.scheduled_time) {
+      setMessage("Aizpildi nosaukumu, piezīmes un laiku.");
+      return;
+    }
+    if (dates.length === 0) {
+      setMessage("Izvēlies vismaz vienu datumu.");
+      return;
+    }
+    if (dates.length > 62) {
+      setMessage("Vienā reizē var izveidot ne vairāk kā 62 kartītes.");
+      return;
+    }
+
+    setSavingId(task.id);
+    setMessage("");
+    const rows = dates.map((date) => {
+      const position =
+        tasks
+          .filter(
+            (item) =>
+              item.scheduled_date === date &&
+              item.assignee_id === task.assignee_id &&
+              item.status !== "canceled",
+          )
+          .reduce((largest, item) => Math.max(largest, item.position), -1) + 1;
+      return {
+        created_by: userId,
+        assignee_id: task.assignee_id,
+        title: task.title.trim(),
+        note: task.note.trim(),
+        scheduled_date: date,
+        scheduled_time: task.scheduled_time,
+        position,
+        status: "planned" as const,
+      };
+    });
+
+    const first = rows[0];
+    const { error: updateError } = await supabase
+      .from("planned_tasks")
+      .update({ ...first, updated_at: new Date().toISOString() })
+      .eq("id", task.id);
+    if (updateError) {
+      setSavingId(null);
+      setMessage("Kartītes neizdevās izveidot.");
+      return;
+    }
+
+    let duplicateRows: PlannedTask[] = [];
+    if (rows.length > 1) {
+      const { data, error } = await supabase
+        .from("planned_tasks")
+        .insert(rows.slice(1))
+        .select();
+      if (error) {
+        await supabase
+          .from("planned_tasks")
+          .update({ status: "new" })
+          .eq("id", task.id);
+        setSavingId(null);
+        setMessage("Daļu kartīšu neizdevās izveidot.");
+        return;
+      }
+      duplicateRows = (data || []) as PlannedTask[];
+    }
+
+    const sourceImages = images[task.id] || [];
+    if (sourceImages.length > 0 && duplicateRows.length > 0) {
+      await supabase.from("planned_task_images").insert(
+        duplicateRows.flatMap((duplicate) =>
+          sourceImages.map((image) => ({
+            planned_task_id: duplicate.id,
+            uploaded_by: userId,
+            url: image.url,
+          })),
+        ),
+      );
+    }
+
+    const updatedOriginal = { ...task, ...first } as PlannedTask;
+    setTasks((current) => [
+      ...current.map((item) =>
+        item.id === task.id ? updatedOriginal : item,
+      ),
+      ...duplicateRows,
+    ]);
+    setImages((current) => {
+      const next = { ...current };
+      duplicateRows.forEach((duplicate) => {
+        next[duplicate.id] = sourceImages.map((image) => ({
+          ...image,
+          planned_task_id: duplicate.id,
+        }));
+      });
+      return next;
+    });
+    setMultiDateConfigs((current) => {
+      const next = { ...current };
+      delete next[task.id];
+      return next;
+    });
+    const hashtagWords = extractHashtagWords(task.title, task.note);
+    await Promise.all(hashtagWords.map((word) => addDictionaryWord(word)));
+    setSelectedDate(dates[0]);
+    setDayTab("planned");
+    setSavingId(null);
+    setMessage(`Izveidotas ${dates.length} neatkarīgas kartītes.`);
+  }
+
   async function sendTask(task: PlannedTask) {
+    const multiDateConfig = multiDateConfigs[task.id];
+    if (multiDateConfig?.enabled) {
+      await sendTaskToMultipleDates(task, multiDateConfig);
+      return;
+    }
     if (
       !task.title.trim() ||
       !task.note.trim() ||
@@ -525,23 +798,43 @@ export default function PlannedTasksPage() {
     changeLocalTask(task.id, changes);
   }
 
-  async function cancelTask(task: PlannedTask) {
-    if (!window.confirm(`Vai atcelt uzdevumu “${task.title || "Bez nosaukuma"}”?`)) {
+  async function deletePlannedTask(task: PlannedTask) {
+    if (
+      !window.confirm(
+        `Vai neatgriezeniski dzēst uzdevumu “${task.title || "Bez nosaukuma"}”?`,
+      )
+    ) {
       return;
     }
-    const changes = {
-      status: "canceled" as const,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = await supabase
-      .from("planned_tasks")
-      .update(changes)
-      .eq("id", task.id);
-    if (error) {
-      setMessage("Uzdevumu neizdevās atcelt.");
+    setSavingId(task.id);
+    const { data, error } = await supabase.rpc("delete_planned_task", {
+      target_id: task.id,
+    });
+    setSavingId(null);
+    if (error || data !== true) {
+      setMessage("Uzdevumu neizdevās izdzēst.");
       return;
     }
-    changeLocalTask(task.id, changes);
+
+    const paths = (images[task.id] || [])
+      .map((image) => {
+        const marker = "/task-images/";
+        return image.url.includes(marker)
+          ? decodeURIComponent(image.url.split(marker)[1])
+          : "";
+      })
+      .filter(Boolean);
+    if (paths.length > 0) {
+      await supabase.storage.from("task-images").remove(paths);
+    }
+
+    setTasks((current) => current.filter((item) => item.id !== task.id));
+    setImages((current) => {
+      const next = { ...current };
+      delete next[task.id];
+      return next;
+    });
+    setMessage("Uzdevums izdzēsts.");
   }
 
   async function moveTask(task: PlannedTask, direction: -1 | 1) {
@@ -841,9 +1134,9 @@ export default function PlannedTasksPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => cancelTask(task)}
+                  onClick={() => deletePlannedTask(task)}
                   className="text-zinc-500 hover:text-red-600"
-                  aria-label="Atcelt kartīti"
+                  aria-label="Dzēst kartīti"
                 >
                   <X size={20} />
                 </button>
@@ -941,42 +1234,280 @@ export default function PlannedTasksPage() {
                     ))}
                   </select>
                 </label>
-                <div className="relative self-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const input = scheduleInputRefs.current[task.id];
-                      if (!input) return;
-                      try {
-                        input.showPicker();
-                      } catch {
-                        input.click();
+                <div className="flex items-center gap-2 self-end">
+                  <div className="relative min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = scheduleInputRefs.current[task.id];
+                        if (!input) return;
+                        try {
+                          input.showPicker();
+                        } catch {
+                          input.click();
+                        }
+                      }}
+                      className="flex min-h-10 w-full items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800"
+                      aria-label="Izvēlēties uzdevuma datumu un laiku"
+                    >
+                      <CalendarClock size={19} className="shrink-0 text-blue-600" />
+                      <span className="truncate font-medium">
+                        {scheduledDateTimeLabel(task)}
+                      </span>
+                    </button>
+                    <input
+                      ref={(element) => {
+                        scheduleInputRefs.current[task.id] = element;
+                      }}
+                      type="datetime-local"
+                      required
+                      value={`${task.scheduled_date || selectedDate}T${task.scheduled_time?.slice(0, 5) || nextTimeForDate(task.scheduled_date || selectedDate, task.id)}`}
+                      onChange={(event) =>
+                        void saveSchedule(task, event.currentTarget.value)
                       }
-                    }}
-                    className="flex min-h-10 w-full items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800"
-                    aria-label="Izvēlēties uzdevuma datumu un laiku"
-                  >
-                    <CalendarClock size={19} className="shrink-0 text-blue-600" />
-                    <span className="truncate font-medium">
-                      {scheduledDateTimeLabel(task)}
-                    </span>
-                  </button>
-                  <input
-                    ref={(element) => {
-                      scheduleInputRefs.current[task.id] = element;
-                    }}
-                    type="datetime-local"
-                    required
-                    value={`${task.scheduled_date || selectedDate}T${task.scheduled_time?.slice(0, 5) || nextTimeForDate(task.scheduled_date || selectedDate, task.id)}`}
-                    onChange={(event) =>
-                      void saveSchedule(task, event.currentTarget.value)
-                    }
-                    tabIndex={-1}
-                    aria-hidden="true"
-                    className="pointer-events-none absolute h-px w-px opacity-0"
-                  />
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute h-px w-px opacity-0"
+                    />
+                  </div>
+                  <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-2 py-2 text-xs font-medium dark:border-zinc-600">
+                    <input
+                      type="checkbox"
+                      checked={multiDateConfigs[task.id]?.enabled || false}
+                      onChange={(event) =>
+                        updateMultiDateConfig(task, {
+                          enabled: event.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 accent-blue-600"
+                    />
+                    <span>Vairāki datumi</span>
+                  </label>
                 </div>
               </div>
+
+              {multiDateConfigs[task.id]?.enabled && (() => {
+                const config = multiDateConfigs[task.id];
+                const dates = selectedDates(config);
+                const weekdayLabels = [
+                  [1, "P"],
+                  [2, "O"],
+                  [3, "T"],
+                  [4, "C"],
+                  [5, "Pk"],
+                ] as const;
+                return (
+                  <div className="space-y-3 rounded-xl border border-blue-300 bg-blue-50/60 p-3 dark:border-blue-900 dark:bg-blue-950/20">
+                    <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700">
+                      {([
+                        ["manual", "Atsevišķi"],
+                        ["range", "Periods"],
+                        ["month", "Mēnesis"],
+                      ] as const).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => updateMultiDateConfig(task, { mode })}
+                          className={`px-2 py-2 text-sm font-medium ${
+                            config.mode === mode
+                              ? "bg-blue-600 text-white"
+                              : "bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {config.mode === "manual" && (
+                      <div className="space-y-2">
+                        <div className="overflow-hidden rounded-xl border border-zinc-300 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                          <div className="mb-3 flex items-center justify-between">
+                          <button
+                            type="button"
+                              onClick={() =>
+                                updateMultiDateConfig(task, {
+                                  manualMonth: adjacentMonth(
+                                    config.manualMonth,
+                                    -1,
+                                  ),
+                                })
+                              }
+                              className="rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                              aria-label="Iepriekšējais mēnesis"
+                            >
+                              <ChevronLeft size={20} />
+                            </button>
+                            <strong className="capitalize">
+                              {monthLabel(config.manualMonth)}
+                            </strong>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateMultiDateConfig(task, {
+                                  manualMonth: adjacentMonth(
+                                    config.manualMonth,
+                                    1,
+                                  ),
+                                })
+                              }
+                              className="rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                              aria-label="Nākamais mēnesis"
+                            >
+                              <ChevronRight size={20} />
+                            </button>
+                          </div>
+                          <div className="mb-1 grid grid-cols-7 text-center text-xs font-semibold text-zinc-500">
+                            {['P', 'O', 'T', 'C', 'Pk', 'S', 'Sv'].map((day) => (
+                              <span key={day} className="py-1">{day}</span>
+                            ))}
+                          </div>
+                          <div className="grid grid-cols-7 gap-1">
+                            {calendarDays(config.manualMonth).map((date, index) => {
+                              if (!date) return <span key={`empty-${index}`} />;
+                              const selected = config.manualDates.includes(date);
+                              return (
+                                <button
+                                  key={date}
+                                  type="button"
+                                  onClick={() =>
+                                    updateMultiDateConfig(task, {
+                                      manualDates: selected
+                                        ? config.manualDates.filter(
+                                            (item) => item !== date,
+                                          )
+                                        : [...config.manualDates, date].sort(),
+                                    })
+                                  }
+                                  className={`aspect-square rounded-lg text-sm font-medium transition ${
+                                    selected
+                                      ? "bg-blue-600 text-white shadow-sm"
+                                      : "hover:bg-blue-100 dark:hover:bg-blue-950"
+                                  }`}
+                                  aria-pressed={selected}
+                                  aria-label={shortDateLabel(date)}
+                                >
+                                  {Number(date.slice(-2))}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <p className="text-xs text-zinc-500">
+                          Uzspied datumam, lai to atzīmētu vai noņemtu. Šeit var
+                          izvēlēties arī sestdienas un svētdienas.
+                        </p>
+                      </div>
+                    )}
+
+                    {config.mode === "range" && (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="space-y-1 text-xs font-medium">
+                          <span>No</span>
+                          <input
+                            type="date"
+                            value={config.from}
+                            onChange={(event) =>
+                              updateMultiDateConfig(task, { from: event.target.value })
+                            }
+                            className="w-full rounded-lg border border-zinc-300 bg-white p-2 dark:border-zinc-600 dark:bg-zinc-900"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs font-medium">
+                          <span>Līdz</span>
+                          <input
+                            type="date"
+                            value={config.to}
+                            onChange={(event) =>
+                              updateMultiDateConfig(task, { to: event.target.value })
+                            }
+                            className="w-full rounded-lg border border-zinc-300 bg-white p-2 dark:border-zinc-600 dark:bg-zinc-900"
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    {config.mode === "month" && (
+                      <label className="block space-y-1 text-xs font-medium">
+                        <span>Mēnesis</span>
+                        <input
+                          type="month"
+                          value={config.month}
+                          onChange={(event) =>
+                            updateMultiDateConfig(task, { month: event.target.value })
+                          }
+                          className="w-full rounded-lg border border-zinc-300 bg-white p-2 dark:border-zinc-600 dark:bg-zinc-900"
+                        />
+                      </label>
+                    )}
+
+                    {config.mode !== "manual" && (
+                      <div className="space-y-1">
+                        <span className="text-xs font-medium">Darba dienas</span>
+                        <div className="flex gap-2">
+                          {weekdayLabels.map(([weekday, label]) => (
+                            <button
+                              key={weekday}
+                              type="button"
+                              onClick={() =>
+                                updateMultiDateConfig(task, {
+                                  weekdays: config.weekdays.includes(weekday)
+                                    ? config.weekdays.filter((day) => day !== weekday)
+                                    : [...config.weekdays, weekday].sort(),
+                                })
+                              }
+                              className={`min-w-10 rounded-lg border px-2 py-2 text-sm font-semibold ${
+                                config.weekdays.includes(weekday)
+                                  ? "border-blue-600 bg-blue-600 text-white"
+                                  : "border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-900"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-zinc-500">
+                          Sestdienas un svētdienas šajā režīmā netiek iekļautas.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      {dates.slice(0, 14).map((date) => (
+                        <span
+                          key={date}
+                          className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-xs font-medium shadow-sm dark:bg-zinc-900"
+                        >
+                          {shortDateLabel(date)}
+                          {config.mode === "manual" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateMultiDateConfig(task, {
+                                  manualDates: config.manualDates.filter(
+                                    (item) => item !== date,
+                                  ),
+                                })
+                              }
+                              aria-label={`Noņemt ${shortDateLabel(date)}`}
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                      {dates.length > 14 && (
+                        <span className="rounded-full px-2 py-1 text-xs font-medium">
+                          +{dates.length - 14}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-semibold">
+                      Tiks izveidotas {dates.length} neatkarīgas kartītes.
+                    </p>
+                  </div>
+                );
+              })()}
 
               {(images[task.id] || []).length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -1059,6 +1590,33 @@ export default function PlannedTasksPage() {
             onChange={(event) => setSelectedDate(event.target.value)}
             className="rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
           />
+        </div>
+
+        <div
+          role="tablist"
+          aria-label="Darbinieki"
+          className="flex overflow-x-auto rounded-t-xl border border-b-0 border-zinc-300 bg-zinc-200 px-1 pt-1 dark:border-zinc-700 dark:bg-zinc-950"
+        >
+          {employeeProfiles.map((profile, index) => (
+            <button
+              key={profile.id}
+              type="button"
+              role="tab"
+              aria-selected={selectedEmployeeId === profile.id}
+              onClick={() => setSelectedEmployeeId(profile.id)}
+              className={`relative min-w-32 shrink-0 px-5 py-2.5 text-sm font-semibold transition-colors ${
+                selectedEmployeeId === profile.id
+                  ? "z-10 rounded-t-xl bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-white"
+                  : `rounded-t-lg text-zinc-600 hover:bg-zinc-300/70 dark:text-zinc-400 dark:hover:bg-zinc-800/70 ${
+                      index > 0
+                        ? "before:absolute before:bottom-2 before:left-0 before:top-2 before:w-px before:bg-zinc-400/60 dark:before:bg-zinc-600"
+                        : ""
+                    }`
+              }`}
+            >
+              {profile.display_name || profile.email}
+            </button>
+          ))}
         </div>
 
         <div className="grid grid-cols-3 gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
@@ -1181,10 +1739,11 @@ export default function PlannedTasksPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => cancelTask(task)}
+                      onClick={() => deletePlannedTask(task)}
+                      disabled={savingId === task.id}
                       className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:text-red-300"
                     >
-                      Atcelt
+                      {savingId === task.id ? "Dzēš..." : "Dzēst"}
                     </button>
                   </div>
                 )}
