@@ -116,6 +116,7 @@ export default function PlannedTasksPage() {
     taskId: number;
     date: string;
     time: string;
+    withoutTime: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -436,7 +437,9 @@ export default function PlannedTasksPage() {
     const updated = {
       ...task,
       scheduled_date: scheduleEditor.date,
-      scheduled_time: scheduleEditor.time || null,
+      scheduled_time: scheduleEditor.withoutTime
+        ? null
+        : scheduleEditor.time || null,
     };
     changeLocalTask(task.id, {
       scheduled_date: updated.scheduled_date,
@@ -904,7 +907,8 @@ export default function PlannedTasksPage() {
                     setScheduleEditor({
                       taskId: task.id,
                       date: task.scheduled_date || "",
-                      time: task.scheduled_time?.slice(0, 5) || "",
+                      time: task.scheduled_time?.slice(0, 5) || "09:00",
+                      withoutTime: !task.scheduled_time,
                     })
                   }
                   className="flex min-h-10 items-center gap-2 self-end rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800"
@@ -1159,32 +1163,50 @@ export default function PlannedTasksPage() {
             </div>
 
             <label className="block space-y-1 text-sm">
-              <span className="font-medium">Datums *</span>
+              <span className="font-medium">Datums un laiks *</span>
               <input
-                type="date"
+                type="datetime-local"
                 required
-                value={scheduleEditor.date}
-                onChange={(event) =>
-                  setScheduleEditor((current) =>
-                    current ? { ...current, date: event.target.value } : null,
-                  )
+                value={
+                  scheduleEditor.date
+                    ? `${scheduleEditor.date}T${scheduleEditor.time || "09:00"}`
+                    : ""
                 }
+                onChange={(event) => {
+                  const [date, time] = event.target.value.split("T");
+                  setScheduleEditor((current) =>
+                    current
+                      ? {
+                          ...current,
+                          date: date || "",
+                          time: time || current.time,
+                        }
+                      : null,
+                  );
+                }}
                 className="w-full rounded-lg border border-zinc-300 bg-transparent p-3 dark:border-zinc-600"
               />
             </label>
 
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium">Laiks (nav obligāts)</span>
+            <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-700">
               <input
-                type="time"
-                value={scheduleEditor.time}
+                type="checkbox"
+                checked={scheduleEditor.withoutTime}
                 onChange={(event) =>
                   setScheduleEditor((current) =>
-                    current ? { ...current, time: event.target.value } : null,
+                    current
+                      ? { ...current, withoutTime: event.target.checked }
+                      : null,
                   )
                 }
-                className="w-full rounded-lg border border-zinc-300 bg-transparent p-3 dark:border-zinc-600"
+                className="h-5 w-5 accent-blue-600"
               />
+              <span>
+                <span className="block font-medium">Bez laika</span>
+                <span className="text-xs text-zinc-500">
+                  Saglabāt tikai izvēlēto datumu
+                </span>
+              </span>
             </label>
 
             <button
