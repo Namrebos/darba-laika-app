@@ -81,11 +81,6 @@ function statusLabel(status: PlannedStatus) {
   return labels[status];
 }
 
-function scheduledDateTimeValue(task: PlannedTask) {
-  if (!task.scheduled_date) return "";
-  return `${task.scheduled_date}T${task.scheduled_time?.slice(0, 5) || "09:00"}`;
-}
-
 function scheduledDateTimeLabel(task: PlannedTask) {
   if (!task.scheduled_date) return "Izvēlēties datumu un laiku";
   const [year, month, day] = task.scheduled_date.split("-");
@@ -117,6 +112,11 @@ export default function PlannedTasksPage() {
   const [creatingRequestLink, setCreatingRequestLink] = useState(false);
   const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [scheduleEditor, setScheduleEditor] = useState<{
+    taskId: number;
+    date: string;
+    time: string;
+  } | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -423,6 +423,27 @@ export default function PlannedTasksPage() {
       .eq("id", task.id);
     setSavingId(null);
     if (error) setMessage("Kartītes izmaiņas neizdevās saglabāt.");
+  }
+
+  async function saveSchedule() {
+    if (!scheduleEditor?.date) {
+      setMessage("Datums ir obligāts.");
+      return;
+    }
+    const task = tasks.find((item) => item.id === scheduleEditor.taskId);
+    if (!task) return;
+
+    const updated = {
+      ...task,
+      scheduled_date: scheduleEditor.date,
+      scheduled_time: scheduleEditor.time || null,
+    };
+    changeLocalTask(task.id, {
+      scheduled_date: updated.scheduled_date,
+      scheduled_time: updated.scheduled_time,
+    });
+    await saveDraft(updated);
+    setScheduleEditor(null);
   }
 
   async function sendTask(task: PlannedTask) {
@@ -877,31 +898,23 @@ export default function PlannedTasksPage() {
                     ))}
                   </select>
                 </label>
-                <label className="relative flex min-h-10 cursor-pointer items-center gap-2 self-end rounded-lg border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setScheduleEditor({
+                      taskId: task.id,
+                      date: task.scheduled_date || "",
+                      time: task.scheduled_time?.slice(0, 5) || "",
+                    })
+                  }
+                  className="flex min-h-10 items-center gap-2 self-end rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800"
+                  aria-label="Izvēlēties uzdevuma datumu un laiku"
+                >
                   <CalendarClock size={19} className="shrink-0 text-blue-600" />
                   <span className="truncate font-medium">
                     {scheduledDateTimeLabel(task)}
                   </span>
-                  <input
-                    type="datetime-local"
-                    value={scheduledDateTimeValue(task)}
-                    onChange={(event) => {
-                      const [date, time] = event.target.value.split("T");
-                      const updated = {
-                        ...task,
-                        scheduled_date: date || null,
-                        scheduled_time: time || null,
-                      };
-                      changeLocalTask(task.id, {
-                        scheduled_date: date || null,
-                        scheduled_time: time || null,
-                      });
-                      void saveDraft(updated);
-                    }}
-                    aria-label="Izvēlēties uzdevuma datumu un laiku"
-                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                  />
-                </label>
+                </button>
               </div>
 
               {(images[task.id] || []).length > 0 && (
@@ -1119,6 +1132,72 @@ export default function PlannedTasksPage() {
           </div>
         )}
       </section>
+      {scheduleEditor && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="schedule-editor-title"
+          onClick={() => setScheduleEditor(null)}
+        >
+          <div
+            className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-5 shadow-xl dark:bg-zinc-900"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="schedule-editor-title" className="text-lg font-semibold">
+                Datums un laiks
+              </h2>
+              <button
+                type="button"
+                onClick={() => setScheduleEditor(null)}
+                className="rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                aria-label="Aizvērt"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">Datums *</span>
+              <input
+                type="date"
+                required
+                value={scheduleEditor.date}
+                onChange={(event) =>
+                  setScheduleEditor((current) =>
+                    current ? { ...current, date: event.target.value } : null,
+                  )
+                }
+                className="w-full rounded-lg border border-zinc-300 bg-transparent p-3 dark:border-zinc-600"
+              />
+            </label>
+
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">Laiks (nav obligāts)</span>
+              <input
+                type="time"
+                value={scheduleEditor.time}
+                onChange={(event) =>
+                  setScheduleEditor((current) =>
+                    current ? { ...current, time: event.target.value } : null,
+                  )
+                }
+                className="w-full rounded-lg border border-zinc-300 bg-transparent p-3 dark:border-zinc-600"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={saveSchedule}
+              disabled={!scheduleEditor.date || savingId === scheduleEditor.taskId}
+              className="w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-zinc-500"
+            >
+              {savingId === scheduleEditor.taskId ? "Saglabā..." : "Saglabāt"}
+            </button>
+          </div>
+        </div>
+      )}
       <TransportRequestModal
         requestId={openedRequestId}
         onClose={() => setOpenedRequestId(null)}
