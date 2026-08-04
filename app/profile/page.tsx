@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { BookOpenText } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BookOpenText, ChevronDown, Clock } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import DictionaryModal from "@/app/components/DictionaryModal";
 import UserAvatar from "@/app/components/UserAvatar";
@@ -10,6 +10,12 @@ type DictionaryWord = {
   name: string;
   usageCount: number;
 };
+
+const WORK_TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
+  const hours = Math.floor(index / 4);
+  const minutes = (index % 4) * 15;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+});
 
 export default function ProfilePage() {
   const [userId, setUserId] = useState("");
@@ -28,6 +34,11 @@ export default function ProfilePage() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [regularWorkStart, setRegularWorkStart] = useState("09:00");
   const [regularWorkEnd, setRegularWorkEnd] = useState("18:00");
+  const [draftWorkStart, setDraftWorkStart] = useState("09:00");
+  const [draftWorkEnd, setDraftWorkEnd] = useState("18:00");
+  const [workTimeOpen, setWorkTimeOpen] = useState(false);
+  const [savingWorkTime, setSavingWorkTime] = useState(false);
+  const workTimePickerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -52,13 +63,32 @@ export default function ProfilePage() {
         .eq("user_id", authData.user.id)
         .maybeSingle();
       if (workSchedule) {
-        setRegularWorkStart(workSchedule.regular_start.slice(0, 5));
-        setRegularWorkEnd(workSchedule.regular_end.slice(0, 5));
+        const start = workSchedule.regular_start.slice(0, 5);
+        const end = workSchedule.regular_end.slice(0, 5);
+        setRegularWorkStart(start);
+        setRegularWorkEnd(end);
+        setDraftWorkStart(start);
+        setDraftWorkEnd(end);
       }
       await loadDictionary(authData.user.id);
     }
     load();
   }, []);
+
+  useEffect(() => {
+    function closeWorkTimePicker(event: MouseEvent) {
+      if (
+        workTimePickerRef.current &&
+        !workTimePickerRef.current.contains(event.target as Node)
+      ) {
+        setWorkTimeOpen(false);
+        setDraftWorkStart(regularWorkStart);
+        setDraftWorkEnd(regularWorkEnd);
+      }
+    }
+    document.addEventListener("mousedown", closeWorkTimePicker);
+    return () => document.removeEventListener("mousedown", closeWorkTimePicker);
+  }, [regularWorkEnd, regularWorkStart]);
 
   async function loadDictionary(id: string) {
     const { data } = await supabase
@@ -116,12 +146,6 @@ export default function ProfilePage() {
     const nextEmail = email.trim().toLowerCase();
     if (!name) return setMessage("Ievadi vārdu vai lietotājvārdu.");
     if (!nextEmail) return setMessage("Ievadi e-pasta adresi.");
-    if (!regularWorkStart || !regularWorkEnd) {
-      return setMessage("Norādi parastās darba dienas sākumu un beigas.");
-    }
-    if (regularWorkEnd <= regularWorkStart) {
-      return setMessage("Darba dienas beigām jābūt pēc sākuma laika.");
-    }
     if (newPassword && newPassword.length < 8) {
       return setMessage("Jaunajai parolei jābūt vismaz 8 rakstzīmes garai.");
     }
@@ -169,18 +193,7 @@ export default function ProfilePage() {
       setSaving(false);
       return setMessage("Profila izmaiņas neizdevās saglabāt.");
     }
-    const { error: scheduleError } = await supabase
-      .from("user_work_schedule_settings")
-      .upsert({
-        user_id: userId,
-        regular_start: regularWorkStart,
-        regular_end: regularWorkEnd,
-        updated_at: new Date().toISOString(),
-      });
     setSaving(false);
-    if (scheduleError) {
-      return setMessage("Darba laika robežas neizdevās saglabāt.");
-    }
     setAvatarUrl(nextAvatarUrl);
     setImage(null);
     setNewPassword("");
@@ -196,6 +209,43 @@ export default function ProfilePage() {
         : newPassword
           ? "Profils un jaunā parole saglabāti."
           : "Profils saglabāts.",
+    );
+  }
+
+  async function confirmWorkTime() {
+    const start = draftWorkStart;
+    const end = draftWorkEnd;
+    if (end <= start) {
+      setMessage("Darba laika beigām jābūt pēc sākuma laika.");
+      return;
+    }
+    if (!userId) {
+      setMessage("Lietotāja sesija nav pieejama.");
+      return;
+    }
+
+    setSavingWorkTime(true);
+    setMessage("");
+    const confirmedAt = new Date();
+    const { error } = await supabase
+      .from("user_work_schedule_settings")
+      .upsert({
+        user_id: userId,
+        regular_start: start,
+        regular_end: end,
+        updated_at: confirmedAt.toISOString(),
+      });
+    setSavingWorkTime(false);
+    if (error) {
+      setMessage("Darba laiku neizdevās apstiprināt.");
+      return;
+    }
+
+    setRegularWorkStart(start);
+    setRegularWorkEnd(end);
+    setWorkTimeOpen(false);
+    setMessage(
+      `Darba laiks ${start}–${end} darbojas no apstiprināšanas brīža.`,
     );
   }
 
@@ -220,37 +270,71 @@ export default function ProfilePage() {
         </label>
         <div className="space-y-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
           <div>
-            <h2 className="font-semibold">Parastais darba laiks</h2>
+            <h2 className="font-semibold">Darba laiks</h2>
             <p className="text-sm text-zinc-500">
               Darbs ārpus šīm robežām tiek skaitīts kā virsstundas. Sestdienās un svētdienās viss darba laiks ir virsstundas.
             </p>
           </div>
-          <div className="flex flex-nowrap items-center gap-2">
-            <label className="flex min-w-0 items-center gap-2">
-              <span className="shrink-0 text-sm font-medium">No</span>
-              <input
-                required
-                type="time"
-                step={900}
-                value={regularWorkStart}
-                onChange={(event) => setRegularWorkStart(event.target.value)}
-                aria-label="Darba dienas sākums"
-                className="w-[6.5rem] min-w-0 rounded border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+          <div ref={workTimePickerRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setWorkTimeOpen((open) => !open)}
+              className="flex w-full items-center gap-3 rounded border border-zinc-300 bg-white px-3 py-2 text-left dark:border-zinc-600 dark:bg-zinc-800"
+              aria-expanded={workTimeOpen}
+            >
+              <Clock size={18} className="shrink-0 text-blue-600" />
+              <span className="flex-1 font-medium">
+                {draftWorkStart}–{draftWorkEnd}
+              </span>
+              <ChevronDown
+                size={18}
+                className={`transition ${workTimeOpen ? "rotate-180" : ""}`}
               />
-            </label>
-            <span aria-hidden="true" className="text-zinc-400">–</span>
-            <label className="flex min-w-0 items-center gap-2">
-              <span className="shrink-0 text-sm font-medium">līdz</span>
-              <input
-                required
-                type="time"
-                step={900}
-                value={regularWorkEnd}
-                onChange={(event) => setRegularWorkEnd(event.target.value)}
-                aria-label="Darba dienas beigas"
-                className="w-[6.5rem] min-w-0 rounded border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-600 dark:bg-zinc-800"
-              />
-            </label>
+            </button>
+
+            {workTimeOpen && (
+              <div className="absolute left-0 right-0 z-20 mt-2 space-y-3 rounded-lg border border-zinc-300 bg-white p-3 shadow-xl dark:border-zinc-600 dark:bg-zinc-900">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+                  <label className="space-y-1">
+                    <span className="text-xs font-medium">No</span>
+                    <select
+                      value={draftWorkStart}
+                      onChange={(event) => setDraftWorkStart(event.target.value)}
+                      className="w-full rounded border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                    >
+                      {WORK_TIME_OPTIONS.map((time) => (
+                        <option key={`start-${time}`} value={time}>{time}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="pb-2 text-zinc-400">–</span>
+                  <label className="space-y-1">
+                    <span className="text-xs font-medium">Līdz</span>
+                    <select
+                      value={draftWorkEnd}
+                      onChange={(event) => setDraftWorkEnd(event.target.value)}
+                      className="w-full rounded border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                    >
+                      {WORK_TIME_OPTIONS.map((time) => (
+                        <option key={`end-${time}`} value={time}>{time}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  disabled={
+                    savingWorkTime ||
+                    (draftWorkStart === regularWorkStart &&
+                      draftWorkEnd === regularWorkEnd)
+                  }
+                  onClick={() => void confirmWorkTime()}
+                  className="w-full rounded bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingWorkTime ? "Apstiprina..." : "Apstiprināt"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
         <div className="space-y-2">
