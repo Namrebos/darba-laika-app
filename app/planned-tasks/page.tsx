@@ -116,7 +116,6 @@ export default function PlannedTasksPage() {
     taskId: number;
     date: string;
     time: string;
-    withoutTime: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -223,6 +222,26 @@ export default function PlannedTasksPage() {
       canceled: dayTasks.filter((task) => task.status === "canceled").length,
     };
   }, [selectedDate, tasks]);
+
+  function nextTimeForDate(date: string, excludedTaskId?: number) {
+    const latestMinutes = tasks
+      .filter(
+        (task) =>
+          task.id !== excludedTaskId &&
+          task.scheduled_date === date &&
+          task.status !== "canceled" &&
+          task.scheduled_time,
+      )
+      .map((task) => {
+        const [hours, minutes] = task.scheduled_time!.slice(0, 5).split(":");
+        return Number(hours) * 60 + Number(minutes);
+      })
+      .reduce((latest, minutes) => Math.max(latest, minutes), -1);
+
+    if (latestMinutes < 0) return "09:00";
+    const nextMinutes = Math.min(latestMinutes + 60, 23 * 60 + 59);
+    return `${String(Math.floor(nextMinutes / 60)).padStart(2, "0")}:${String(nextMinutes % 60).padStart(2, "0")}`;
+  }
 
   function profileName(profileId: string) {
     const profile = profiles.find((item) => item.id === profileId);
@@ -427,8 +446,8 @@ export default function PlannedTasksPage() {
   }
 
   async function saveSchedule() {
-    if (!scheduleEditor?.date) {
-      setMessage("Datums ir obligāts.");
+    if (!scheduleEditor?.date || !scheduleEditor.time) {
+      setMessage("Datums un laiks ir obligāti.");
       return;
     }
     const task = tasks.find((item) => item.id === scheduleEditor.taskId);
@@ -437,9 +456,7 @@ export default function PlannedTasksPage() {
     const updated = {
       ...task,
       scheduled_date: scheduleEditor.date,
-      scheduled_time: scheduleEditor.withoutTime
-        ? null
-        : scheduleEditor.time || null,
+      scheduled_time: scheduleEditor.time,
     };
     changeLocalTask(task.id, {
       scheduled_date: updated.scheduled_date,
@@ -450,8 +467,15 @@ export default function PlannedTasksPage() {
   }
 
   async function sendTask(task: PlannedTask) {
-    if (!task.title.trim() || !task.note.trim() || !task.scheduled_date) {
-      setMessage("Pirms nosūtīšanas aizpildi nosaukumu, piezīmes un datumu.");
+    if (
+      !task.title.trim() ||
+      !task.note.trim() ||
+      !task.scheduled_date ||
+      !task.scheduled_time
+    ) {
+      setMessage(
+        "Pirms nosūtīšanas aizpildi nosaukumu, piezīmes, datumu un laiku.",
+      );
       return;
     }
 
@@ -533,12 +557,14 @@ export default function PlannedTasksPage() {
 
     const firstPosition = task.position;
     const secondPosition = other.position;
+    const firstTime = task.scheduled_time;
+    const secondTime = other.scheduled_time;
     setTasks((current) =>
       current.map((item) =>
         item.id === task.id
-          ? { ...item, position: secondPosition }
+          ? { ...item, position: secondPosition, scheduled_time: secondTime }
           : item.id === other.id
-            ? { ...item, position: firstPosition }
+            ? { ...item, position: firstPosition, scheduled_time: firstTime }
             : item,
       ),
     );
@@ -546,11 +572,19 @@ export default function PlannedTasksPage() {
     const [{ error: firstError }, { error: secondError }] = await Promise.all([
       supabase
         .from("planned_tasks")
-        .update({ position: secondPosition, updated_at: new Date().toISOString() })
+        .update({
+          position: secondPosition,
+          scheduled_time: secondTime,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", task.id),
       supabase
         .from("planned_tasks")
-        .update({ position: firstPosition, updated_at: new Date().toISOString() })
+        .update({
+          position: firstPosition,
+          scheduled_time: firstTime,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", other.id),
     ]);
 
@@ -572,14 +606,22 @@ export default function PlannedTasksPage() {
 
     const [dragged] = reordered.splice(fromIndex, 1);
     reordered.splice(toIndex, 0, dragged);
+    const timeSlots = selectedDayTasks.map((task) => task.scheduled_time);
     const positions = new Map(
       reordered.map((task, index) => [task.id, index]),
+    );
+    const scheduledTimes = new Map(
+      reordered.map((task, index) => [task.id, timeSlots[index]]),
     );
 
     setTasks((current) =>
       current.map((task) =>
         positions.has(task.id)
-          ? { ...task, position: positions.get(task.id) as number }
+          ? {
+              ...task,
+              position: positions.get(task.id) as number,
+              scheduled_time: scheduledTimes.get(task.id) || null,
+            }
           : task,
       ),
     );
@@ -589,7 +631,11 @@ export default function PlannedTasksPage() {
       reordered.map((task, index) =>
         supabase
           .from("planned_tasks")
-          .update({ position: index, updated_at: new Date().toISOString() })
+          .update({
+            position: index,
+            scheduled_time: timeSlots[index],
+            updated_at: new Date().toISOString(),
+          })
           .eq("id", task.id),
       ),
     );
@@ -903,14 +949,16 @@ export default function PlannedTasksPage() {
                 </label>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    const date = task.scheduled_date || selectedDate;
                     setScheduleEditor({
                       taskId: task.id,
-                      date: task.scheduled_date || "",
-                      time: task.scheduled_time?.slice(0, 5) || "09:00",
-                      withoutTime: !task.scheduled_time,
-                    })
-                  }
+                      date,
+                      time:
+                        task.scheduled_time?.slice(0, 5) ||
+                        nextTimeForDate(date, task.id),
+                    });
+                  }}
                   className="flex min-h-10 items-center gap-2 self-end rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800"
                   aria-label="Izvēlēties uzdevuma datumu un laiku"
                 >
@@ -1188,31 +1236,14 @@ export default function PlannedTasksPage() {
               />
             </label>
 
-            <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-700">
-              <input
-                type="checkbox"
-                checked={scheduleEditor.withoutTime}
-                onChange={(event) =>
-                  setScheduleEditor((current) =>
-                    current
-                      ? { ...current, withoutTime: event.target.checked }
-                      : null,
-                  )
-                }
-                className="h-5 w-5 accent-blue-600"
-              />
-              <span>
-                <span className="block font-medium">Bez laika</span>
-                <span className="text-xs text-zinc-500">
-                  Saglabāt tikai izvēlēto datumu
-                </span>
-              </span>
-            </label>
-
             <button
               type="button"
               onClick={saveSchedule}
-              disabled={!scheduleEditor.date || savingId === scheduleEditor.taskId}
+              disabled={
+                !scheduleEditor.date ||
+                !scheduleEditor.time ||
+                savingId === scheduleEditor.taskId
+              }
               className="w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-zinc-500"
             >
               {savingId === scheduleEditor.taskId ? "Saglabā..." : "Saglabāt"}
