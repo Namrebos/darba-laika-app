@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
+  CalendarClock,
   ChevronDown,
   Clipboard,
   ExternalLink,
@@ -78,6 +79,20 @@ function statusLabel(status: PlannedStatus) {
     canceled: "Atcelts",
   };
   return labels[status];
+}
+
+function scheduledDateTimeValue(task: PlannedTask) {
+  if (!task.scheduled_date) return "";
+  return `${task.scheduled_date}T${task.scheduled_time?.slice(0, 5) || "09:00"}`;
+}
+
+function scheduledDateTimeLabel(task: PlannedTask) {
+  if (!task.scheduled_date) return "Izvēlēties datumu un laiku";
+  const [year, month, day] = task.scheduled_date.split("-");
+  const date = `${day}.${month}.${year}.`;
+  return task.scheduled_time
+    ? `${date} ${task.scheduled_time.slice(0, 5)}`
+    : date;
 }
 
 export default function PlannedTasksPage() {
@@ -838,7 +853,7 @@ export default function PlannedTasksPage() {
                 {renderDictionarySuggestions(task.id, "note")}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1 text-sm">
                   <span className="font-medium">Lietotājs</span>
                   <select
@@ -862,40 +877,29 @@ export default function PlannedTasksPage() {
                     ))}
                   </select>
                 </label>
-                <label className="space-y-1 text-sm">
-                  <span className="font-medium">Datums</span>
+                <label className="relative flex min-h-10 cursor-pointer items-center gap-2 self-end rounded-lg border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800">
+                  <CalendarClock size={19} className="shrink-0 text-blue-600" />
+                  <span className="truncate font-medium">
+                    {scheduledDateTimeLabel(task)}
+                  </span>
                   <input
-                    type="date"
-                    value={task.scheduled_date || ""}
+                    type="datetime-local"
+                    value={scheduledDateTimeValue(task)}
                     onChange={(event) => {
+                      const [date, time] = event.target.value.split("T");
                       const updated = {
                         ...task,
-                        scheduled_date: event.target.value || null,
+                        scheduled_date: date || null,
+                        scheduled_time: time || null,
                       };
                       changeLocalTask(task.id, {
-                        scheduled_date: event.target.value || null,
+                        scheduled_date: date || null,
+                        scheduled_time: time || null,
                       });
                       void saveDraft(updated);
                     }}
-                    className="w-full rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
-                  />
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span className="font-medium">Laiks (nav obligāts)</span>
-                  <input
-                    type="time"
-                    value={task.scheduled_time?.slice(0, 5) || ""}
-                    onChange={(event) => {
-                      const updated = {
-                        ...task,
-                        scheduled_time: event.target.value || null,
-                      };
-                      changeLocalTask(task.id, {
-                        scheduled_time: event.target.value || null,
-                      });
-                      void saveDraft(updated);
-                    }}
-                    className="w-full rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
+                    aria-label="Izvēlēties uzdevuma datumu un laiku"
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                   />
                 </label>
               </div>
