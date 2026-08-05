@@ -862,6 +862,39 @@ export default function PlannedTasksPage() {
     setMessage("Uzdevums atjaunots.");
   }
 
+  async function emptyTrash() {
+    if (dayCounts.canceled === 0 || !selectedEmployeeId) return;
+    if (
+      !window.confirm(
+        `Vai neatgriezeniski iztīrīt ${profileName(selectedEmployeeId)} miskasti ${shortDateLabel(selectedDate)}?`,
+      )
+    ) {
+      return;
+    }
+
+    setMessage("");
+    const { data, error } = await supabase.rpc("empty_planned_task_trash", {
+      target_assignee_id: selectedEmployeeId,
+      target_date: selectedDate,
+    });
+    if (error) {
+      setMessage("Miskasti neizdevās iztīrīt.");
+      return;
+    }
+
+    setTasks((current) =>
+      current.filter(
+        (task) =>
+          !(
+            task.assignee_id === selectedEmployeeId &&
+            task.scheduled_date === selectedDate &&
+            task.status === "canceled"
+          ),
+      ),
+    );
+    setMessage(`Neatgriezeniski izdzēsti ${Number(data) || 0} uzdevumi.`);
+  }
+
   async function moveTask(task: PlannedTask, direction: -1 | 1) {
     const index = selectedDayTasks.findIndex((item) => item.id === task.id);
     const other = selectedDayTasks[index + direction];
@@ -1654,6 +1687,18 @@ export default function PlannedTasksPage() {
             </button>
           ))}
         </div>
+
+        {dayTab === "canceled" && dayCounts.canceled > 0 && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => void emptyTrash()}
+              className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
+            >
+              Iztīrīt miskasti
+            </button>
+          </div>
+        )}
 
         {selectedDayTasks.length === 0 ? (
           <p className="py-4 text-sm text-zinc-500">
