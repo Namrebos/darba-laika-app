@@ -836,6 +836,32 @@ export default function PlannedTasksPage() {
     setMessage("Uzdevums izdzēsts.");
   }
 
+  async function restorePlannedTask(task: PlannedTask) {
+    setSavingId(task.id);
+    setMessage("");
+    const { data, error } = await supabase.rpc("restore_planned_task", {
+      target_planned_task_id: task.id,
+    });
+    setSavingId(null);
+    if (error || data !== true) {
+      setMessage(
+        "Uzdevumu neizdevās atjaunot. Iespējams, glabāšanas termiņš ir beidzies.",
+      );
+      return;
+    }
+
+    const { data: restoredTask } = await supabase
+      .from("planned_tasks")
+      .select("status")
+      .eq("id", task.id)
+      .single();
+    const restoredStatus =
+      (restoredTask?.status as PlannedStatus | undefined) || "started";
+    changeLocalTask(task.id, { status: restoredStatus });
+    setDayTab(restoredStatus === "completed" ? "completed" : "planned");
+    setMessage("Uzdevums atjaunots.");
+  }
+
   async function moveTask(task: PlannedTask, direction: -1 | 1) {
     const index = selectedDayTasks.findIndex((item) => item.id === task.id);
     const other = selectedDayTasks[index + direction];
@@ -1611,7 +1637,7 @@ export default function PlannedTasksPage() {
             [
               ["planned", `Plānotie ${dayCounts.planned}`],
               ["completed", `Izpildītie ${dayCounts.completed}`],
-              ["canceled", `Atceltie ${dayCounts.canceled}`],
+              ["canceled", `Miskaste ${dayCounts.canceled}`],
             ] as [DayTab, string][]
           ).map(([tab, label]) => (
             <button
@@ -1731,6 +1757,18 @@ export default function PlannedTasksPage() {
                       className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:text-red-300"
                     >
                       {savingId === task.id ? "Dzēš..." : "Dzēst"}
+                    </button>
+                  </div>
+                )}
+                {task.status === "canceled" && task.task_log_id && (
+                  <div className="mt-3 flex justify-end border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                    <button
+                      type="button"
+                      onClick={() => void restorePlannedTask(task)}
+                      disabled={savingId === task.id}
+                      className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      {savingId === task.id ? "Atjauno..." : "Atjaunot"}
                     </button>
                   </div>
                 )}

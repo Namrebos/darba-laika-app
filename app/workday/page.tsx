@@ -40,13 +40,6 @@ type DictionaryWord = {
   usageCount: number;
 };
 
-type DeletedTask = {
-  id: number;
-  title: string;
-  note: string | null;
-  deleted_at: string;
-};
-
 function makeLocalId() {
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -64,7 +57,6 @@ export default function WorkdayPage() {
   const [savingTasks, setSavingTasks] = useState<Record<string, boolean>>({});
   const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([]);
   const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
-  const [deletedTasks, setDeletedTasks] = useState<DeletedTask[]>([]);
   const [startingPlannedTaskIds, setStartingPlannedTaskIds] = useState<
     Record<number, boolean>
   >({});
@@ -98,7 +90,6 @@ export default function WorkdayPage() {
       await checkSession(user);
       await loadDictionary(user.id);
       await loadTodayPlannedTasks(user.id);
-      await loadDeletedTasks(user.id);
       await supabase.rpc("purge_expired_own_deleted_tasks");
       setLoading(false);
     };
@@ -194,21 +185,6 @@ export default function WorkdayPage() {
     });
 
     setTasks(restoredTasks);
-  };
-
-  const loadDeletedTasks = async (userId: string) => {
-    const sevenDaysAgo = new Date(
-      Date.now() - 7 * 24 * 60 * 60 * 1000,
-    ).toISOString();
-    const { data } = await supabase
-      .from("task_logs")
-      .select("id, title, note, deleted_at")
-      .eq("user_id", userId)
-      .not("deleted_at", "is", null)
-      .gte("deleted_at", sevenDaysAgo)
-      .order("deleted_at", { ascending: false });
-
-    setDeletedTasks((data || []) as DeletedTask[]);
   };
 
   const loadTodayPlannedTasks = async (userId: string) => {
@@ -619,7 +595,9 @@ export default function WorkdayPage() {
     if (!taskToDelete) return;
 
     const confirmed = window.confirm(
-      `Vai tiešām pārvietot uzdevumu “${taskToDelete.title || "Bez nosaukuma"}” uz Miskasti?\n\nTo varēs atjaunot 7 dienu laikā.`,
+      taskToDelete.plannedTaskId
+        ? `Vai tiešām pārvietot uzdevumu “${taskToDelete.title || "Bez nosaukuma"}” uz Miskasti?\n\nTo varēs atjaunot 7 dienu laikā sadaļā “Plānotie uzdevumi”.`
+        : `Vai tiešām neatgriezeniski dzēst uzdevumu “${taskToDelete.title || "Bez nosaukuma"}”?`,
     );
     if (!confirmed) return;
 
@@ -633,7 +611,11 @@ export default function WorkdayPage() {
           target_task_log_id: taskToDelete.supabaseTaskId,
         });
         if (error || data !== true) {
-          alert("Uzdevumu neizdevās pārvietot uz Miskasti.");
+          alert(
+            taskToDelete.plannedTaskId
+              ? "Uzdevumu neizdevās pārvietot uz Miskasti."
+              : "Uzdevumu neizdevās izdzēst.",
+          );
           setTasks((current) => {
             if (current.some((task) => task.id === taskToDelete.id)) {
               return current;
@@ -648,7 +630,6 @@ export default function WorkdayPage() {
         }
       }
 
-      if (user) await loadDeletedTasks(user.id);
     } finally {
       deletingTaskIds.current.delete(id);
       setSavingTasks((current) => {
@@ -657,18 +638,6 @@ export default function WorkdayPage() {
         return next;
       });
     }
-  };
-
-  const restoreDeletedTask = async (taskId: number) => {
-    const { data, error } = await supabase.rpc("restore_own_deleted_task", {
-      target_task_log_id: taskId,
-    });
-    if (error || data !== true) {
-      alert("Uzdevumu neizdevās atjaunot.");
-      return;
-    }
-    if (user) await loadDeletedTasks(user.id);
-    if (user && sessionId) await loadSavedTasks(user.id, sessionId);
   };
 
   if (loading) {
@@ -770,41 +739,6 @@ export default function WorkdayPage() {
                 </article>
               ))}
             </section>
-          )}
-
-          {deletedTasks.length > 0 && (
-            <details className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-              <summary className="cursor-pointer font-semibold">
-                Miskaste ({deletedTasks.length})
-              </summary>
-              <p className="mt-2 text-sm text-zinc-500">
-                Dzēstos uzdevumus var atjaunot 7 dienu laikā.
-              </p>
-              <div className="mt-3 space-y-2">
-                {deletedTasks.map((deletedTask) => (
-                  <div
-                    key={deletedTask.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white p-3 dark:border-amber-900 dark:bg-zinc-900"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">
-                        {deletedTask.title || "Bez nosaukuma"}
-                      </p>
-                      <p className="text-xs text-zinc-500">
-                        Dzēsts {new Date(deletedTask.deleted_at).toLocaleString("lv-LV")}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => restoreDeletedTask(deletedTask.id)}
-                      className="shrink-0 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
-                    >
-                      Atjaunot
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </details>
           )}
 
           {tasks.map((task) => (
