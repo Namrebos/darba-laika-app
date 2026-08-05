@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
@@ -195,7 +195,6 @@ export default function PlannedTasksPage() {
   const [creatingRequestLink, setCreatingRequestLink] = useState(false);
   const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
-  const scheduleInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [multiDateConfigs, setMultiDateConfigs] = useState<
     Record<number, MultiDateConfig>
   >({});
@@ -1238,17 +1237,9 @@ export default function PlannedTasksPage() {
                   <div className="relative min-w-0 flex-1">
                     <button
                       type="button"
-                      onClick={() => {
-                        const input = scheduleInputRefs.current[task.id];
-                        if (!input) return;
-                        try {
-                          input.showPicker();
-                        } catch {
-                          input.click();
-                        }
-                      }}
-                      className="flex min-h-10 w-full items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800"
-                      aria-label="Izvēlēties uzdevuma datumu un laiku"
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      className="pointer-events-none flex min-h-10 w-full items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm dark:border-zinc-600"
                     >
                       <CalendarClock size={19} className="shrink-0 text-blue-600" />
                       <span className="truncate font-medium">
@@ -1256,18 +1247,14 @@ export default function PlannedTasksPage() {
                       </span>
                     </button>
                     <input
-                      ref={(element) => {
-                        scheduleInputRefs.current[task.id] = element;
-                      }}
                       type="datetime-local"
                       required
                       value={`${task.scheduled_date || selectedDate}T${task.scheduled_time?.slice(0, 5) || nextTimeForDate(task.scheduled_date || selectedDate, task.id)}`}
                       onChange={(event) =>
                         void saveSchedule(task, event.currentTarget.value)
                       }
-                      tabIndex={-1}
-                      aria-hidden="true"
-                      className="pointer-events-none absolute h-px w-px opacity-0"
+                      aria-label="Izvēlēties uzdevuma datumu un laiku"
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                     />
                   </div>
                   <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-2 py-2 text-xs font-medium dark:border-zinc-600">
