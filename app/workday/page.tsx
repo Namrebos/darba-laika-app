@@ -9,6 +9,14 @@ import Image from "next/image";
 import TaskCard from "../components/TaskCard";
 import TransportRequestModal from "@/app/components/TransportRequestModal";
 import { ExternalLink } from "lucide-react";
+import {
+  getCachedAccess,
+  getOfflineWorkday,
+  newOfflineId,
+  saveOfflineWorkday,
+  type OfflineWorkdayRecord,
+} from "@/lib/offlineStore";
+import { syncOfflineWorkday } from "@/lib/offlineSync";
 
 type Task = {
   id: string;
@@ -23,6 +31,8 @@ type Task = {
   supabaseTaskId?: number;
   plannedTaskId?: number;
   transportRequestId?: number;
+  offlineId: string;
+  deleted?: boolean;
 };
 
 type PlannedTask = {
@@ -54,6 +64,8 @@ export default function WorkdayPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dictionaryWords, setDictionaryWords] = useState<DictionaryWord[]>([]);
   const [sessionId, setSessionId] = useState<number | null>(null);
+  const [sessionOfflineId, setSessionOfflineId] = useState<string | null>(null);
+  const [sessionStartTime, setSessionStartTime] = useState<string | null>(null);
   const [savingTasks, setSavingTasks] = useState<Record<string, boolean>>({});
   const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([]);
   const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
@@ -64,9 +76,8 @@ export default function WorkdayPage() {
 
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData.session?.user ?? null;
 
       if (!user) {
         router.push("/login");
@@ -78,10 +89,10 @@ export default function WorkdayPage() {
         .select("role, can_access_workday")
         .eq("id", user.id)
         .single();
-      if (
-        profile?.role !== "admin" &&
-        profile?.can_access_workday !== true
-      ) {
+      const cachedAccess = !profile
+        ? await getCachedAccess<{ role?: string; permissions?: { can_access_workday?: boolean } }>(user.id)
+        : undefined;
+      if (profile?.role !== "admin" && profile?.can_access_workday !== true && cachedAccess?.role !== "admin" && cachedAccess?.permissions?.can_access_workday !== true) {
         router.replace("/summary");
         return;
       }
@@ -96,6 +107,60 @@ export default function WorkdayPage() {
 
     getUser();
   }, [router]);
+
+  useEffect(() => {
+    if (!user || !sessionOfflineId || !sessionStartTime || workdayState !== "active") return;
+    const timeout = window.setTimeout(async () => {
+      const previous = await getOfflineWorkday(user.id);
+      const visibleIds = new Set(tasks.map((task) => task.offlineId));
+      const deletedTasks = (previous?.tasks || []).filter(
+        (task) => task.deleted && !visibleIds.has(task.localId),
+      );
+      const record: OfflineWorkdayRecord = {
+        userId: user.id,
+        localId: sessionOfflineId,
+        serverId: sessionId ?? undefined,
+        startTime: sessionStartTime,
+        endTime: null,
+        updatedAt: new Date().toISOString(),
+        tasks: [...tasks.map((task) => ({
+          localId: task.offlineId,
+          serverId: task.supabaseTaskId,
+          plannedTaskId: task.plannedTaskId,
+          transportRequestId: task.transportRequestId,
+          title: task.title,
+          notes: task.notes,
+          startTime: (task.startTime || new Date()).toISOString(),
+          endTime: task.endTime?.toISOString() || null,
+          deleted: task.deleted === true,
+          images: task.images,
+          uploadedImageUrls: task.uploadedImageUrls,
+        })), ...deletedTasks],
+      };
+      void saveOfflineWorkday(record);
+      if (navigator.onLine) void syncOfflineWorkday(user.id);
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [user, sessionOfflineId, sessionStartTime, sessionId, workdayState, tasks]);
+
+  useEffect(() => {
+    const handleSynced = async () => {
+      if (!user) return;
+      const record = await getOfflineWorkday(user.id);
+      if (!record) return;
+      setSessionId(record.serverId ?? null);
+      setTasks((current) =>
+        current.map((task) => {
+          const synced = record.tasks.find((item) => item.localId === task.offlineId);
+          return synced
+            ? { ...task, supabaseTaskId: synced.serverId, images: synced.images as File[], uploadedImageUrls: synced.uploadedImageUrls }
+            : task;
+        }),
+      );
+    };
+    window.addEventListener("offline-sync-complete", handleSynced);
+    return () => window.removeEventListener("offline-sync-complete", handleSynced);
+  }, [user]);
 
   useEffect(() => {
     if (user && sessionId) {
@@ -181,6 +246,7 @@ export default function WorkdayPage() {
         transportRequestId: linkedPlannedTasks?.find(
           (planned: any) => planned.task_log_id === log.id,
         )?.transport_request_id,
+        offlineId: log.offline_id || newOfflineId(),
       };
     });
 
@@ -226,7 +292,7 @@ export default function WorkdayPage() {
   };
 
   const checkSession = async (currentUser: User) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("work_logs")
       .select("*")
       .eq("user_id", currentUser.id)
@@ -236,7 +302,39 @@ export default function WorkdayPage() {
 
     if (data && data.length > 0) {
       setSessionId(data[0].id);
+      setSessionOfflineId(data[0].created_at);
+      setSessionStartTime(data[0].start_time);
       setWorkdayState("active");
+      return;
+    }
+
+    if (error || !navigator.onLine) {
+      const offline = await getOfflineWorkday(currentUser.id);
+      if (offline && !offline.endTime) {
+        setSessionId(offline.serverId ?? null);
+        setSessionOfflineId(offline.localId);
+        setSessionStartTime(offline.startTime);
+        setWorkdayState("active");
+        setTasks(
+          offline.tasks
+            .filter((task) => !task.deleted)
+            .map((task) => ({
+              id: `offline-${task.localId}`,
+              offlineId: task.localId,
+              title: task.title,
+              notes: task.notes,
+              tags: [],
+              images: task.images as File[],
+              uploadedImageUrls: task.uploadedImageUrls,
+              status: task.endTime ? "finished" : "active",
+              startTime: new Date(task.startTime),
+              endTime: task.endTime ? new Date(task.endTime) : undefined,
+              supabaseTaskId: task.serverId,
+              plannedTaskId: task.plannedTaskId,
+              transportRequestId: task.transportRequestId,
+            })),
+        );
+      }
     }
   };
 
@@ -364,8 +462,6 @@ export default function WorkdayPage() {
 
   const saveTaskToDB = async (task: Task) => {
     if (!user) return;
-    if (!sessionId) return;
-
     if (task.supabaseTaskId || savingTasks[task.id]) return;
 
     setSavingTasks((prev) => ({ ...prev, [task.id]: true }));
@@ -379,59 +475,9 @@ export default function WorkdayPage() {
           ? (task.endTime ? new Date(task.endTime) : new Date()).toISOString()
           : null;
 
-      const { data, error } = await supabase
-        .from("task_logs")
-        .insert([
-          {
-            session_id: sessionId,
-            title: task.title,
-            note: task.notes,
-            start_time: startISO,
-            end_time: endISO,
-            user_id: user.id,
-          },
-        ])
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Saglabāšanas kļūda:", error.message);
-        return;
-      }
-
-      if (data) {
-        const uploadedUrls = await uploadImages(task, data.id);
-        if (task.uploadedImageUrls.length > 0) {
-          await supabase.from("task_images").insert(
-            task.uploadedImageUrls.map((url) => ({
-              user_id: user.id,
-              task_log_id: data.id,
-              url,
-            })),
-          );
-        }
-        if (task.plannedTaskId) {
-          await supabase.rpc("update_assigned_planned_task_status", {
-            target_id: task.plannedTaskId,
-            target_status: "started",
-            linked_task_log_id: data.id,
-          });
-          if (task.status === "finished") {
-            await supabase.rpc("update_assigned_planned_task_status", {
-              target_id: task.plannedTaskId,
-              target_status: "completed",
-              linked_task_log_id: data.id,
-            });
-          }
-          setPlannedTasks((current) =>
-            current.filter((item) => item.id !== task.plannedTaskId),
-          );
-        }
-        updateTask(task.id, {
-          uploadedImageUrls: [...task.uploadedImageUrls, ...uploadedUrls],
-          supabaseTaskId: data.id,
-        });
-      }
+      updateTask(task.id, { startTime: new Date(startISO), endTime: endISO ? new Date(endISO) : undefined });
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await syncOfflineWorkday(user.id);
     } finally {
       setSavingTasks((prev) => {
         const next = { ...prev };
@@ -444,59 +490,46 @@ export default function WorkdayPage() {
   const startWorkday = async () => {
     if (!user) return;
 
-    const { data } = await supabase
-      .from("work_logs")
-      .insert([
-        {
-          user_id: user.id,
-          project: "Darba diena",
-          start_time: new Date().toISOString(),
-          description: "",
-        },
-      ])
-      .select()
-      .single();
-
-    if (data) {
-      setWorkdayState("active");
-      setSessionId(data.id);
+    const localId = newOfflineId();
+    const startTime = new Date().toISOString();
+    const record: OfflineWorkdayRecord = { userId: user.id, localId, startTime, endTime: null, tasks: [], updatedAt: startTime };
+    await saveOfflineWorkday(record);
+    setSessionOfflineId(localId);
+    setSessionStartTime(startTime);
+    setWorkdayState("active");
+    if (navigator.onLine) {
+      await syncOfflineWorkday(user.id);
+      const synced = await getOfflineWorkday(user.id);
+      setSessionId(synced?.serverId ?? null);
     }
   };
 
   const endWorkday = async () => {
     if (!user) return;
 
-    const { data: unfinishedTasks } = await supabase
-      .from("task_logs")
-      .select("*")
-      .eq("user_id", user.id)
-      .is("deleted_at", null)
-      .is("end_time", null);
-
-    if (unfinishedTasks && unfinishedTasks.length > 0) {
+    if (tasks.some((task) => task.status !== "finished" && !task.deleted)) {
       alert("Vispirms pabeidz visus uzdevumus!");
       return;
     }
 
-    const { data } = await supabase
-      .from("work_logs")
-      .select("*")
-      .eq("user_id", user.id)
-      .is("end_time", null)
-      .order("start_time", { ascending: false })
-      .limit(1);
-
-    if (data && data.length > 0) {
-      const id = data[0].id;
-
-      await supabase
-        .from("work_logs")
-        .update({ end_time: new Date().toISOString() })
-        .eq("id", id);
-
+    if (sessionOfflineId && sessionStartTime) {
+      const endTime = new Date().toISOString();
+      const previous = await getOfflineWorkday(user.id);
+      const visibleIds = new Set(tasks.map((task) => task.offlineId));
+      const deletedTasks = (previous?.tasks || []).filter(
+        (task) => task.deleted && !visibleIds.has(task.localId),
+      );
+      await saveOfflineWorkday({
+        userId: user.id, localId: sessionOfflineId, serverId: sessionId ?? undefined,
+        startTime: sessionStartTime, endTime, updatedAt: endTime,
+        tasks: [...tasks.map((task) => ({ localId: task.offlineId, serverId: task.supabaseTaskId, plannedTaskId: task.plannedTaskId, transportRequestId: task.transportRequestId, title: task.title, notes: task.notes, startTime: (task.startTime || new Date()).toISOString(), endTime: task.endTime?.toISOString() || null, deleted: task.deleted === true, images: task.images, uploadedImageUrls: task.uploadedImageUrls })), ...deletedTasks],
+      });
+      if (navigator.onLine) await syncOfflineWorkday(user.id);
       setWorkdayState("inactive");
       setTasks([]);
       setSessionId(null);
+      setSessionOfflineId(null);
+      setSessionStartTime(null);
     }
   };
 
@@ -509,6 +542,7 @@ export default function WorkdayPage() {
       images: [],
       uploadedImageUrls: [],
       status: "starting",
+      offlineId: newOfflineId(),
     };
 
     setTasks((prev) => [...prev, newTask]);
@@ -528,6 +562,27 @@ export default function WorkdayPage() {
       [plannedTask.id]: true,
     }));
     try {
+      if (!navigator.onLine) {
+        const now = new Date();
+        setTasks((current) => [
+          ...current,
+          {
+            id: `offline-${plannedTask.id}-${Date.now()}`,
+            offlineId: newOfflineId(),
+            title: plannedTask.title,
+            notes: plannedTask.note,
+            tags: [],
+            images: [],
+            uploadedImageUrls: plannedTask.imageUrls,
+            status: "active",
+            startTime: now,
+            plannedTaskId: plannedTask.id,
+            transportRequestId: plannedTask.transport_request_id ?? undefined,
+          },
+        ]);
+        setPlannedTasks((current) => current.filter((item) => item.id !== plannedTask.id));
+        return;
+      }
       const { error } = await supabase.rpc("start_assigned_planned_task", {
         target_id: plannedTask.id,
         target_session_id: sessionId,
@@ -606,7 +661,14 @@ export default function WorkdayPage() {
     setTasks((current) => current.filter((task) => task.id !== id));
 
     try {
-      if (taskToDelete.supabaseTaskId) {
+      if (!navigator.onLine || !taskToDelete.supabaseTaskId) {
+        const offline = await getOfflineWorkday(user!.id);
+        if (offline) {
+          const stored = offline.tasks.find((task) => task.localId === taskToDelete.offlineId);
+          if (stored) stored.deleted = true;
+          await saveOfflineWorkday(offline);
+        }
+      } else if (taskToDelete.supabaseTaskId) {
         const { data, error } = await supabase.rpc("soft_delete_own_task", {
           target_task_log_id: taskToDelete.supabaseTaskId,
         });

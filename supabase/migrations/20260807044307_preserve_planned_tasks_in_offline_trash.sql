@@ -1,0 +1,3 @@
+-- The final sync_offline_task definition is already included in the preceding
+-- migration for clean installations. This migration records the production
+-- hotfix that preserves planned tasks in the shared trash during offline sync.

@@ -1,8 +1,10 @@
-const CACHE_NAME = "darba-laiks-static-v3";
+const CACHE_NAME = "darba-laiks-static-v4";
 const STATIC_FILES = [
   "/manifest.webmanifest",
   "/icon-192.png",
   "/icon-512.png",
+  "/",
+  "/workday",
 ];
 
 self.addEventListener("install", (event) => {
@@ -38,15 +40,18 @@ self.addEventListener("fetch", (event) => {
     url.pathname === "/icon-512.png" ||
     url.pathname.startsWith("/_next/static/");
 
-  if (!isSameOrigin || !isStaticFile || event.request.method !== "GET") {
+  const isPage = event.request.mode === "navigate";
+
+  if (!isSameOrigin || (!isStaticFile && !isPage) || event.request.method !== "GET") {
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-
-      return fetch(event.request).then((networkResponse) => {
+    (isPage
+      ? fetch(event.request).catch(() => caches.match(event.request).then((response) => response || caches.match("/workday")))
+      : caches.match(event.request).then((cachedResponse) => cachedResponse || fetch(event.request))
+    ).then((networkResponse) => {
+        if (!networkResponse) return new Response("Bezsaistes lapa nav pieejama.", { status: 503 });
         const responseClone = networkResponse.clone();
 
         caches.open(CACHE_NAME).then((cache) => {
@@ -54,7 +59,6 @@ self.addEventListener("fetch", (event) => {
         });
 
         return networkResponse;
-      });
-    }),
+      }),
   );
 });

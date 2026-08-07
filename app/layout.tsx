@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import "./globals.css";
 import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister";
+import OfflineStatus from "@/app/components/OfflineStatus";
+import { getCachedAccess, saveCachedAccess } from "@/lib/offlineStore";
 import {
   hasSectionAccess,
   type AppRole,
@@ -93,7 +95,8 @@ export default function RootLayout({
     if (isAuthPage) return;
 
     async function checkAccess() {
-      const { data: authData } = await supabase.auth.getUser();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const authData = { user: sessionData.session?.user ?? null };
       if (!authData.user) {
         router.replace("/login");
         return;
@@ -110,13 +113,17 @@ export default function RootLayout({
         `)
         .eq("id", authData.user.id)
         .single();
-      const currentRole = (profile?.role || "member") as AppRole;
+      const cached = !profile
+        ? await getCachedAccess<{ role: AppRole; permissions: SectionPermissions }>(authData.user.id)
+        : undefined;
+      const currentRole = (profile?.role || cached?.role || "member") as AppRole;
       const currentPermissions: SectionPermissions = {
-        can_access_workday: profile?.can_access_workday === true,
-        can_access_finance: profile?.can_access_finance === true,
-        can_access_calculators: profile?.can_access_calculators === true,
-        can_access_planned_tasks: profile?.can_access_planned_tasks === true,
+        can_access_workday: profile ? profile.can_access_workday === true : cached?.permissions.can_access_workday === true,
+        can_access_finance: profile ? profile.can_access_finance === true : cached?.permissions.can_access_finance === true,
+        can_access_calculators: profile ? profile.can_access_calculators === true : cached?.permissions.can_access_calculators === true,
+        can_access_planned_tasks: profile ? profile.can_access_planned_tasks === true : cached?.permissions.can_access_planned_tasks === true,
       };
+      if (profile) void saveCachedAccess(authData.user.id, { role: currentRole, permissions: currentPermissions });
       setRole(currentRole);
       setPermissions(currentPermissions);
 
@@ -240,7 +247,8 @@ export default function RootLayout({
   return (
     <html lang="lv">
       <body className="bg-white dark:bg-zinc-900 text-black dark:text-white transition-colors">
-        <ServiceWorkerRegister />
+      <ServiceWorkerRegister />
+      <OfflineStatus />
 
         <div className="flex h-screen">
           <div
