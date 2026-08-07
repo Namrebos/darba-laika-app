@@ -26,6 +26,7 @@ export type OfflineWorkdayRecord = {
   endTime: string | null;
   tasks: OfflineTaskRecord[];
   updatedAt: string;
+  needsSync: boolean;
 };
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -65,9 +66,19 @@ export async function getOfflineWorkday(userId: string) {
   );
 }
 
-export async function saveOfflineWorkday(record: OfflineWorkdayRecord) {
+export async function saveOfflineWorkday(
+  record: OfflineWorkdayRecord,
+  options: { needsSync?: boolean } = {},
+) {
   await withStore("readwrite", (store) =>
-    store.put({ ...record, updatedAt: new Date().toISOString() }, workdayKey(record.userId)),
+    store.put(
+      {
+        ...record,
+        needsSync: options.needsSync ?? true,
+        updatedAt: new Date().toISOString(),
+      },
+      workdayKey(record.userId),
+    ),
   );
   window.dispatchEvent(new CustomEvent("offline-data-changed"));
 }

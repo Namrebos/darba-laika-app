@@ -13,7 +13,8 @@ let syncing = false;
 export async function syncOfflineWorkday(userId: string) {
   if (syncing || !navigator.onLine) return false;
   const record = await getOfflineWorkday(userId);
-  if (!record) return true;
+  if (!record || record.needsSync === false) return true;
+  const syncStartedFrom = record.updatedAt;
 
   syncing = true;
   window.dispatchEvent(new CustomEvent("offline-sync-status", { detail: { syncing: true } }));
@@ -68,16 +69,36 @@ export async function syncOfflineWorkday(userId: string) {
 
     record.tasks = record.tasks.filter((task) => !task.deleted);
 
+    const latest = await getOfflineWorkday(userId);
+    if (latest && latest.updatedAt !== syncStartedFrom) {
+      latest.serverId = record.serverId;
+      latest.tasks = latest.tasks.map((task) => {
+        const synced = record.tasks.find((item) => item.localId === task.localId);
+        return synced
+          ? {
+              ...task,
+              serverId: synced.serverId,
+              images: synced.images,
+              uploadedImageUrls: synced.uploadedImageUrls,
+            }
+          : task;
+      });
+      await saveOfflineWorkday(latest, { needsSync: true });
+      window.setTimeout(() => void syncOfflineWorkday(userId), 3000);
+      window.dispatchEvent(new CustomEvent("offline-sync-complete", { detail: latest }));
+      return true;
+    }
+
     if (record.endTime) {
       await clearOfflineWorkday(userId);
     } else {
-      await saveOfflineWorkday(record);
+      await saveOfflineWorkday(record, { needsSync: false });
     }
     window.dispatchEvent(new CustomEvent("offline-sync-complete", { detail: record }));
     return true;
   } catch (error) {
     console.error("Bezsaistes datu sinhronizācijas kļūda:", error);
-    await saveOfflineWorkday(record);
+    await saveOfflineWorkday(record, { needsSync: true });
     window.dispatchEvent(new CustomEvent("offline-sync-error"));
     return false;
   } finally {

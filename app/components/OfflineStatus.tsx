@@ -17,7 +17,8 @@ export default function OfflineStatus() {
       setOnline(navigator.onLine);
       const { data } = await supabase.auth.getSession();
       userId = data.session?.user.id || userId;
-      setPending(Boolean(userId && (await getOfflineWorkday(userId))));
+      const record = userId ? await getOfflineWorkday(userId) : undefined;
+      setPending(Boolean(record && record.needsSync !== false));
     };
     const handleOnline = async () => {
       await refresh();
@@ -41,16 +42,13 @@ export default function OfflineStatus() {
     };
   }, []);
 
-  if (online && !pending && !syncing) return null;
+  // Tiešsaistē sinhronizācija notiek fonā un netraucē darbu ar paziņojumu joslu.
+  if (online) return null;
   return (
     <div className={`fixed inset-x-3 bottom-3 z-[110] mx-auto flex max-w-md items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium shadow-xl ${online ? "bg-amber-400 text-black" : "bg-zinc-900 text-white"}`}>
       {syncing ? <RefreshCw className="animate-spin" size={20} /> : <CloudOff size={20} />}
       <span>
-        {syncing
-          ? "Sinhronizē ierīcē saglabātos datus…"
-          : online
-            ? "Dati gaida sinhronizāciju."
-            : "Bezsaistes režīms — dati tiek saglabāti ierīcē."}
+        Bezsaistes režīms — dati tiek saglabāti ierīcē.
       </span>
     </div>
   );
