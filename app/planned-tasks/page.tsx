@@ -7,6 +7,8 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
+  CarFront,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -49,6 +51,15 @@ type PlannedTask = {
   status: PlannedStatus;
   task_log_id: number | null;
   transport_request_id: number | null;
+  vehicle_id: number | null;
+};
+
+type Vehicle = {
+  id: number;
+  registration_number: string;
+  display_name: string;
+  usage_count: number;
+  last_used_at: string | null;
 };
 
 type PlannedImage = {
@@ -176,6 +187,7 @@ export default function PlannedTasksPage() {
   const router = useRouter();
   const [userId, setUserId] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [tasks, setTasks] = useState<PlannedTask[]>([]);
   const [images, setImages] = useState<Record<number, PlannedImage[]>>({});
   const [selectedDate, setSelectedDate] = useState(todayInRiga());
@@ -195,6 +207,10 @@ export default function PlannedTasksPage() {
   const [creatingRequestLink, setCreatingRequestLink] = useState(false);
   const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [vehicleManagerOpen, setVehicleManagerOpen] = useState(false);
+  const [newVehicleRegistration, setNewVehicleRegistration] = useState("");
+  const [newVehicleName, setNewVehicleName] = useState("");
+  const [savingVehicle, setSavingVehicle] = useState(false);
   const [multiDateConfigs, setMultiDateConfigs] = useState<
     Record<number, MultiDateConfig>
   >({});
@@ -226,6 +242,7 @@ export default function PlannedTasksPage() {
         { data: taskRows, error: taskError },
         { data: imageRows, error: imageError },
         { data: tagRows, error: tagError },
+        { data: vehicleRows, error: vehicleError },
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -242,9 +259,24 @@ export default function PlannedTasksPage() {
           .select("name, usage_count")
           .eq("user_id", authData.user.id)
           .order("usage_count", { ascending: false }),
+        supabase
+          .from("vehicles")
+          .select(
+            "id, registration_number, display_name, usage_count, last_used_at",
+          )
+          .eq("is_active", true)
+          .order("usage_count", { ascending: false })
+          .order("last_used_at", { ascending: false, nullsFirst: false })
+          .order("registration_number"),
       ]);
 
-      if (profileError || taskError || imageError || tagError) {
+      if (
+        profileError ||
+        taskError ||
+        imageError ||
+        tagError ||
+        vehicleError
+      ) {
         setMessage("Neizdevās ielādēt plānotos uzdevumus.");
       }
 
@@ -261,6 +293,7 @@ export default function PlannedTasksPage() {
           "",
       );
       setTasks((taskRows || []) as PlannedTask[]);
+      setVehicles((vehicleRows || []) as Vehicle[]);
       setDictionaryWords(
         (tagRows || []).map((word) => ({
           name: word.name,
@@ -550,6 +583,41 @@ export default function PlannedTasksPage() {
     "Kravas pārvadājuma pieteikums",
   );
 
+  async function reloadVehicles() {
+    const { data, error } = await supabase
+      .from("vehicles")
+      .select(
+        "id, registration_number, display_name, usage_count, last_used_at",
+      )
+      .eq("is_active", true)
+      .order("usage_count", { ascending: false })
+      .order("last_used_at", { ascending: false, nullsFirst: false })
+      .order("registration_number");
+    if (!error) setVehicles((data || []) as Vehicle[]);
+  }
+
+  async function addVehicle() {
+    if (!newVehicleRegistration.trim()) {
+      setMessage("Ievadi auto valsts reģistrācijas numuru.");
+      return;
+    }
+    setSavingVehicle(true);
+    setMessage("");
+    const { error } = await supabase.rpc("add_vehicle", {
+      vehicle_registration_number: newVehicleRegistration,
+      vehicle_display_name: newVehicleName,
+    });
+    setSavingVehicle(false);
+    if (error) {
+      setMessage(error.message || "Auto neizdevās pievienot.");
+      return;
+    }
+    setNewVehicleRegistration("");
+    setNewVehicleName("");
+    await reloadVehicles();
+    setMessage("Auto pievienots sarakstam.");
+  }
+
   async function saveDraft(task: PlannedTask) {
     setSavingId(task.id);
     setMessage("");
@@ -561,6 +629,7 @@ export default function PlannedTasksPage() {
         note: task.note.trim(),
         scheduled_date: task.scheduled_date || null,
         scheduled_time: task.scheduled_time || null,
+        vehicle_id: task.vehicle_id,
         updated_at: new Date().toISOString(),
       })
       .eq("id", task.id);
@@ -650,6 +719,7 @@ export default function PlannedTasksPage() {
         note: task.note.trim(),
         scheduled_date: date,
         scheduled_time: task.scheduled_time,
+        vehicle_id: task.vehicle_id,
         position,
         status: "planned" as const,
       };
@@ -1109,6 +1179,17 @@ export default function PlannedTasksPage() {
                 <Link2 size={18} />
                 {creatingRequestLink ? "Veido saiti..." : "Klienta saite"}
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewMenuOpen(false);
+                  setVehicleManagerOpen(true);
+                }}
+                className="flex w-full items-center gap-3 border-t border-zinc-200 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              >
+                <CarFront size={18} />
+                Auto saraksts
+              </button>
             </div>
           )}
         </div>
@@ -1291,6 +1372,41 @@ export default function PlannedTasksPage() {
                       </option>
                     ))}
                   </select>
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span className="font-medium">Auto VNZ</span>
+                  <div className="flex gap-2">
+                    <select
+                      value={task.vehicle_id ?? ""}
+                      onChange={(event) => {
+                        const vehicleId = event.target.value
+                          ? Number(event.target.value)
+                          : null;
+                        const updated = { ...task, vehicle_id: vehicleId };
+                        changeLocalTask(task.id, { vehicle_id: vehicleId });
+                        void saveDraft(updated).then(() => reloadVehicles());
+                      }}
+                      className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
+                    >
+                      <option value="">Nav izvēlēts</option>
+                      {vehicles.map((vehicle) => (
+                        <option key={vehicle.id} value={vehicle.id}>
+                          {vehicle.registration_number}
+                          {vehicle.display_name
+                            ? ` · ${vehicle.display_name}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setVehicleManagerOpen(true)}
+                      className="rounded-lg border border-zinc-300 px-3 text-lg font-semibold hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800"
+                      aria-label="Pievienot auto"
+                    >
+                      +
+                    </button>
+                  </div>
                 </label>
                 <div className="flex items-center gap-2 self-end">
                   <div className="relative min-w-0 flex-1">
@@ -1822,6 +1938,86 @@ export default function PlannedTasksPage() {
           </div>
         )}
       </section>
+      {vehicleManagerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setVehicleManagerOpen(false);
+          }}
+        >
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-bold">Auto saraksts</h2>
+                <p className="text-sm text-zinc-500">
+                  Biežāk izmantotie auto automātiski ir saraksta augšgalā.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVehicleManagerOpen(false)}
+                className="rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                aria-label="Aizvērt"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="grid gap-2 rounded-xl border border-zinc-200 p-3 sm:grid-cols-[1fr_1.3fr_auto] dark:border-zinc-700">
+              <input
+                value={newVehicleRegistration}
+                onChange={(event) =>
+                  setNewVehicleRegistration(event.target.value.toUpperCase())
+                }
+                placeholder="VNZ, piem. AB-1234"
+                className="min-w-0 rounded-lg border border-zinc-300 bg-transparent p-2 uppercase dark:border-zinc-600"
+              />
+              <input
+                value={newVehicleName}
+                onChange={(event) => setNewVehicleName(event.target.value)}
+                placeholder="Nosaukums (nav obligāts)"
+                className="min-w-0 rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
+              />
+              <button
+                type="button"
+                onClick={() => void addVehicle()}
+                disabled={savingVehicle}
+                className="flex items-center justify-center rounded-lg bg-green-600 px-4 py-2 font-semibold text-white disabled:opacity-50"
+                aria-label="Saglabāt auto"
+              >
+                <Check size={20} />
+              </button>
+            </div>
+
+            <div className="mt-4 divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+              {vehicles.length === 0 ? (
+                <p className="p-4 text-sm text-zinc-500">
+                  Auto vēl nav pievienoti.
+                </p>
+              ) : (
+                vehicles.map((vehicle) => (
+                  <div
+                    key={vehicle.id}
+                    className="flex items-center justify-between gap-3 p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold">{vehicle.registration_number}</p>
+                      {vehicle.display_name && (
+                        <p className="truncate text-sm text-zinc-500">
+                          {vehicle.display_name}
+                        </p>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-xs text-zinc-500">
+                      Izmantots {vehicle.usage_count}×
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <TransportRequestModal
         requestId={openedRequestId}
         onClose={() => setOpenedRequestId(null)}
