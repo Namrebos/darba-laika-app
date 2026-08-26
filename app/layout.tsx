@@ -153,6 +153,7 @@ export default function RootLayout({
         "/finance": "can_access_finance",
         "/calculators": "can_access_calculators",
         "/planned-tasks": "can_access_planned_tasks",
+        "/fleet": "can_access_planned_tasks",
       };
       const requiredSection = protectedRoutes[pathname];
       if (
@@ -225,7 +226,10 @@ export default function RootLayout({
       : []),
     ...(currentAccess &&
     hasSectionAccess(currentAccess, "can_access_planned_tasks")
-      ? [{ href: "/planned-tasks", label: "Plānotie uzdevumi" }]
+      ? [
+          { href: "/planned-tasks", label: "Plānotie uzdevumi" },
+          { href: "/fleet", label: "Autoparks" },
+        ]
       : []),
     ...(role === "admin" ? [{ href: "/users", label: "Lietotāji" }] : []),
     { href: "/profile", label: "Profils" },
