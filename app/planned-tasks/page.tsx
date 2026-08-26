@@ -1347,11 +1347,20 @@ export default function PlannedTasksPage() {
                         changeLocalTask(task.id, { vehicle_id: vehicleId });
                         void saveDraft(updated).then(() => reloadVehicles());
                       }}
-                      className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
+                      className="w-full min-w-0 rounded-lg border border-zinc-300 bg-white p-2 text-zinc-950 [color-scheme:light] dark:border-zinc-600 dark:bg-zinc-900 dark:text-white dark:[color-scheme:dark]"
                     >
-                      <option value="">Nav izvēlēts</option>
+                      <option
+                        value=""
+                        className="bg-white text-zinc-950 dark:bg-zinc-900 dark:text-white"
+                      >
+                        Nav izvēlēts
+                      </option>
                       {vehicles.map((vehicle) => (
-                        <option key={vehicle.id} value={vehicle.id}>
+                        <option
+                          key={vehicle.id}
+                          value={vehicle.id}
+                          className="bg-white text-zinc-950 dark:bg-zinc-900 dark:text-white"
+                        >
                           {vehicle.registration_number}
                           {vehicle.display_name
                             ? ` · ${vehicle.display_name}`
