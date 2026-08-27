@@ -1307,27 +1307,23 @@ export default function PlannedTasksPage() {
                   : "border-amber-400 bg-amber-50 ring-2 ring-amber-300/60 dark:border-amber-500 dark:bg-amber-950/30"
               }`}
             >
-              <button
-                type="button"
-                onClick={() => toggleTask(task)}
-                className={`flex w-full items-center gap-3 text-left ${
-                  expandedTaskIds.has(task.id)
-                    ? "justify-end"
-                    : "justify-between"
-                }`}
-                aria-expanded={expandedTaskIds.has(task.id)}
-              >
-                {!expandedTaskIds.has(task.id) && (
-                  <div className="min-w-0">
-                    <h3 className="truncate font-semibold">
-                      {task.title.trim() || "Bez nosaukuma"}
-                    </h3>
-                    <p className="mt-1 truncate text-sm text-zinc-500">
-                      {notePreview(task.note)}
-                    </p>
-                  </div>
-                )}
-                <div className="flex shrink-0 items-center gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleTask(task)}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                  aria-expanded={expandedTaskIds.has(task.id)}
+                >
+                  {!expandedTaskIds.has(task.id) && (
+                    <div className="min-w-0">
+                      <h3 className="truncate font-semibold">
+                        {task.title.trim() || "Bez nosaukuma"}
+                      </h3>
+                      <p className="mt-1 truncate text-sm text-zinc-500">
+                        {notePreview(task.note)}
+                      </p>
+                    </div>
+                  )}
                   <span
                     className={`rounded-full px-2 py-1 text-xs font-bold ${
                       task.viewed_at
@@ -1337,14 +1333,29 @@ export default function PlannedTasksPage() {
                   >
                     {task.viewed_at ? "Drafts" : "Jauns"}
                   </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleTask(task)}
+                  className="shrink-0 rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  aria-label={
+                    expandedTaskIds.has(task.id)
+                      ? "Aizvērt kartīti"
+                      : "Atvērt kartīti"
+                  }
+                  aria-expanded={expandedTaskIds.has(task.id)}
+                >
                   <ChevronDown
                     size={20}
-                    className={`transition-transform ${
-                      expandedTaskIds.has(task.id) ? "rotate-180" : ""
-                    }`}
+                    className="transition-transform"
+                    style={{
+                      transform: expandedTaskIds.has(task.id)
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
+                    }}
                   />
-                </div>
-              </button>
+                </button>
+              </div>
               {expandedTaskIds.has(task.id) && (
                 <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
               <div className="relative">
