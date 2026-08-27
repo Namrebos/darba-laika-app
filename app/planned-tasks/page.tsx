@@ -834,7 +834,14 @@ export default function PlannedTasksPage() {
     if (multiDateConfig?.enabled) {
       if (!task.title.trim() || !task.assignee_id) {
         const saved = await saveDraft(task);
-        if (saved) setMessage("Kartīte saglabāta draftos.");
+        if (saved) {
+          setExpandedTaskIds((current) => {
+            const next = new Set(current);
+            next.delete(task.id);
+            return next;
+          });
+          setMessage("Kartīte saglabāta draftos.");
+        }
         return;
       }
       await sendTaskToMultipleDates(task, multiDateConfig);
@@ -842,7 +849,14 @@ export default function PlannedTasksPage() {
     }
     if (!isTaskReadyToPlan(task)) {
       const saved = await saveDraft(task);
-      if (saved) setMessage("Kartīte saglabāta draftos.");
+      if (saved) {
+        setExpandedTaskIds((current) => {
+          const next = new Set(current);
+          next.delete(task.id);
+          return next;
+        });
+        setMessage("Kartīte saglabāta draftos.");
+      }
       return;
     }
 
