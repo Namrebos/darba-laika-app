@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
   Clipboard,
   ExternalLink,
   ImagePlus,
@@ -1869,7 +1868,13 @@ export default function PlannedTasksPage() {
             aria-label={dayPlanExpanded ? "Aizvērt dienas plānu" : "Atvērt dienas plānu"}
             aria-expanded={dayPlanExpanded}
           >
-            {dayPlanExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            <ChevronDown
+              size={20}
+              className="transition-transform"
+              style={{
+                transform: dayPlanExpanded ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            />
           </button>
         </div>
 
