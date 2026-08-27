@@ -40,7 +40,7 @@ type Profile = {
 type PlannedTask = {
   id: number;
   created_by: string;
-  assignee_id: string;
+  assignee_id: string | null;
   title: string;
   note: string;
   scheduled_date: string | null;
@@ -50,6 +50,8 @@ type PlannedTask = {
   task_log_id: number | null;
   transport_request_id: number | null;
   vehicle_id: number | null;
+  viewed_at: string | null;
+  updated_at: string;
 };
 
 type Vehicle = {
@@ -310,7 +312,15 @@ export default function PlannedTasksPage() {
   }, [router]);
 
   const newTasks = useMemo(
-    () => tasks.filter((task) => task.status === "new"),
+    () =>
+      tasks
+        .filter((task) => task.status === "new")
+        .sort((a, b) => {
+          if (Boolean(a.viewed_at) !== Boolean(b.viewed_at)) {
+            return a.viewed_at ? 1 : -1;
+          }
+          return b.updated_at.localeCompare(a.updated_at);
+        }),
     [tasks],
   );
 
@@ -393,7 +403,8 @@ export default function PlannedTasksPage() {
     return `${String(Math.floor(nextMinutes / 60)).padStart(2, "0")}:${String(nextMinutes % 60).padStart(2, "0")}`;
   }
 
-  function profileName(profileId: string) {
+  function profileName(profileId: string | null) {
+    if (!profileId) return "Nav piešķirts";
     const profile = profiles.find((item) => item.id === profileId);
     return profile?.display_name || profile?.email || "Nezināms lietotājs";
   }
@@ -521,16 +532,13 @@ export default function PlannedTasksPage() {
   async function createDraft() {
     if (!userId) return;
     setMessage("");
-    const defaultAssignee =
-      profiles.find((profile) => profile.id === userId)?.id ||
-      profiles[0]?.id ||
-      userId;
     const { data, error } = await supabase
       .from("planned_tasks")
       .insert({
         created_by: userId,
-        assignee_id: defaultAssignee,
+        assignee_id: null,
         status: "new",
+        viewed_at: new Date().toISOString(),
       })
       .select()
       .single();
@@ -540,6 +548,17 @@ export default function PlannedTasksPage() {
       return;
     }
     setTasks((current) => [data as PlannedTask, ...current]);
+  }
+
+  async function markTaskViewed(task: PlannedTask) {
+    if (task.viewed_at) return;
+    const viewedAt = new Date().toISOString();
+    changeLocalTask(task.id, { viewed_at: viewedAt });
+    const { error } = await supabase
+      .from("planned_tasks")
+      .update({ viewed_at: viewedAt })
+      .eq("id", task.id);
+    if (error) changeLocalTask(task.id, { viewed_at: null });
   }
 
   async function createRequestLink() {
@@ -590,23 +609,61 @@ export default function PlannedTasksPage() {
     if (!error) setVehicles((data || []) as Vehicle[]);
   }
 
-  async function saveDraft(task: PlannedTask) {
+  function isTaskReadyToPlan(task: PlannedTask) {
+    return Boolean(
+      task.title.trim() &&
+        task.assignee_id &&
+        task.scheduled_date &&
+        task.scheduled_time,
+    );
+  }
+
+  async function saveDraft(task: PlannedTask, autoPlan = false) {
     setSavingId(task.id);
     setMessage("");
+    const shouldPlan =
+      task.status === "new" &&
+      autoPlan &&
+      !multiDateConfigs[task.id]?.enabled &&
+      isTaskReadyToPlan(task);
+    const position = shouldPlan
+      ? tasks
+          .filter(
+            (item) =>
+              item.id !== task.id &&
+              item.scheduled_date === task.scheduled_date &&
+              item.assignee_id === task.assignee_id &&
+              item.status !== "canceled",
+          )
+          .reduce((largest, item) => Math.max(largest, item.position), -1) + 1
+      : task.position;
+    const updatedAt = new Date().toISOString();
+    const changes = {
+      assignee_id: task.assignee_id,
+      title: task.title.trim(),
+      note: task.note.trim(),
+      scheduled_date: task.scheduled_date || null,
+      scheduled_time: task.scheduled_time || null,
+      vehicle_id: task.vehicle_id,
+      status: shouldPlan ? ("planned" as const) : task.status,
+      position,
+      updated_at: updatedAt,
+    };
     const { error } = await supabase
       .from("planned_tasks")
-      .update({
-        assignee_id: task.assignee_id,
-        title: task.title.trim(),
-        note: task.note.trim(),
-        scheduled_date: task.scheduled_date || null,
-        scheduled_time: task.scheduled_time || null,
-        vehicle_id: task.vehicle_id,
-        updated_at: new Date().toISOString(),
-      })
+      .update(changes)
       .eq("id", task.id);
     setSavingId(null);
-    if (error) setMessage("Kartītes izmaiņas neizdevās saglabāt.");
+    if (error) {
+      setMessage("Kartītes izmaiņas neizdevās saglabāt.");
+      return;
+    }
+    changeLocalTask(task.id, changes);
+    if (shouldPlan) {
+      setSelectedDate(task.scheduled_date!);
+      setDayTab("planned");
+      setMessage("Kartīte automātiski ieplānota izvēlētajā darbadienā.");
+    }
   }
 
   async function saveSchedule(task: PlannedTask, value: string) {
@@ -625,7 +682,7 @@ export default function PlannedTasksPage() {
       scheduled_date: updated.scheduled_date,
       scheduled_time: updated.scheduled_time,
     });
-    await saveDraft(updated);
+    await saveDraft(updated, true);
   }
 
   function updateMultiDateConfig(
@@ -659,8 +716,8 @@ export default function PlannedTasksPage() {
     config: MultiDateConfig,
   ) {
     const dates = selectedDates(config);
-    if (!task.title.trim() || !task.note.trim() || !task.scheduled_time) {
-      setMessage("Aizpildi nosaukumu, piezīmes un laiku.");
+    if (!task.title.trim() || !task.assignee_id || !task.scheduled_time) {
+      setMessage("Aizpildi nosaukumu, izvēlies lietotāju un laiku.");
       return;
     }
     if (dates.length === 0) {
@@ -777,12 +834,12 @@ export default function PlannedTasksPage() {
     }
     if (
       !task.title.trim() ||
-      !task.note.trim() ||
+      !task.assignee_id ||
       !task.scheduled_date ||
       !task.scheduled_time
     ) {
       setMessage(
-        "Pirms nosūtīšanas aizpildi nosaukumu, piezīmes, datumu un laiku.",
+        "Pirms ieplānošanas izvēlies lietotāju, datumu un laiku.",
       );
       return;
     }
@@ -1210,7 +1267,14 @@ export default function PlannedTasksPage() {
       )}
 
       <section className="space-y-3">
-        <h2 className="font-semibold">Jaunās kartītes ({newTasks.length})</h2>
+        <div>
+          <h2 className="font-semibold">
+            Jaunie uzdevumi un drafti ({newTasks.length})
+          </h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Šeit paliek kartītes bez lietotāja, datuma vai laika.
+          </p>
+        </div>
         {newTasks.length === 0 ? (
           <p className="rounded-xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-500 dark:border-zinc-700">
             Nav sagatavošanā esošu kartīšu.
@@ -1219,12 +1283,22 @@ export default function PlannedTasksPage() {
           newTasks.map((task) => (
             <article
               key={task.id}
-              className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
+              onClick={() => void markTaskViewed(task)}
+              className={`relative space-y-3 rounded-xl border p-4 transition-colors ${
+                task.viewed_at
+                  ? "border-zinc-200 dark:border-zinc-700"
+                  : "border-amber-400 bg-amber-50 ring-2 ring-amber-300/60 dark:border-amber-500 dark:bg-amber-950/30"
+              }`}
             >
+              {!task.viewed_at && (
+                <span className="absolute -right-2 -top-2 rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-black shadow-md">
+                  Jauns
+                </span>
+              )}
               <div className="flex items-center justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                    Jauns
+                    Drafts
                   </span>
                   {task.transport_request_id && (
                     <span className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-800 dark:bg-violet-950 dark:text-violet-200">
@@ -1314,19 +1388,21 @@ export default function PlannedTasksPage() {
                 <label className="space-y-1 text-sm">
                   <span className="font-medium">Lietotājs</span>
                   <select
-                    value={task.assignee_id}
+                    value={task.assignee_id ?? ""}
                     onChange={(event) => {
+                      const assigneeId = event.target.value || null;
                       const updated = {
                         ...task,
-                        assignee_id: event.target.value,
+                        assignee_id: assigneeId,
                       };
                       changeLocalTask(task.id, {
-                        assignee_id: event.target.value,
+                        assignee_id: assigneeId,
                       });
-                      void saveDraft(updated);
+                      void saveDraft(updated, true);
                     }}
-                    className="w-full rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
+                    className="w-full rounded-lg border border-zinc-300 bg-white p-2 text-zinc-950 [color-scheme:light] dark:border-zinc-600 dark:bg-zinc-900 dark:text-white dark:[color-scheme:dark]"
                   >
+                    <option value="">Nav piešķirts</option>
                     {profiles.map((profile) => (
                       <option key={profile.id} value={profile.id}>
                         {profile.display_name || profile.email}
@@ -1690,11 +1766,19 @@ export default function PlannedTasksPage() {
                 <button
                   type="button"
                   disabled={savingId === task.id}
-                  onClick={() => sendTask(task)}
+                  onClick={() =>
+                    isTaskReadyToPlan(task) || multiDateConfigs[task.id]?.enabled
+                      ? void sendTask(task)
+                      : void saveDraft(task)
+                  }
                   className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                   <Send size={18} />
-                  {savingId === task.id ? "Saglabā..." : "Nosūtīt"}
+                  {savingId === task.id
+                    ? "Saglabā..."
+                    : isTaskReadyToPlan(task) || multiDateConfigs[task.id]?.enabled
+                      ? "Ieplānot"
+                      : "Saglabāt draftu"}
                 </button>
               </div>
             </article>
