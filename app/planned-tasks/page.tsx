@@ -210,9 +210,6 @@ export default function PlannedTasksPage() {
   const [multiDateConfigs, setMultiDateConfigs] = useState<
     Record<number, MultiDateConfig>
   >({});
-  const [includeTaskTime, setIncludeTaskTime] = useState<
-    Record<number, boolean>
-  >({});
   const scheduleInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   useEffect(() => {
@@ -621,25 +618,9 @@ export default function PlannedTasksPage() {
     );
   }
 
-  async function saveDraft(task: PlannedTask, autoPlan = false) {
+  async function saveDraft(task: PlannedTask) {
     setSavingId(task.id);
     setMessage("");
-    const shouldPlan =
-      task.status === "new" &&
-      autoPlan &&
-      !multiDateConfigs[task.id]?.enabled &&
-      isTaskReadyToPlan(task);
-    const position = shouldPlan
-      ? tasks
-          .filter(
-            (item) =>
-              item.id !== task.id &&
-              item.scheduled_date === task.scheduled_date &&
-              item.assignee_id === task.assignee_id &&
-              item.status !== "canceled",
-          )
-          .reduce((largest, item) => Math.max(largest, item.position), -1) + 1
-      : task.position;
     const updatedAt = new Date().toISOString();
     const changes = {
       assignee_id: task.assignee_id,
@@ -648,8 +629,8 @@ export default function PlannedTasksPage() {
       scheduled_date: task.scheduled_date || null,
       scheduled_time: task.scheduled_time || null,
       vehicle_id: task.vehicle_id,
-      status: shouldPlan ? ("planned" as const) : task.status,
-      position,
+      status: task.status,
+      position: task.position,
       updated_at: updatedAt,
     };
     const { error } = await supabase
@@ -659,14 +640,10 @@ export default function PlannedTasksPage() {
     setSavingId(null);
     if (error) {
       setMessage("Kartītes izmaiņas neizdevās saglabāt.");
-      return;
+      return false;
     }
     changeLocalTask(task.id, changes);
-    if (shouldPlan) {
-      setSelectedDate(task.scheduled_date!);
-      setDayTab("planned");
-      setMessage("Kartīte automātiski ieplānota izvēlētajā darbadienā.");
-    }
+    return true;
   }
 
   async function saveSchedule(task: PlannedTask, value: string) {
@@ -676,19 +653,16 @@ export default function PlannedTasksPage() {
       return;
     }
 
-    const shouldIncludeTime =
-      includeTaskTime[task.id] ?? Boolean(task.scheduled_time);
-
     const updated = {
       ...task,
       scheduled_date: date,
-      scheduled_time: shouldIncludeTime && time ? time : null,
+      scheduled_time: time || null,
     };
     changeLocalTask(task.id, {
       scheduled_date: updated.scheduled_date,
       scheduled_time: updated.scheduled_time,
     });
-    await saveDraft(updated, true);
+    await saveDraft(updated);
   }
 
   function updateMultiDateConfig(
@@ -835,17 +809,17 @@ export default function PlannedTasksPage() {
   async function sendTask(task: PlannedTask) {
     const multiDateConfig = multiDateConfigs[task.id];
     if (multiDateConfig?.enabled) {
+      if (!task.title.trim() || !task.assignee_id) {
+        const saved = await saveDraft(task);
+        if (saved) setMessage("Kartīte saglabāta draftos.");
+        return;
+      }
       await sendTaskToMultipleDates(task, multiDateConfig);
       return;
     }
-    if (
-      !task.title.trim() ||
-      !task.assignee_id ||
-      !task.scheduled_date
-    ) {
-      setMessage(
-        "Pirms ieplānošanas izvēlies lietotāju un datumu.",
-      );
+    if (!isTaskReadyToPlan(task)) {
+      const saved = await saveDraft(task);
+      if (saved) setMessage("Kartīte saglabāta draftos.");
       return;
     }
 
@@ -880,7 +854,7 @@ export default function PlannedTasksPage() {
     changeLocalTask(task.id, changes);
     const hashtagWords = extractHashtagWords(task.title, task.note);
     await Promise.all(hashtagWords.map((word) => addDictionaryWord(word)));
-    setSelectedDate(task.scheduled_date);
+    setSelectedDate(task.scheduled_date!);
     setDayTab("planned");
     setMessage("Kartīte nosūtīta uz izvēlēto dienu.");
   }
@@ -1403,7 +1377,7 @@ export default function PlannedTasksPage() {
                       changeLocalTask(task.id, {
                         assignee_id: assigneeId,
                       });
-                      void saveDraft(updated, true);
+                      void saveDraft(updated);
                     }}
                     className="w-full rounded-lg border border-zinc-300 bg-white p-2 text-zinc-950 [color-scheme:light] dark:border-zinc-600 dark:bg-zinc-900 dark:text-white dark:[color-scheme:dark]"
                   >
@@ -1488,27 +1462,6 @@ export default function PlannedTasksPage() {
                       className="pointer-events-none absolute h-px w-px opacity-0"
                     />
                   </div>
-                  <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-2 py-2 text-xs font-medium dark:border-zinc-600">
-                    <input
-                      type="checkbox"
-                      checked={
-                        includeTaskTime[task.id] ?? Boolean(task.scheduled_time)
-                      }
-                      onChange={(event) => {
-                        const includeTime = event.target.checked;
-                        setIncludeTaskTime((current) => ({
-                          ...current,
-                          [task.id]: includeTime,
-                        }));
-                        if (!includeTime && task.scheduled_time) {
-                          const updated = { ...task, scheduled_time: null };
-                          changeLocalTask(task.id, { scheduled_time: null });
-                          void saveDraft(updated);
-                        }
-                      }}
-                    />
-                    Laiks
-                  </label>
                   <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-2 py-2 text-xs font-medium dark:border-zinc-600">
                     <input
                       type="checkbox"
@@ -1805,19 +1758,11 @@ export default function PlannedTasksPage() {
                 <button
                   type="button"
                   disabled={savingId === task.id}
-                  onClick={() =>
-                    isTaskReadyToPlan(task) || multiDateConfigs[task.id]?.enabled
-                      ? void sendTask(task)
-                      : void saveDraft(task)
-                  }
+                  onClick={() => void sendTask(task)}
                   className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                   <Send size={18} />
-                  {savingId === task.id
-                    ? "Saglabā..."
-                    : isTaskReadyToPlan(task) || multiDateConfigs[task.id]?.enabled
-                      ? "Ieplānot"
-                      : "Saglabāt draftu"}
+                  {savingId === task.id ? "Saglabā..." : "Nosūtīt"}
                 </button>
               </div>
             </article>
