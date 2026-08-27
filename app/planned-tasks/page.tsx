@@ -1846,11 +1846,11 @@ export default function PlannedTasksPage() {
           >
             <div>
               <h2 className="font-semibold">Dienas plāns</h2>
-              <p className="text-sm text-zinc-500">
-                {dayPlanExpanded
-                  ? "Izvēlies datumu un sakārto secību."
-                  : selectedDate.split("-").reverse().join(".")}
-              </p>
+              {dayPlanExpanded && (
+                <p className="text-sm text-zinc-500">
+                  Izvēlies datumu un sakārto secību.
+                </p>
+              )}
             </div>
             <ChevronDown
               size={20}
