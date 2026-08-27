@@ -580,24 +580,27 @@ export default function PlannedTasksPage() {
   async function createDraft() {
     if (!userId) return;
     setMessage("");
-    const { data, error } = await supabase
-      .from("planned_tasks")
-      .insert({
-        created_by: userId,
-        assignee_id: null,
-        status: "new",
-        viewed_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error || !data) {
-      setMessage("Jaunu kartīti neizdevās izveidot.");
-      return;
-    }
-    setTasks((current) => [data as PlannedTask, ...current]);
-    setModalTaskId(data.id);
-    setExpandedTaskIds((current) => new Set(current).add(data.id));
+    const temporaryId = -Date.now();
+    const now = new Date().toISOString();
+    const temporaryTask: PlannedTask = {
+      id: temporaryId,
+      created_by: userId,
+      assignee_id: null,
+      title: "",
+      note: "",
+      scheduled_date: null,
+      scheduled_time: null,
+      position: 0,
+      status: "new",
+      task_log_id: null,
+      transport_request_id: null,
+      vehicle_id: null,
+      viewed_at: now,
+      updated_at: now,
+    };
+    setTasks((current) => [temporaryTask, ...current]);
+    setModalTaskId(temporaryId);
+    setExpandedTaskIds((current) => new Set(current).add(temporaryId));
   }
 
   async function markTaskViewed(task: PlannedTask) {
@@ -615,6 +618,14 @@ export default function PlannedTasksPage() {
     const isExpanded = expandedTaskIds.has(task.id);
     if (modalTaskId === task.id && isExpanded) {
       setModalTaskId(null);
+      if (task.id < 0) {
+        setTasks((current) => current.filter((item) => item.id !== task.id));
+        setMultiDateConfigs((current) => {
+          const next = { ...current };
+          delete next[task.id];
+          return next;
+        });
+      }
       setExpandedTaskIds((current) => {
         const next = new Set(current);
         next.delete(task.id);
@@ -689,12 +700,60 @@ export default function PlannedTasksPage() {
   function isTaskReadyToPlan(task: PlannedTask) {
     return Boolean(
       task.title.trim() &&
+        task.note.trim() &&
         task.assignee_id &&
         task.scheduled_date,
     );
   }
 
+  async function persistTemporaryTask(task: PlannedTask) {
+    if (task.id >= 0) return task;
+    const { data, error } = await supabase
+      .from("planned_tasks")
+      .insert({
+        created_by: userId,
+        assignee_id: task.assignee_id,
+        title: task.title.trim(),
+        note: task.note.trim(),
+        scheduled_date: task.scheduled_date,
+        scheduled_time: task.scheduled_time,
+        position: task.position,
+        status: "new",
+        vehicle_id: task.vehicle_id,
+        viewed_at: task.viewed_at || new Date().toISOString(),
+      })
+      .select()
+      .single();
+    if (error || !data) {
+      setMessage("Kartīti neizdevās saglabāt.");
+      return null;
+    }
+
+    const persistedTask = data as PlannedTask;
+    setTasks((current) =>
+      current.map((item) => (item.id === task.id ? persistedTask : item)),
+    );
+    setExpandedTaskIds((current) => {
+      const next = new Set(current);
+      next.delete(task.id);
+      next.add(persistedTask.id);
+      return next;
+    });
+    setModalTaskId((current) =>
+      current === task.id ? persistedTask.id : current,
+    );
+    setMultiDateConfigs((current) => {
+      const config = current[task.id];
+      if (!config) return current;
+      const next = { ...current, [persistedTask.id]: config };
+      delete next[task.id];
+      return next;
+    });
+    return persistedTask;
+  }
+
   async function saveDraft(task: PlannedTask) {
+    if (task.id < 0) return true;
     setSavingId(task.id);
     setMessage("");
     const updatedAt = new Date().toISOString();
@@ -884,6 +943,17 @@ export default function PlannedTasksPage() {
   }
 
   async function sendTask(task: PlannedTask) {
+    if (!task.title.trim() || !task.note.trim()) {
+      setMessage("Nosaukums un piezīmes ir obligāti.");
+      return;
+    }
+    if (task.id < 0) {
+      setSavingId(task.id);
+      const persistedTask = await persistTemporaryTask(task);
+      setSavingId(null);
+      if (persistedTask) await sendTask(persistedTask);
+      return;
+    }
     const multiDateConfig = multiDateConfigs[task.id];
     if (multiDateConfig?.enabled) {
       if (!task.title.trim() || !task.assignee_id) {
@@ -978,6 +1048,16 @@ export default function PlannedTasksPage() {
         `Vai neatgriezeniski dzēst uzdevumu “${task.title || "Bez nosaukuma"}”?`,
       )
     ) {
+      return;
+    }
+    if (task.id < 0) {
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+      setModalTaskId(null);
+      setExpandedTaskIds((current) => {
+        const next = new Set(current);
+        next.delete(task.id);
+        return next;
+      });
       return;
     }
     setSavingId(task.id);
@@ -1167,6 +1247,10 @@ export default function PlannedTasksPage() {
 
   async function uploadImages(task: PlannedTask, files: FileList | null) {
     if (!files || files.length === 0 || !userId) return;
+    if (task.id < 0) {
+      setMessage("Foto var pievienot pēc kartītes saglabāšanas.");
+      return;
+    }
     setSavingId(task.id);
     setMessage("");
 
