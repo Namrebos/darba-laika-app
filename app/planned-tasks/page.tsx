@@ -20,6 +20,7 @@ import {
   Pencil,
   Plus,
   Send,
+  Trash2,
   Truck,
   X,
 } from "lucide-react";
@@ -1331,24 +1332,6 @@ export default function PlannedTasksPage() {
               </button>
               {expandedTaskIds.has(task.id) && (
                 <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-wrap items-center gap-2">
-                  {task.transport_request_id && (
-                    <span className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-800 dark:bg-violet-950 dark:text-violet-200">
-                      Klienta pieteikums
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => deletePlannedTask(task)}
-                  className="text-zinc-500 hover:text-red-600"
-                  aria-label="Dzēst kartīti"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
               <div className="relative">
                 <input
                   value={task.title}
@@ -1809,15 +1792,27 @@ export default function PlannedTasksPage() {
                     </button>
                   )}
                 </div>
-                <button
-                  type="button"
-                  disabled={savingId === task.id}
-                  onClick={() => void sendTask(task)}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  <Send size={18} />
-                  {savingId === task.id ? "Saglabā..." : "Nosūtīt"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={savingId === task.id}
+                    onClick={() => void deletePlannedTask(task)}
+                    className="flex items-center justify-center rounded-lg bg-red-600 p-2.5 text-white hover:bg-red-700 disabled:opacity-50"
+                    aria-label="Dzēst kartīti"
+                    title="Dzēst kartīti"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingId === task.id}
+                    onClick={() => void sendTask(task)}
+                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    <Send size={18} />
+                    {savingId === task.id ? "Saglabā..." : "Nosūtīt"}
+                  </button>
+                </div>
               </div>
                 </div>
               )}
