@@ -219,6 +219,7 @@ export default function PlannedTasksPage() {
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<number>>(
     () => new Set(),
   );
+  const [dayPlanExpanded, setDayPlanExpanded] = useState(false);
   const [multiDateConfigs, setMultiDateConfigs] = useState<
     Record<number, MultiDateConfig>
   >({});
@@ -1836,19 +1837,40 @@ export default function PlannedTasksPage() {
       </section>
 
       <section className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="font-semibold">Dienas plāns</h2>
-            <p className="text-sm text-zinc-500">Izvēlies datumu un sakārto secību.</p>
-          </div>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-            className="rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
-          />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setDayPlanExpanded((current) => !current)}
+            className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+            aria-expanded={dayPlanExpanded}
+          >
+            <div>
+              <h2 className="font-semibold">Dienas plāns</h2>
+              <p className="text-sm text-zinc-500">
+                {dayPlanExpanded
+                  ? "Izvēlies datumu un sakārto secību."
+                  : selectedDate.split("-").reverse().join(".")}
+              </p>
+            </div>
+            <ChevronDown
+              size={20}
+              className={`shrink-0 transition-transform ${
+                dayPlanExpanded ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+          {dayPlanExpanded && (
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              className="rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
+            />
+          )}
         </div>
 
+        {dayPlanExpanded && (
+          <>
         <div
           role="tablist"
           aria-label="Darbinieki"
@@ -2031,6 +2053,8 @@ export default function PlannedTasksPage() {
               </article>
             ))}
           </div>
+        )}
+          </>
         )}
       </section>
       <TransportRequestModal
