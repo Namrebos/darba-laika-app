@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clipboard,
   ExternalLink,
   ImagePlus,
@@ -1837,11 +1838,11 @@ export default function PlannedTasksPage() {
       </section>
 
       <section className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setDayPlanExpanded((current) => !current)}
-            className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+            className="min-w-0 flex-1 text-left"
             aria-expanded={dayPlanExpanded}
           >
             <div>
@@ -1852,21 +1853,24 @@ export default function PlannedTasksPage() {
                 </p>
               )}
             </div>
-            <ChevronDown
-              size={20}
-              className={`shrink-0 transition-transform ${
-                dayPlanExpanded ? "rotate-180" : ""
-              }`}
-            />
           </button>
           {dayPlanExpanded && (
             <input
               type="date"
               value={selectedDate}
               onChange={(event) => setSelectedDate(event.target.value)}
-              className="rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
+              className="min-w-0 max-w-44 rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
             />
           )}
+          <button
+            type="button"
+            onClick={() => setDayPlanExpanded((current) => !current)}
+            className="shrink-0 rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            aria-label={dayPlanExpanded ? "Aizvērt dienas plānu" : "Atvērt dienas plānu"}
+            aria-expanded={dayPlanExpanded}
+          >
+            {dayPlanExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </button>
         </div>
 
         {dayPlanExpanded && (
