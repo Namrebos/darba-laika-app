@@ -1291,15 +1291,10 @@ export default function PlannedTasksPage() {
                   : "border-amber-400 bg-amber-50 ring-2 ring-amber-300/60 dark:border-amber-500 dark:bg-amber-950/30"
               }`}
             >
-              {!task.viewed_at && (
-                <span className="absolute -right-2 -top-2 rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-black shadow-md">
-                  Jauns
-                </span>
-              )}
               <button
                 type="button"
                 onClick={() => toggleTask(task)}
-                className="flex w-full items-center justify-between gap-3 pr-8 text-left"
+                className="flex w-full items-center justify-between gap-3 text-left"
                 aria-expanded={expandedTaskIds.has(task.id)}
               >
                 <div className="min-w-0">
@@ -1310,20 +1305,28 @@ export default function PlannedTasksPage() {
                     {notePreview(task.note)}
                   </p>
                 </div>
-                <ChevronDown
-                  size={20}
-                  className={`shrink-0 transition-transform ${
-                    expandedTaskIds.has(task.id) ? "rotate-180" : ""
-                  }`}
-                />
+                <div className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-bold ${
+                      task.viewed_at
+                        ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200"
+                        : "bg-amber-400 text-black"
+                    }`}
+                  >
+                    {task.viewed_at ? "Drafts" : "Jauns"}
+                  </span>
+                  <ChevronDown
+                    size={20}
+                    className={`transition-transform ${
+                      expandedTaskIds.has(task.id) ? "rotate-180" : ""
+                    }`}
+                  />
+                </div>
               </button>
               {expandedTaskIds.has(task.id) && (
                 <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-              <div className="flex items-center justify-between">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                    Drafts
-                  </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
                   {task.transport_request_id && (
                     <span className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-800 dark:bg-violet-950 dark:text-violet-200">
                       Klienta pieteikums
