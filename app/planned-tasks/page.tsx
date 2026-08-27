@@ -223,6 +223,7 @@ export default function PlannedTasksPage() {
   );
   const [dayPlanExpanded, setDayPlanExpanded] = useState(false);
   const [inboxExpanded, setInboxExpanded] = useState(false);
+  const [modalTaskId, setModalTaskId] = useState<number | null>(null);
   const [multiDateConfigs, setMultiDateConfigs] = useState<
     Record<number, MultiDateConfig>
   >({});
@@ -361,6 +362,14 @@ export default function PlannedTasksPage() {
         inboxTab === "new" ? !task.viewed_at : Boolean(task.viewed_at),
       ),
     [inboxTab, newTasks],
+  );
+
+  const displayedInboxTasks = useMemo(
+    () =>
+      modalTaskId === null
+        ? visibleInboxTasks
+        : newTasks.filter((task) => task.id === modalTaskId),
+    [modalTaskId, newTasks, visibleInboxTasks],
   );
 
   const employeeProfiles = useMemo(() => {
@@ -587,7 +596,7 @@ export default function PlannedTasksPage() {
       return;
     }
     setTasks((current) => [data as PlannedTask, ...current]);
-    setInboxTab("planned");
+    setModalTaskId(data.id);
     setExpandedTaskIds((current) => new Set(current).add(data.id));
   }
 
@@ -604,6 +613,15 @@ export default function PlannedTasksPage() {
 
   function toggleTask(task: PlannedTask) {
     const isExpanded = expandedTaskIds.has(task.id);
+    if (modalTaskId === task.id && isExpanded) {
+      setModalTaskId(null);
+      setExpandedTaskIds((current) => {
+        const next = new Set(current);
+        next.delete(task.id);
+        return next;
+      });
+      return;
+    }
     setExpandedTaskIds((current) => {
       const next = new Set(current);
       if (next.has(task.id)) next.delete(task.id);
@@ -611,6 +629,13 @@ export default function PlannedTasksPage() {
       return next;
     });
     if (isExpanded && !task.viewed_at) void markTaskViewed(task);
+  }
+
+  function toggleInbox() {
+    if (!inboxExpanded) {
+      setInboxTab(inboxCounts.new > 0 ? "new" : "planned");
+    }
+    setInboxExpanded((current) => !current);
   }
 
   async function createRequestLink() {
@@ -853,6 +878,7 @@ export default function PlannedTasksPage() {
     await Promise.all(hashtagWords.map((word) => addDictionaryWord(word)));
     setSelectedDate(dates[0]);
     setDayTab("planned");
+    setModalTaskId(null);
     setSavingId(null);
     setMessage(`Izveidotas ${dates.length} neatkarīgas kartītes.`);
   }
@@ -863,6 +889,8 @@ export default function PlannedTasksPage() {
       if (!task.title.trim() || !task.assignee_id) {
         const saved = await saveDraft(task);
         if (saved) {
+          setModalTaskId(null);
+          setInboxTab("planned");
           setExpandedTaskIds((current) => {
             const next = new Set(current);
             next.delete(task.id);
@@ -878,6 +906,8 @@ export default function PlannedTasksPage() {
     if (!isTaskReadyToPlan(task)) {
       const saved = await saveDraft(task);
       if (saved) {
+        setModalTaskId(null);
+        setInboxTab("planned");
         setExpandedTaskIds((current) => {
           const next = new Set(current);
           next.delete(task.id);
@@ -917,6 +947,7 @@ export default function PlannedTasksPage() {
     }
 
     changeLocalTask(task.id, changes);
+    setModalTaskId(null);
     const hashtagWords = extractHashtagWords(task.title, task.note);
     await Promise.all(hashtagWords.map((word) => addDictionaryWord(word)));
     setSelectedDate(task.scheduled_date!);
@@ -972,6 +1003,7 @@ export default function PlannedTasksPage() {
     }
 
     setTasks((current) => current.filter((item) => item.id !== task.id));
+    setModalTaskId((current) => (current === task.id ? null : current));
     setImages((current) => {
       const next = { ...current };
       delete next[task.id];
@@ -1223,7 +1255,6 @@ export default function PlannedTasksPage() {
                 type="button"
                 onClick={() => {
                   setNewMenuOpen(false);
-                  setInboxExpanded(true);
                   void createDraft();
                 }}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -1310,20 +1341,20 @@ export default function PlannedTasksPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setInboxExpanded((current) => !current)}
+            onClick={toggleInbox}
             className="min-w-0 flex-1 text-left"
             aria-expanded={inboxExpanded}
           >
-            <h2 className="font-semibold">Plānotie uzdevumi</h2>
+            <h2 className="font-semibold">Uzdevumi</h2>
           </button>
           <button
             type="button"
-            onClick={() => setInboxExpanded((current) => !current)}
+            onClick={toggleInbox}
             className="shrink-0 rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
             aria-label={
               inboxExpanded
-                ? "Aizvērt plānotos uzdevumus"
-                : "Atvērt plānotos uzdevumus"
+                ? "Aizvērt uzdevumus"
+                : "Atvērt uzdevumus"
             }
             aria-expanded={inboxExpanded}
           >
@@ -1337,17 +1368,15 @@ export default function PlannedTasksPage() {
           </button>
         </div>
 
-        {inboxExpanded && (
-          <>
-            <div
+        <div
               role="tablist"
-              aria-label="Plānoto uzdevumu veidi"
+              aria-label="Uzdevumu veidi"
               className="flex overflow-x-auto rounded-t-xl border border-b-0 border-zinc-300 bg-zinc-200 px-1 pt-1 dark:border-zinc-700 dark:bg-zinc-950"
             >
               {(
                 [
                   ["planned", `Plānotie ${inboxCounts.planned}`],
-                  ["new", `Jaunie ${inboxCounts.new}`],
+                  ["new", `Jauns ${inboxCounts.new}`],
                 ] as [InboxTab, string][]
               ).map(([tab, label]) => (
                 <button
@@ -1355,7 +1384,10 @@ export default function PlannedTasksPage() {
                   type="button"
                   role="tab"
                   aria-selected={inboxTab === tab}
-                  onClick={() => setInboxTab(tab)}
+                  onClick={() => {
+                    setInboxTab(tab);
+                    setInboxExpanded(true);
+                  }}
                   className={`relative min-w-32 flex-1 px-5 py-2.5 text-sm font-semibold transition-colors ${
                     inboxTab === tab
                       ? "z-10 rounded-t-xl bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-white"
@@ -1367,18 +1399,27 @@ export default function PlannedTasksPage() {
               ))}
             </div>
 
-        {visibleInboxTasks.length === 0 ? (
+        {(inboxExpanded || modalTaskId !== null) && (
+          <>
+        {modalTaskId !== null && (
+          <div className="fixed inset-0 z-40 bg-black/60" aria-hidden="true" />
+        )}
+        {displayedInboxTasks.length === 0 ? (
           <p className="rounded-xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-500 dark:border-zinc-700">
             Šajā tabā kartīšu nav.
           </p>
         ) : (
-          visibleInboxTasks.map((task) => (
+          displayedInboxTasks.map((task) => (
             <article
               key={task.id}
-              className={`relative rounded-xl border p-4 transition-colors ${
-                task.viewed_at
-                  ? "border-zinc-200 dark:border-zinc-700"
-                  : "border-amber-400 bg-amber-50 ring-2 ring-amber-300/60 dark:border-amber-500 dark:bg-amber-950/30"
+              className={`rounded-xl border p-4 transition-colors ${
+                modalTaskId === task.id
+                  ? "fixed inset-x-4 bottom-4 top-4 z-50 mx-auto max-w-3xl overflow-y-auto bg-white shadow-2xl dark:bg-zinc-900"
+                  : `relative ${
+                      task.viewed_at
+                        ? "border-zinc-200 dark:border-zinc-700"
+                        : "border-amber-400 bg-amber-50 ring-2 ring-amber-300/60 dark:border-amber-500 dark:bg-amber-950/30"
+                    }`
               }`}
             >
               <div className="flex items-center gap-2">
