@@ -210,6 +210,9 @@ export default function PlannedTasksPage() {
   const [multiDateConfigs, setMultiDateConfigs] = useState<
     Record<number, MultiDateConfig>
   >({});
+  const [includeTaskTime, setIncludeTaskTime] = useState<
+    Record<number, boolean>
+  >({});
 
   useEffect(() => {
     async function load() {
@@ -613,8 +616,7 @@ export default function PlannedTasksPage() {
     return Boolean(
       task.title.trim() &&
         task.assignee_id &&
-        task.scheduled_date &&
-        task.scheduled_time,
+        task.scheduled_date,
     );
   }
 
@@ -668,15 +670,18 @@ export default function PlannedTasksPage() {
 
   async function saveSchedule(task: PlannedTask, value: string) {
     const [date, time] = value.split("T");
-    if (!date || !time) {
-      setMessage("Datums un laiks ir obligāti.");
+    if (!date) {
+      setMessage("Datums ir obligāts.");
       return;
     }
+
+    const shouldIncludeTime =
+      includeTaskTime[task.id] ?? Boolean(task.scheduled_time);
 
     const updated = {
       ...task,
       scheduled_date: date,
-      scheduled_time: time,
+      scheduled_time: shouldIncludeTime && time ? time : null,
     };
     changeLocalTask(task.id, {
       scheduled_date: updated.scheduled_date,
@@ -716,8 +721,8 @@ export default function PlannedTasksPage() {
     config: MultiDateConfig,
   ) {
     const dates = selectedDates(config);
-    if (!task.title.trim() || !task.assignee_id || !task.scheduled_time) {
-      setMessage("Aizpildi nosaukumu, izvēlies lietotāju un laiku.");
+    if (!task.title.trim() || !task.assignee_id) {
+      setMessage("Aizpildi nosaukumu un izvēlies lietotāju.");
       return;
     }
     if (dates.length === 0) {
@@ -835,11 +840,10 @@ export default function PlannedTasksPage() {
     if (
       !task.title.trim() ||
       !task.assignee_id ||
-      !task.scheduled_date ||
-      !task.scheduled_time
+      !task.scheduled_date
     ) {
       setMessage(
-        "Pirms ieplānošanas izvēlies lietotāju, datumu un laiku.",
+        "Pirms ieplānošanas izvēlies lietotāju un datumu.",
       );
       return;
     }
@@ -1272,7 +1276,7 @@ export default function PlannedTasksPage() {
             Jaunie uzdevumi un drafti ({newTasks.length})
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Šeit paliek kartītes bez lietotāja, datuma vai laika.
+            Šeit paliek kartītes bez lietotāja vai datuma.
           </p>
         </div>
         {newTasks.length === 0 ? (
@@ -1470,6 +1474,27 @@ export default function PlannedTasksPage() {
                       className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                     />
                   </div>
+                  <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-2 py-2 text-xs font-medium dark:border-zinc-600">
+                    <input
+                      type="checkbox"
+                      checked={
+                        includeTaskTime[task.id] ?? Boolean(task.scheduled_time)
+                      }
+                      onChange={(event) => {
+                        const includeTime = event.target.checked;
+                        setIncludeTaskTime((current) => ({
+                          ...current,
+                          [task.id]: includeTime,
+                        }));
+                        if (!includeTime && task.scheduled_time) {
+                          const updated = { ...task, scheduled_time: null };
+                          changeLocalTask(task.id, { scheduled_time: null });
+                          void saveDraft(updated);
+                        }
+                      }}
+                    />
+                    Laiks
+                  </label>
                   <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-2 py-2 text-xs font-medium dark:border-zinc-600">
                     <input
                       type="checkbox"
