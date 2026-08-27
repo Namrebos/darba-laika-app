@@ -328,6 +328,12 @@ export default function PlannedTasksPage() {
     load();
   }, [router]);
 
+  useEffect(() => {
+    if (!message) return;
+    const timeout = window.setTimeout(() => setMessage(""), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [message]);
+
   const newTasks = useMemo(
     () =>
       tasks
@@ -1194,10 +1200,64 @@ export default function PlannedTasksPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4">
       {message && (
-        <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">
+        <p className="fixed bottom-5 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl bg-blue-700 px-4 py-3 text-center text-sm font-semibold text-white shadow-xl">
           {message}
         </p>
       )}
+
+      <div className="flex justify-end">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setNewMenuOpen((current) => !current)}
+            className="flex shrink-0 items-center gap-2 rounded-lg bg-green-600 px-3 py-2 font-medium text-white hover:bg-green-700"
+            aria-expanded={newMenuOpen}
+          >
+            <Plus size={18} />
+            Jauns
+            <ChevronDown size={16} />
+          </button>
+          {newMenuOpen && (
+            <div className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+              <button
+                type="button"
+                onClick={() => {
+                  setNewMenuOpen(false);
+                  setInboxExpanded(true);
+                  void createDraft();
+                }}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                <Plus size={18} />
+                Jauns uzdevums
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewMenuOpen(false);
+                  router.push("/planned-tasks/new-trip");
+                }}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                <Truck size={18} />
+                Jauns brauciens
+              </button>
+              <button
+                type="button"
+                disabled={creatingRequestLink}
+                onClick={() => {
+                  setNewMenuOpen(false);
+                  void createRequestLink();
+                }}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+              >
+                <Link2 size={18} />
+                {creatingRequestLink ? "Veido saiti..." : "Klienta saite"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {requestLink && (
         <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50 p-3 dark:border-violet-900 dark:bg-violet-950/30">
@@ -1279,59 +1339,6 @@ export default function PlannedTasksPage() {
 
         {inboxExpanded && (
           <>
-            <div className="flex justify-end">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setNewMenuOpen((current) => !current)}
-                  className="flex shrink-0 items-center gap-2 rounded-lg bg-green-600 px-3 py-2 font-medium text-white hover:bg-green-700"
-                  aria-expanded={newMenuOpen}
-                >
-                  <Plus size={18} />
-                  Jauns
-                  <ChevronDown size={16} />
-                </button>
-                {newMenuOpen && (
-                  <div className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewMenuOpen(false);
-                        void createDraft();
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    >
-                      <Plus size={18} />
-                      Jauns uzdevums
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewMenuOpen(false);
-                        router.push("/planned-tasks/new-trip");
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    >
-                      <Truck size={18} />
-                      Jauns brauciens
-                    </button>
-                    <button
-                      type="button"
-                      disabled={creatingRequestLink}
-                      onClick={() => {
-                        setNewMenuOpen(false);
-                        void createRequestLink();
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
-                    >
-                      <Link2 size={18} />
-                      {creatingRequestLink ? "Veido saiti..." : "Klienta saite"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
             <div
               role="tablist"
               aria-label="Plānoto uzdevumu veidi"
