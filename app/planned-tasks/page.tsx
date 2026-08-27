@@ -70,6 +70,7 @@ type PlannedImage = {
 };
 
 type DayTab = "planned" | "completed" | "canceled";
+type InboxTab = "planned" | "new";
 type DictionaryField = "title" | "note";
 
 type DictionaryWord = {
@@ -202,6 +203,7 @@ export default function PlannedTasksPage() {
   const [selectedDate, setSelectedDate] = useState(todayInRiga());
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [dayTab, setDayTab] = useState<DayTab>("planned");
+  const [inboxTab, setInboxTab] = useState<InboxTab>("planned");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null);
@@ -220,6 +222,7 @@ export default function PlannedTasksPage() {
     () => new Set(),
   );
   const [dayPlanExpanded, setDayPlanExpanded] = useState(false);
+  const [inboxExpanded, setInboxExpanded] = useState(false);
   const [multiDateConfigs, setMultiDateConfigs] = useState<
     Record<number, MultiDateConfig>
   >({});
@@ -336,6 +339,22 @@ export default function PlannedTasksPage() {
           return b.updated_at.localeCompare(a.updated_at);
         }),
     [tasks],
+  );
+
+  const inboxCounts = useMemo(
+    () => ({
+      planned: newTasks.filter((task) => Boolean(task.viewed_at)).length,
+      new: newTasks.filter((task) => !task.viewed_at).length,
+    }),
+    [newTasks],
+  );
+
+  const visibleInboxTasks = useMemo(
+    () =>
+      newTasks.filter((task) =>
+        inboxTab === "new" ? !task.viewed_at : Boolean(task.viewed_at),
+      ),
+    [inboxTab, newTasks],
   );
 
   const employeeProfiles = useMemo(() => {
@@ -562,6 +581,7 @@ export default function PlannedTasksPage() {
       return;
     }
     setTasks((current) => [data as PlannedTask, ...current]);
+    setInboxTab("planned");
     setExpandedTaskIds((current) => new Set(current).add(data.id));
   }
 
@@ -577,13 +597,14 @@ export default function PlannedTasksPage() {
   }
 
   function toggleTask(task: PlannedTask) {
+    const isExpanded = expandedTaskIds.has(task.id);
     setExpandedTaskIds((current) => {
       const next = new Set(current);
       if (next.has(task.id)) next.delete(task.id);
       else next.add(task.id);
       return next;
     });
-    if (!task.viewed_at) void markTaskViewed(task);
+    if (isExpanded && !task.viewed_at) void markTaskViewed(task);
   }
 
   async function createRequestLink() {
@@ -1172,65 +1193,6 @@ export default function PlannedTasksPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Plānotie uzdevumi</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Sagatavo, piešķir un sakārto uzdevumu kartītes.
-          </p>
-        </div>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setNewMenuOpen((current) => !current)}
-            className="flex shrink-0 items-center gap-2 rounded-lg bg-green-600 px-3 py-2 font-medium text-white hover:bg-green-700"
-            aria-expanded={newMenuOpen}
-          >
-            <Plus size={18} />
-            Jauns
-            <ChevronDown size={16} />
-          </button>
-          {newMenuOpen && (
-            <div className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-              <button
-                type="button"
-                onClick={() => {
-                  setNewMenuOpen(false);
-                  void createDraft();
-                }}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <Plus size={18} />
-                Jauns uzdevums
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setNewMenuOpen(false);
-                  router.push("/planned-tasks/new-trip");
-                }}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <Truck size={18} />
-                Jauns brauciens
-              </button>
-              <button
-                type="button"
-                disabled={creatingRequestLink}
-                onClick={() => {
-                  setNewMenuOpen(false);
-                  void createRequestLink();
-                }}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
-              >
-                <Link2 size={18} />
-                {creatingRequestLink ? "Veido saiti..." : "Klienta saite"}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
       {message && (
         <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">
           {message}
@@ -1284,21 +1246,126 @@ export default function PlannedTasksPage() {
         </div>
       )}
 
-      <section className="space-y-3">
-        <div>
-          <h2 className="font-semibold">
-            Jaunie uzdevumi un drafti ({newTasks.length})
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            Šeit paliek kartītes bez lietotāja vai datuma.
-          </p>
+      <section className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setInboxExpanded((current) => !current)}
+            className="min-w-0 flex-1 text-left"
+            aria-expanded={inboxExpanded}
+          >
+            <h2 className="font-semibold">Plānotie uzdevumi</h2>
+          </button>
+          <button
+            type="button"
+            onClick={() => setInboxExpanded((current) => !current)}
+            className="shrink-0 rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            aria-label={
+              inboxExpanded
+                ? "Aizvērt plānotos uzdevumus"
+                : "Atvērt plānotos uzdevumus"
+            }
+            aria-expanded={inboxExpanded}
+          >
+            <ChevronDown
+              size={20}
+              className="transition-transform"
+              style={{
+                transform: inboxExpanded ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            />
+          </button>
         </div>
-        {newTasks.length === 0 ? (
+
+        {inboxExpanded && (
+          <>
+            <div className="flex justify-end">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setNewMenuOpen((current) => !current)}
+                  className="flex shrink-0 items-center gap-2 rounded-lg bg-green-600 px-3 py-2 font-medium text-white hover:bg-green-700"
+                  aria-expanded={newMenuOpen}
+                >
+                  <Plus size={18} />
+                  Jauns
+                  <ChevronDown size={16} />
+                </button>
+                {newMenuOpen && (
+                  <div className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewMenuOpen(false);
+                        void createDraft();
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                      <Plus size={18} />
+                      Jauns uzdevums
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewMenuOpen(false);
+                        router.push("/planned-tasks/new-trip");
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                      <Truck size={18} />
+                      Jauns brauciens
+                    </button>
+                    <button
+                      type="button"
+                      disabled={creatingRequestLink}
+                      onClick={() => {
+                        setNewMenuOpen(false);
+                        void createRequestLink();
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+                    >
+                      <Link2 size={18} />
+                      {creatingRequestLink ? "Veido saiti..." : "Klienta saite"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div
+              role="tablist"
+              aria-label="Plānoto uzdevumu veidi"
+              className="flex overflow-x-auto rounded-t-xl border border-b-0 border-zinc-300 bg-zinc-200 px-1 pt-1 dark:border-zinc-700 dark:bg-zinc-950"
+            >
+              {(
+                [
+                  ["planned", `Plānotie ${inboxCounts.planned}`],
+                  ["new", `Jaunie ${inboxCounts.new}`],
+                ] as [InboxTab, string][]
+              ).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={inboxTab === tab}
+                  onClick={() => setInboxTab(tab)}
+                  className={`relative min-w-32 flex-1 px-5 py-2.5 text-sm font-semibold transition-colors ${
+                    inboxTab === tab
+                      ? "z-10 rounded-t-xl bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-white"
+                      : "rounded-t-lg text-zinc-600 hover:bg-zinc-300/70 dark:text-zinc-400 dark:hover:bg-zinc-800/70"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+        {visibleInboxTasks.length === 0 ? (
           <p className="rounded-xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-500 dark:border-zinc-700">
-            Nav sagatavošanā esošu kartīšu.
+            Šajā tabā kartīšu nav.
           </p>
         ) : (
-          newTasks.map((task) => (
+          visibleInboxTasks.map((task) => (
             <article
               key={task.id}
               className={`relative rounded-xl border p-4 transition-colors ${
@@ -1308,13 +1375,13 @@ export default function PlannedTasksPage() {
               }`}
             >
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => toggleTask(task)}
-                  className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
-                  aria-expanded={expandedTaskIds.has(task.id)}
-                >
-                  {!expandedTaskIds.has(task.id) && (
+                {!expandedTaskIds.has(task.id) ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleTask(task)}
+                    className="min-w-0 flex-1 text-left"
+                    aria-expanded={false}
+                  >
                     <div className="min-w-0">
                       <h3 className="truncate font-semibold">
                         {task.title.trim() || "Bez nosaukuma"}
@@ -1323,17 +1390,10 @@ export default function PlannedTasksPage() {
                         {notePreview(task.note)}
                       </p>
                     </div>
-                  )}
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs font-bold ${
-                      task.viewed_at
-                        ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200"
-                        : "bg-amber-400 text-black"
-                    }`}
-                  >
-                    {task.viewed_at ? "Drafts" : "Jauns"}
-                  </span>
-                </button>
+                  </button>
+                ) : (
+                  <div className="min-w-0 flex-1" />
+                )}
                 <button
                   type="button"
                   onClick={() => toggleTask(task)}
@@ -1844,6 +1904,8 @@ export default function PlannedTasksPage() {
               )}
             </article>
           ))
+        )}
+          </>
         )}
       </section>
 
