@@ -1294,17 +1294,23 @@ export default function PlannedTasksPage() {
               <button
                 type="button"
                 onClick={() => toggleTask(task)}
-                className="flex w-full items-center justify-between gap-3 text-left"
+                className={`flex w-full items-center gap-3 text-left ${
+                  expandedTaskIds.has(task.id)
+                    ? "justify-end"
+                    : "justify-between"
+                }`}
                 aria-expanded={expandedTaskIds.has(task.id)}
               >
-                <div className="min-w-0">
-                  <h3 className="truncate font-semibold">
-                    {task.title.trim() || "Bez nosaukuma"}
-                  </h3>
-                  <p className="mt-1 truncate text-sm text-zinc-500">
-                    {notePreview(task.note)}
-                  </p>
-                </div>
+                {!expandedTaskIds.has(task.id) && (
+                  <div className="min-w-0">
+                    <h3 className="truncate font-semibold">
+                      {task.title.trim() || "Bez nosaukuma"}
+                    </h3>
+                    <p className="mt-1 truncate text-sm text-zinc-500">
+                      {notePreview(task.note)}
+                    </p>
+                  </div>
+                )}
                 <div className="flex shrink-0 items-center gap-2">
                   <span
                     className={`rounded-full px-2 py-1 text-xs font-bold ${
