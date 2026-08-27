@@ -183,6 +183,14 @@ function scheduledDateTimeLabel(task: PlannedTask) {
     : date;
 }
 
+function notePreview(value: string) {
+  const symbols = Array.from(value.trim());
+  if (symbols.length === 0) return "Nav piezīmju";
+  return symbols.length > 30
+    ? `${symbols.slice(0, 30).join("")}...`
+    : symbols.join("");
+}
+
 export default function PlannedTasksPage() {
   const router = useRouter();
   const [userId, setUserId] = useState("");
@@ -207,6 +215,9 @@ export default function PlannedTasksPage() {
   const [creatingRequestLink, setCreatingRequestLink] = useState(false);
   const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<number>>(
+    () => new Set(),
+  );
   const [multiDateConfigs, setMultiDateConfigs] = useState<
     Record<number, MultiDateConfig>
   >({});
@@ -549,6 +560,7 @@ export default function PlannedTasksPage() {
       return;
     }
     setTasks((current) => [data as PlannedTask, ...current]);
+    setExpandedTaskIds((current) => new Set(current).add(data.id));
   }
 
   async function markTaskViewed(task: PlannedTask) {
@@ -560,6 +572,16 @@ export default function PlannedTasksPage() {
       .update({ viewed_at: viewedAt })
       .eq("id", task.id);
     if (error) changeLocalTask(task.id, { viewed_at: null });
+  }
+
+  function toggleTask(task: PlannedTask) {
+    setExpandedTaskIds((current) => {
+      const next = new Set(current);
+      if (next.has(task.id)) next.delete(task.id);
+      else next.add(task.id);
+      return next;
+    });
+    if (!task.viewed_at) void markTaskViewed(task);
   }
 
   async function createRequestLink() {
@@ -873,6 +895,7 @@ export default function PlannedTasksPage() {
       return;
     }
     changeLocalTask(task.id, changes);
+    setExpandedTaskIds((current) => new Set(current).add(task.id));
   }
 
   async function deletePlannedTask(task: PlannedTask) {
@@ -1262,8 +1285,7 @@ export default function PlannedTasksPage() {
           newTasks.map((task) => (
             <article
               key={task.id}
-              onClick={() => void markTaskViewed(task)}
-              className={`relative space-y-3 rounded-xl border p-4 transition-colors ${
+              className={`relative rounded-xl border p-4 transition-colors ${
                 task.viewed_at
                   ? "border-zinc-200 dark:border-zinc-700"
                   : "border-amber-400 bg-amber-50 ring-2 ring-amber-300/60 dark:border-amber-500 dark:bg-amber-950/30"
@@ -1274,6 +1296,29 @@ export default function PlannedTasksPage() {
                   Jauns
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => toggleTask(task)}
+                className="flex w-full items-center justify-between gap-3 pr-8 text-left"
+                aria-expanded={expandedTaskIds.has(task.id)}
+              >
+                <div className="min-w-0">
+                  <h3 className="truncate font-semibold">
+                    {task.title.trim() || "Bez nosaukuma"}
+                  </h3>
+                  <p className="mt-1 truncate text-sm text-zinc-500">
+                    {notePreview(task.note)}
+                  </p>
+                </div>
+                <ChevronDown
+                  size={20}
+                  className={`shrink-0 transition-transform ${
+                    expandedTaskIds.has(task.id) ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {expandedTaskIds.has(task.id) && (
+                <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
               <div className="flex items-center justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">
@@ -1765,6 +1810,8 @@ export default function PlannedTasksPage() {
                   {savingId === task.id ? "Saglabā..." : "Nosūtīt"}
                 </button>
               </div>
+                </div>
+              )}
             </article>
           ))
         )}
