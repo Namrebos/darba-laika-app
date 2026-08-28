@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Camera,
+  CalendarClock,
   CheckCircle2,
   ImagePlus,
   Link2,
@@ -137,6 +138,73 @@ function FieldLabel({
       {children}
       {required && <span className="text-red-500"> *</span>}
     </span>
+  );
+}
+
+function dateTimeLabel(date: string, time: string, placeholder: string) {
+  if (!date) return placeholder;
+  const [year, month, day] = date.split("-");
+  const formattedDate = `${day}.${month}.${year}.`;
+  return time ? `${formattedDate} ${time.slice(0, 5)}` : formattedDate;
+}
+
+function DateTimeField({
+  label,
+  date,
+  time,
+  min,
+  onChange,
+}: {
+  label: string;
+  date: string;
+  time: string;
+  min?: string;
+  onChange: (date: string, time: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pickerValue = date ? `${date}T${time || "09:00"}` : "";
+
+  const openPicker = () => {
+    const input = inputRef.current;
+    if (!input) return;
+    try {
+      input.showPicker();
+    } catch {
+      input.click();
+    }
+  };
+
+  return (
+    <div>
+      <FieldLabel required>{label}</FieldLabel>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={openPicker}
+          className="form-input flex min-h-12 w-full items-center gap-3 text-left"
+          aria-label={label}
+        >
+          <CalendarClock size={20} className="shrink-0 text-blue-600" />
+          <span className={date ? "font-medium" : "text-slate-400"}>
+            {dateTimeLabel(date, time, "Izvēlēties datumu un laiku")}
+          </span>
+        </button>
+        <input
+          ref={inputRef}
+          type="datetime-local"
+          value={pickerValue}
+          min={min}
+          onChange={(event) => {
+            const [nextDate = "", nextTime = ""] =
+              event.currentTarget.value.split("T");
+            onChange(nextDate, nextTime.slice(0, 5));
+          }}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="pointer-events-none absolute h-px w-px opacity-0"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -858,35 +926,19 @@ export default function RequestForm({
                   }
                 />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label>
-                  <FieldLabel required>Uzkraušanas datums</FieldLabel>
-                  <input
-                    type="date"
-                    value={form.pickup_date}
-                    onChange={(event) => {
-                      const pickupDate = event.target.value;
-                      setForm((current) => ({
-                        ...current,
-                        pickup_date: pickupDate,
-                        dropoff_date: pickupDate,
-                      }));
-                    }}
-                    className="form-input"
-                  />
-                </label>
-                <label>
-                  <FieldLabel>Laiks</FieldLabel>
-                  <input
-                    type="time"
-                    value={form.pickup_time}
-                    onChange={(event) =>
-                      update({ pickup_time: event.target.value })
-                    }
-                    className="form-input"
-                  />
-                </label>
-              </div>
+              <DateTimeField
+                label="Uzkraušanas datums un laiks"
+                date={form.pickup_date}
+                time={form.pickup_time}
+                onChange={(pickupDate, pickupTime) => {
+                  setForm((current) => ({
+                    ...current,
+                    pickup_date: pickupDate,
+                    pickup_time: pickupTime,
+                    dropoff_date: pickupDate,
+                  }));
+                }}
+              />
               <label>
                 <FieldLabel>Piezīmes par uzkraušanu</FieldLabel>
                 <textarea
@@ -932,36 +984,22 @@ export default function RequestForm({
                   }
                 />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label>
-                  <FieldLabel required>Izkraušanas datums</FieldLabel>
-                  <input
-                    type="date"
-                    min={form.pickup_date || undefined}
-                    value={form.dropoff_date}
-                    onChange={(event) =>
-                      update({ dropoff_date: event.target.value })
-                    }
-                    className="form-input"
-                  />
-                </label>
-                <label>
-                  <FieldLabel>Laiks</FieldLabel>
-                  <input
-                    type="time"
-                    min={
-                      form.dropoff_date === form.pickup_date
-                        ? form.pickup_time || undefined
-                        : undefined
-                    }
-                    value={form.dropoff_time}
-                    onChange={(event) =>
-                      update({ dropoff_time: event.target.value })
-                    }
-                    className="form-input"
-                  />
-                </label>
-              </div>
+              <DateTimeField
+                label="Izkraušanas datums un laiks"
+                date={form.dropoff_date}
+                time={form.dropoff_time}
+                min={
+                  form.pickup_date
+                    ? `${form.pickup_date}T${form.pickup_time || "00:00"}`
+                    : undefined
+                }
+                onChange={(dropoffDate, dropoffTime) =>
+                  update({
+                    dropoff_date: dropoffDate,
+                    dropoff_time: dropoffTime,
+                  })
+                }
+              />
               <label>
                 <FieldLabel>Piezīmes par izkraušanu</FieldLabel>
                 <textarea
