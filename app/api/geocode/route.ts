@@ -43,9 +43,13 @@ function addressLabel(properties: PhotonFeature["properties"]) {
 }
 
 export async function GET(request: NextRequest) {
-  const lat = Number(request.nextUrl.searchParams.get("lat"));
-  const lng = Number(request.nextUrl.searchParams.get("lng"));
+  const latParam = request.nextUrl.searchParams.get("lat");
+  const lngParam = request.nextUrl.searchParams.get("lng");
+  const lat = Number(latParam);
+  const lng = Number(lngParam);
   if (
+    latParam !== null &&
+    lngParam !== null &&
     Number.isFinite(lat) &&
     Number.isFinite(lng) &&
     lat >= -90 &&
