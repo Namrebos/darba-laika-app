@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpenText, ChevronDown, Clock } from "lucide-react";
+import { Bell, BellOff, BookOpenText, ChevronDown, Clock, Moon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import DictionaryModal from "@/app/components/DictionaryModal";
 import UserAvatar from "@/app/components/UserAvatar";
@@ -9,6 +9,32 @@ import UserAvatar from "@/app/components/UserAvatar";
 type DictionaryWord = {
   name: string;
   usageCount: number;
+};
+
+type NotificationPreferences = {
+  enabled: boolean;
+  new_requests: boolean;
+  assigned_tasks: boolean;
+  task_changes: boolean;
+  task_cancellations: boolean;
+  work_start_reminders: boolean;
+  work_end_reminders: boolean;
+  quiet_hours_enabled: boolean;
+  quiet_hours_start: string;
+  quiet_hours_end: string;
+};
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  enabled: false,
+  new_requests: true,
+  assigned_tasks: true,
+  task_changes: true,
+  task_cancellations: true,
+  work_start_reminders: false,
+  work_end_reminders: false,
+  quiet_hours_enabled: false,
+  quiet_hours_start: "22:00",
+  quiet_hours_end: "07:00",
 };
 
 const WORK_TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
@@ -38,6 +64,9 @@ export default function ProfilePage() {
   const [draftWorkEnd, setDraftWorkEnd] = useState("18:00");
   const [workTimeOpen, setWorkTimeOpen] = useState(false);
   const [savingWorkTime, setSavingWorkTime] = useState(false);
+  const [notificationPreferences, setNotificationPreferences] =
+    useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFERENCES);
+  const [savingNotifications, setSavingNotifications] = useState(false);
   const workTimePickerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -69,6 +98,20 @@ export default function ProfilePage() {
         setRegularWorkEnd(end);
         setDraftWorkStart(start);
         setDraftWorkEnd(end);
+      }
+      const { data: savedNotificationPreferences } = await supabase
+        .from("notification_preferences")
+        .select(
+          "enabled, new_requests, assigned_tasks, task_changes, task_cancellations, work_start_reminders, work_end_reminders, quiet_hours_enabled, quiet_hours_start, quiet_hours_end",
+        )
+        .eq("user_id", authData.user.id)
+        .maybeSingle();
+      if (savedNotificationPreferences) {
+        setNotificationPreferences({
+          ...savedNotificationPreferences,
+          quiet_hours_start: savedNotificationPreferences.quiet_hours_start.slice(0, 5),
+          quiet_hours_end: savedNotificationPreferences.quiet_hours_end.slice(0, 5),
+        });
       }
       await loadDictionary(authData.user.id);
     }
@@ -248,6 +291,35 @@ export default function ProfilePage() {
       `Darba laiks ${start}–${end} darbojas no apstiprināšanas brīža.`,
     );
   }
+
+  async function saveNotificationPreferences() {
+    if (!userId) {
+      setMessage("Lietotāja sesija nav pieejama.");
+      return;
+    }
+    setSavingNotifications(true);
+    setMessage("");
+    const { error } = await supabase.from("notification_preferences").upsert({
+      user_id: userId,
+      ...notificationPreferences,
+      updated_at: new Date().toISOString(),
+    });
+    setSavingNotifications(false);
+    setMessage(
+      error
+        ? "Paziņojumu iestatījumus neizdevās saglabāt."
+        : notificationPreferences.enabled
+          ? "Paziņojumu iestatījumi saglabāti."
+          : "Paziņojumi ir izslēgti.",
+    );
+  }
+
+  const updateNotificationPreference = <K extends keyof NotificationPreferences>(
+    key: K,
+    value: NotificationPreferences[K],
+  ) => {
+    setNotificationPreferences((current) => ({ ...current, [key]: value }));
+  };
 
   return (
     <div className="mx-auto max-w-xl space-y-5 p-4">
@@ -432,6 +504,119 @@ export default function ProfilePage() {
           </button>
         </div>
       </form>
+      <section className="space-y-4 rounded-lg border border-zinc-200 p-5 dark:border-zinc-700">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex gap-3">
+            {notificationPreferences.enabled ? (
+              <Bell className="mt-0.5 shrink-0 text-blue-600" size={22} />
+            ) : (
+              <BellOff className="mt-0.5 shrink-0 text-zinc-500" size={22} />
+            )}
+            <div>
+              <h2 className="font-semibold">Paziņojumi</h2>
+              <p className="text-sm text-zinc-500">
+                Pēc noklusējuma paziņojumi ir izslēgti. Izvēlies, kurus vēlies saņemt.
+              </p>
+            </div>
+          </div>
+          <label className="relative inline-flex shrink-0 cursor-pointer items-center">
+            <input
+              type="checkbox"
+              checked={notificationPreferences.enabled}
+              onChange={(event) =>
+                updateNotificationPreference("enabled", event.target.checked)
+              }
+              className="peer sr-only"
+            />
+            <span className="h-6 w-11 rounded-full bg-zinc-300 transition after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition peer-checked:bg-blue-600 peer-checked:after:translate-x-5 dark:bg-zinc-600" />
+          </label>
+        </div>
+
+        <div className={`space-y-3 ${notificationPreferences.enabled ? "" : "pointer-events-none opacity-45"}`}>
+          {([
+            ["new_requests", "Jauns klienta brauciena pieteikums"],
+            ["assigned_tasks", "Man piešķirts jauns uzdevums vai brauciens"],
+            ["task_changes", "Izmaiņas man piešķirtā uzdevumā"],
+            ["task_cancellations", "Uzdevums atcelts vai atjaunots"],
+            ["work_start_reminders", "Darba laika sākuma atgādinājums"],
+            ["work_end_reminders", "Darba laika beigu atgādinājums"],
+          ] as const).map(([key, label]) => (
+            <label key={key} className="flex items-center justify-between gap-3 rounded border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700">
+              <span>{label}</span>
+              <input
+                type="checkbox"
+                checked={notificationPreferences[key]}
+                onChange={(event) =>
+                  updateNotificationPreference(key, event.target.checked)
+                }
+                className="h-5 w-5 shrink-0 accent-blue-600"
+              />
+            </label>
+          ))}
+
+          <div className="space-y-3 rounded border border-zinc-200 p-3 dark:border-zinc-700">
+            <label className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <Moon size={17} className="text-indigo-500" />
+                Klusuma laiks
+              </span>
+              <input
+                type="checkbox"
+                checked={notificationPreferences.quiet_hours_enabled}
+                onChange={(event) =>
+                  updateNotificationPreference(
+                    "quiet_hours_enabled",
+                    event.target.checked,
+                  )
+                }
+                className="h-5 w-5 accent-blue-600"
+              />
+            </label>
+            {notificationPreferences.quiet_hours_enabled && (
+              <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+                <label className="space-y-1">
+                  <span className="text-xs font-medium">No</span>
+                  <input
+                    type="time"
+                    value={notificationPreferences.quiet_hours_start}
+                    onChange={(event) =>
+                      updateNotificationPreference(
+                        "quiet_hours_start",
+                        event.target.value,
+                      )
+                    }
+                    className="w-full rounded border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                  />
+                </label>
+                <span className="pb-2 text-zinc-400">–</span>
+                <label className="space-y-1">
+                  <span className="text-xs font-medium">Līdz</span>
+                  <input
+                    type="time"
+                    value={notificationPreferences.quiet_hours_end}
+                    onChange={(event) =>
+                      updateNotificationPreference(
+                        "quiet_hours_end",
+                        event.target.value,
+                      )
+                    }
+                    className="w-full rounded border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          disabled={savingNotifications}
+          onClick={() => void saveNotificationPreferences()}
+          className="w-full rounded bg-blue-600 px-4 py-2 font-semibold text-white disabled:opacity-50"
+        >
+          {savingNotifications ? "Saglabā..." : "Saglabāt paziņojumu iestatījumus"}
+        </button>
+      </section>
       <DictionaryModal
         open={dictionaryOpen}
         onClose={() => setDictionaryOpen(false)}
