@@ -14,6 +14,7 @@ import {
   Send,
   Trash2,
   Truck,
+  X,
 } from "lucide-react";
 import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
@@ -662,7 +663,7 @@ export default function RequestForm({
 
   return (
     <div className="mx-auto max-w-6xl">
-      <header className="mb-5 flex items-start gap-3">
+      <header className="relative mb-5 flex items-start gap-3 pr-12">
         <div className="rounded-xl bg-blue-100 p-3 text-blue-700">
           <Truck size={30} />
         </div>
@@ -674,6 +675,16 @@ export default function RequestForm({
             Aizpildiet nepieciešamos laukus un nosūtiet pieprasījumu.
           </p>
         </div>
+        {internal && (
+          <Link
+            href="/planned-tasks"
+            aria-label="Aizvērt formu bez saglabāšanas"
+            title="Aizvērt"
+            className="absolute right-0 top-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+          >
+            <X size={24} />
+          </Link>
+        )}
       </header>
 
       <div className="mb-5 md:hidden">
