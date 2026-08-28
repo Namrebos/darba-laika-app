@@ -161,47 +161,36 @@ function DateTimeField({
   min?: string;
   onChange: (date: string, time: string) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const pickerValue = date ? `${date}T${time || "09:00"}` : "";
-
-  const openPicker = () => {
-    const input = inputRef.current;
-    if (!input) return;
-    try {
-      input.showPicker();
-    } catch {
-      input.click();
-    }
-  };
 
   return (
     <div>
       <FieldLabel required>{label}</FieldLabel>
       <div className="relative">
-        <button
-          type="button"
-          onClick={openPicker}
-          className="form-input flex min-h-12 w-full items-center gap-3 text-left"
-          aria-label={label}
-        >
+        <div className="form-input flex min-h-12 w-full items-center gap-3 text-left">
           <CalendarClock size={20} className="shrink-0 text-blue-600" />
           <span className={date ? "font-medium" : "text-slate-400"}>
             {dateTimeLabel(date, time, "Izvēlēties datumu un laiku")}
           </span>
-        </button>
+        </div>
         <input
-          ref={inputRef}
           type="datetime-local"
           value={pickerValue}
           min={min}
+          onClick={(event) => {
+            try {
+              event.currentTarget.showPicker();
+            } catch {
+              // Safari atver sistēmas izvēlni ar pašu uzticamo pieskārienu.
+            }
+          }}
           onChange={(event) => {
             const [nextDate = "", nextTime = ""] =
               event.currentTarget.value.split("T");
             onChange(nextDate, nextTime.slice(0, 5));
           }}
-          tabIndex={-1}
-          aria-hidden="true"
-          className="pointer-events-none absolute h-px w-px opacity-0"
+          aria-label={label}
+          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
         />
       </div>
     </div>
