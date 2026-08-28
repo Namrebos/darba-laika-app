@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LoaderCircle, MapPin } from "lucide-react";
 
 type Point = { lat: number; lng: number };
@@ -20,9 +20,17 @@ export default function AddressField({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const selectedAddressRef = useRef("");
 
   useEffect(() => {
     const query = value.trim();
+    if (query === selectedAddressRef.current) {
+      setSuggestions([]);
+      setLoading(false);
+      setOpen(false);
+      return;
+    }
     if (query.length < 3) {
       setSuggestions([]);
       setLoading(false);
@@ -57,10 +65,12 @@ export default function AddressField({
   return (
     <div className="relative">
       <input
+        ref={inputRef}
         id={id}
         required
         value={value}
         onChange={(event) => {
+          selectedAddressRef.current = "";
           onChange(event.target.value);
           setOpen(true);
         }}
@@ -85,9 +95,12 @@ export default function AddressField({
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
+                selectedAddressRef.current = suggestion.label.trim();
                 onChange(suggestion.label);
                 onMapFocus({ lat: suggestion.lat, lng: suggestion.lng });
+                setSuggestions([]);
                 setOpen(false);
+                inputRef.current?.blur();
               }}
               className="flex w-full items-start gap-2 border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-800 last:border-0 hover:bg-blue-50"
             >

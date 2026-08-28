@@ -81,14 +81,14 @@ function NavigationMenu({ lat, lng }: { lat: number; lng: number }) {
         Atvērt navigācijā
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 min-w-44 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="absolute left-0 top-full z-20 mt-1 min-w-44 overflow-hidden rounded-lg border border-zinc-200 bg-white text-slate-950 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
           {options.map((option) => (
             <a
               key={option.label}
               href={option.href}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800"
             >
               {option.label}
               <ExternalLink size={14} />

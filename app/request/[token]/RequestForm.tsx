@@ -729,9 +729,14 @@ export default function RequestForm({
                   <input
                     type="date"
                     value={form.pickup_date}
-                    onChange={(event) =>
-                      update({ pickup_date: event.target.value })
-                    }
+                    onChange={(event) => {
+                      const pickupDate = event.target.value;
+                      setForm((current) => ({
+                        ...current,
+                        pickup_date: pickupDate,
+                        dropoff_date: current.dropoff_date || pickupDate,
+                      }));
+                    }}
                     className="form-input"
                   />
                 </label>
