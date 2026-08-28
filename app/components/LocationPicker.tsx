@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
-  LayersControl,
   MapContainer,
   Marker,
   TileLayer,
@@ -11,6 +10,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
+import { Layers, LocateFixed } from "lucide-react";
 
 type Point = {
   lat: number;
@@ -24,6 +24,7 @@ type Props = {
   markerColor?: "blue" | "red";
   active?: boolean;
   readOnly?: boolean;
+  footer?: ReactNode;
 };
 
 const defaultCenter: [number, number] = [56.9496, 24.1052];
@@ -87,7 +88,9 @@ export default function LocationPicker({
   markerColor = "blue",
   active = true,
   readOnly = false,
+  footer,
 }: Props) {
+  const [baseLayer, setBaseLayer] = useState<"map" | "ortho">("map");
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
       alert("Šī ierīce neatbalsta atrašanās vietas noteikšanu.");
@@ -110,31 +113,28 @@ export default function LocationPicker({
 
   return (
     <div className="space-y-2">
-      <div className="h-64 overflow-hidden rounded-xl border border-slate-200">
+      <div className="relative h-64 overflow-hidden rounded-xl border border-slate-200">
         <MapContainer
           center={point ? [point.lat, point.lng] : defaultCenter}
           zoom={point ? 18 : 7}
           scrollWheelZoom
           className="h-full w-full"
         >
-          <LayersControl position="topright">
-            <LayersControl.BaseLayer checked name="Karte">
-              <TileLayer
-                attribution="&copy; OpenStreetMap contributors"
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-            </LayersControl.BaseLayer>
-            <LayersControl.BaseLayer name="Ortofoto">
-              <WMSTileLayer
-                url={lvmOrthoUrl}
-                layers="Orto_LKS"
-                format="image/jpeg"
-                version="1.3.0"
-                crs={crs84}
-                attribution="Ortofoto &copy; LĢIA, LVM GEO"
-              />
-            </LayersControl.BaseLayer>
-          </LayersControl>
+          {baseLayer === "map" ? (
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          ) : (
+            <WMSTileLayer
+              url={lvmOrthoUrl}
+              layers="Orto_LKS"
+              format="image/jpeg"
+              version="1.3.0"
+              crs={crs84}
+              attribution="Ortofoto &copy; LĢIA, LVM GEO"
+            />
+          )}
           <MapEvents onChange={onChange} readOnly={readOnly} />
           <MapUpdater point={point} focusPoint={focusPoint} active={active} />
           {point && (
@@ -151,17 +151,42 @@ export default function LocationPicker({
             />
           )}
         </MapContainer>
+        <div className="absolute left-2.5 top-[4.75rem] z-[1000] flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setBaseLayer((current) =>
+                current === "map" ? "ortho" : "map",
+              )
+            }
+            className={`flex h-10 w-10 items-center justify-center rounded-md border border-slate-400 shadow-md ${
+              baseLayer === "ortho"
+                ? "bg-blue-600 text-white"
+                : "bg-white text-slate-800"
+            }`}
+            aria-label={
+              baseLayer === "map"
+                ? "Pārslēgt uz ortofoto"
+                : "Pārslēgt uz karti"
+            }
+            title={baseLayer === "map" ? "Rādīt ortofoto" : "Rādīt karti"}
+          >
+            <Layers size={20} />
+          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={useCurrentLocation}
+              className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-400 bg-white text-blue-700 shadow-md"
+              aria-label="Izmantot manu atrašanās vietu"
+              title="Mana atrašanās vieta"
+            >
+              <LocateFixed size={21} />
+            </button>
+          )}
+        </div>
       </div>
-
-      {!readOnly && (
-        <button
-          type="button"
-          onClick={useCurrentLocation}
-          className="w-full rounded-lg border border-blue-500 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
-        >
-          Mana atrašanās vieta
-        </button>
-      )}
+      {footer}
 
       <p className="text-xs text-slate-500">
         {point

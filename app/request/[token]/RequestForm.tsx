@@ -845,7 +845,6 @@ export default function RequestForm({
                   onMapFocus={focusPickupMap}
                 />
               </div>
-              <LocationImportField onPoint={updatePickupPointFromMap} />
               <div>
                 <FieldLabel required>Precīza vieta kartē</FieldLabel>
                 <LocationPicker
@@ -854,6 +853,9 @@ export default function RequestForm({
                   onChange={updatePickupPointFromMap}
                   markerColor="blue"
                   active={step === 1}
+                  footer={
+                    <LocationImportField onPoint={updatePickupPointFromMap} />
+                  }
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -917,7 +919,6 @@ export default function RequestForm({
                   onMapFocus={focusDropoffMap}
                 />
               </div>
-              <LocationImportField onPoint={updateDropoffPointFromMap} />
               <div>
                 <FieldLabel required>Precīza vieta kartē</FieldLabel>
                 <LocationPicker
@@ -926,6 +927,9 @@ export default function RequestForm({
                   onChange={updateDropoffPointFromMap}
                   markerColor="red"
                   active={step === 2}
+                  footer={
+                    <LocationImportField onPoint={updateDropoffPointFromMap} />
+                  }
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
