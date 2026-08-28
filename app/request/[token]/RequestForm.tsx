@@ -338,7 +338,7 @@ function PartyFields({
 
       <div>
         <FieldLabel required>Tālrunis</FieldLabel>
-        <div className="grid grid-cols-[minmax(8rem,auto)_1fr] gap-2">
+        <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
           <select
             value={phoneCode}
             onChange={(event) =>
@@ -347,9 +347,9 @@ function PartyFields({
             className="form-input"
             aria-label="Valsts tālruņa kods"
           >
-            {countryCodes.map(([code, country]) => (
+            {countryCodes.map(([code]) => (
               <option key={code} value={code}>
-                {code} {country}
+                {code}
               </option>
             ))}
           </select>
@@ -734,7 +734,7 @@ export default function RequestForm({
                       setForm((current) => ({
                         ...current,
                         pickup_date: pickupDate,
-                        dropoff_date: current.dropoff_date || pickupDate,
+                        dropoff_date: pickupDate,
                       }));
                     }}
                     className="form-input"
