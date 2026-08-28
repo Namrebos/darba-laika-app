@@ -20,6 +20,11 @@ const cache = new Map<
   { expiresAt: number; results: Array<{ label: string; lat: number; lng: number }> }
 >();
 
+const reverseCache = new Map<
+  string,
+  { expiresAt: number; result: { label: string; lat: number; lng: number } | null }
+>();
+
 function addressLabel(properties: PhotonFeature["properties"]) {
   if (!properties) return "";
   const street = [properties.street, properties.housenumber]
@@ -38,6 +43,61 @@ function addressLabel(properties: PhotonFeature["properties"]) {
 }
 
 export async function GET(request: NextRequest) {
+  const lat = Number(request.nextUrl.searchParams.get("lat"));
+  const lng = Number(request.nextUrl.searchParams.get("lng"));
+  if (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  ) {
+    const cacheKey = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+    const cached = reverseCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return NextResponse.json({ result: cached.result });
+    }
+
+    const url = new URL("https://photon.komoot.io/reverse");
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lon", String(lng));
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: "application/geo+json",
+          "User-Agent": "DarbaLaikaApp/1.0 (reverse address search)",
+        },
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!response.ok) throw new Error("Reverse geocoder request failed");
+
+      const data = (await response.json()) as { features?: PhotonFeature[] };
+      const feature = data.features?.[0];
+      const coordinates = feature?.geometry?.coordinates;
+      const label = addressLabel(feature?.properties);
+      const result =
+        coordinates && label
+          ? { label, lat: coordinates[1], lng: coordinates[0] }
+          : null;
+
+      reverseCache.set(cacheKey, {
+        result,
+        expiresAt: Date.now() + 60 * 60 * 1000,
+      });
+      return NextResponse.json(
+        { result },
+        { headers: { "Cache-Control": "public, max-age=300" } },
+      );
+    } catch {
+      return NextResponse.json(
+        { error: "Adreses noteikšana pašlaik nav pieejama.", result: null },
+        { status: 503 },
+      );
+    }
+  }
+
   const query = request.nextUrl.searchParams.get("q")?.trim().slice(0, 120) || "";
   if (query.length < 3) {
     return NextResponse.json({ results: [] });
