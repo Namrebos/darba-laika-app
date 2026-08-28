@@ -762,17 +762,17 @@ export default function RequestForm({
         <h1 className="mt-4 text-2xl font-bold">
           {internal ? "Brauciens izveidots!" : "Pieteikums nosūtīts!"}
         </h1>
-        <p className="mt-3 text-slate-600">
-          {internal
-            ? "Jaunā brauciena kartīte ir pievienota plānotajiem uzdevumiem."
-            : "Paldies! Pakalpojuma sniedzējs ir saņēmis jūsu informāciju."}
-        </p>
+        {!internal && (
+          <p className="mt-3 text-slate-600">
+            Paldies! Pakalpojuma sniedzējs ir saņēmis jūsu informāciju.
+          </p>
+        )}
         {internal && (
           <Link
             href="/planned-tasks"
             className="mt-5 inline-flex rounded-xl bg-blue-800 px-5 py-3 font-semibold text-white"
           >
-            Atgriezties pie plānotajiem uzdevumiem
+            Atgriezties
           </Link>
         )}
       </div>

@@ -151,7 +151,7 @@ export default function LocationPicker({
             />
           )}
         </MapContainer>
-        <div className="absolute left-2.5 top-[4.75rem] z-[1000] flex flex-col gap-2">
+        <div className="absolute left-2.5 top-[4.75rem] z-[1000] flex flex-col gap-1.5">
           <button
             type="button"
             onClick={() =>
@@ -159,7 +159,7 @@ export default function LocationPicker({
                 current === "map" ? "ortho" : "map",
               )
             }
-            className={`flex h-10 w-10 items-center justify-center rounded-md border border-slate-400 shadow-md ${
+            className={`flex h-8 w-8 items-center justify-center rounded border border-slate-400 shadow-md ${
               baseLayer === "ortho"
                 ? "bg-blue-600 text-white"
                 : "bg-white text-slate-800"
@@ -171,17 +171,17 @@ export default function LocationPicker({
             }
             title={baseLayer === "map" ? "Rādīt ortofoto" : "Rādīt karti"}
           >
-            <Layers size={20} />
+            <Layers size={17} />
           </button>
           {!readOnly && (
             <button
               type="button"
               onClick={useCurrentLocation}
-              className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-400 bg-white text-blue-700 shadow-md"
+              className="flex h-8 w-8 items-center justify-center rounded border border-slate-400 bg-white text-blue-700 shadow-md"
               aria-label="Izmantot manu atrašanās vietu"
               title="Mana atrašanās vieta"
             >
-              <LocateFixed size={21} />
+              <LocateFixed size={18} />
             </button>
           )}
         </div>
