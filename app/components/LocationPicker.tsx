@@ -2,9 +2,11 @@
 
 import { useEffect } from "react";
 import {
+  LayersControl,
   MapContainer,
   Marker,
   TileLayer,
+  WMSTileLayer,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -25,6 +27,9 @@ type Props = {
 };
 
 const defaultCenter: [number, number] = [56.9496, 24.1052];
+const lvmOrthoUrl =
+  "https://geoserver.lvmgeo.lv/wms62531a9bfcfa4015856924e94076a178";
+const crs84 = L.extend({}, L.CRS.EPSG4326, { code: "CRS:84" }) as L.CRS;
 
 function markerIcon(color: "blue" | "red") {
   return L.divIcon({
@@ -112,10 +117,24 @@ export default function LocationPicker({
           scrollWheelZoom
           className="h-full w-full"
         >
-          <TileLayer
-            attribution="&copy; OpenStreetMap contributors"
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <LayersControl position="topright">
+            <LayersControl.BaseLayer checked name="Karte">
+              <TileLayer
+                attribution="&copy; OpenStreetMap contributors"
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+            </LayersControl.BaseLayer>
+            <LayersControl.BaseLayer name="Ortofoto">
+              <WMSTileLayer
+                url={lvmOrthoUrl}
+                layers="Orto_LKS"
+                format="image/jpeg"
+                version="1.3.0"
+                crs={crs84}
+                attribution="Ortofoto &copy; LĢIA, LVM GEO"
+              />
+            </LayersControl.BaseLayer>
+          </LayersControl>
           <MapEvents onChange={onChange} readOnly={readOnly} />
           <MapUpdater point={point} focusPoint={focusPoint} active={active} />
           {point && (
