@@ -22,10 +22,17 @@ export default function AddressField({
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedAddressRef = useRef("");
+  const userQueryRef = useRef("");
 
   useEffect(() => {
     const query = value.trim();
     if (query === selectedAddressRef.current) {
+      setSuggestions([]);
+      setLoading(false);
+      setOpen(false);
+      return;
+    }
+    if (query !== userQueryRef.current) {
       setSuggestions([]);
       setLoading(false);
       setOpen(false);
@@ -71,6 +78,7 @@ export default function AddressField({
         value={value}
         onChange={(event) => {
           selectedAddressRef.current = "";
+          userQueryRef.current = event.target.value.trim();
           onChange(event.target.value);
           setOpen(true);
         }}
