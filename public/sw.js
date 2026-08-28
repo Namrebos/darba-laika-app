@@ -62,3 +62,26 @@ self.addEventListener("fetch", (event) => {
       }),
   );
 });
+
+self.addEventListener("push", (event) => {
+  const data = event.data?.json() || {};
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Darba laiks", {
+      body: data.body || "Saņemts jauns paziņojums.",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url: data.url || "/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = new URL(event.notification.data?.url || "/", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => client.url === targetUrl);
+      return existing ? existing.focus() : self.clients.openWindow(targetUrl);
+    }),
+  );
+});

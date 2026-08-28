@@ -19,6 +19,8 @@ type NotificationPreferences = {
   task_cancellations: boolean;
   work_start_reminders: boolean;
   work_end_reminders: boolean;
+  work_start_reminder_time: string;
+  work_end_reminder_time: string;
   quiet_hours_enabled: boolean;
   quiet_hours_start: string;
   quiet_hours_end: string;
@@ -32,6 +34,8 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   task_cancellations: true,
   work_start_reminders: false,
   work_end_reminders: false,
+  work_start_reminder_time: "08:45",
+  work_end_reminder_time: "18:00",
   quiet_hours_enabled: false,
   quiet_hours_start: "22:00",
   quiet_hours_end: "07:00",
@@ -42,6 +46,13 @@ const WORK_TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
   const minutes = (index % 4) * 15;
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 });
+
+function urlBase64ToUint8Array(value: string) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(base64);
+  return Uint8Array.from([...raw].map((character) => character.charCodeAt(0)));
+}
 
 export default function ProfilePage() {
   const [userId, setUserId] = useState("");
@@ -102,7 +113,7 @@ export default function ProfilePage() {
       const { data: savedNotificationPreferences } = await supabase
         .from("notification_preferences")
         .select(
-          "enabled, new_requests, assigned_tasks, task_changes, task_cancellations, work_start_reminders, work_end_reminders, quiet_hours_enabled, quiet_hours_start, quiet_hours_end",
+          "enabled, new_requests, assigned_tasks, task_changes, task_cancellations, work_start_reminders, work_end_reminders, work_start_reminder_time, work_end_reminder_time, quiet_hours_enabled, quiet_hours_start, quiet_hours_end",
         )
         .eq("user_id", authData.user.id)
         .maybeSingle();
@@ -111,6 +122,8 @@ export default function ProfilePage() {
           ...savedNotificationPreferences,
           quiet_hours_start: savedNotificationPreferences.quiet_hours_start.slice(0, 5),
           quiet_hours_end: savedNotificationPreferences.quiet_hours_end.slice(0, 5),
+          work_start_reminder_time: savedNotificationPreferences.work_start_reminder_time.slice(0, 5),
+          work_end_reminder_time: savedNotificationPreferences.work_end_reminder_time.slice(0, 5),
         });
       }
       await loadDictionary(authData.user.id);
@@ -299,6 +312,65 @@ export default function ProfilePage() {
     }
     setSavingNotifications(true);
     setMessage("");
+
+    if (notificationPreferences.enabled) {
+      if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+        setSavingNotifications(false);
+        setMessage("Šī ierīce vai pārlūks neatbalsta push paziņojumus.");
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setSavingNotifications(false);
+        setMessage("Lai ieslēgtu paziņojumus, atļauj tos ierīces iestatījumos.");
+        return;
+      }
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          const response = await fetch("/api/notifications/vapid-key");
+          const payload = (await response.json()) as { publicKey?: string };
+          if (!response.ok || !payload.publicKey) throw new Error("Missing VAPID key");
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(payload.publicKey),
+          });
+        }
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) throw new Error("Missing session");
+        const response = await fetch("/api/notifications/subscription", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(subscription.toJSON()),
+        });
+        if (!response.ok) throw new Error("Subscription failed");
+      } catch {
+        setSavingNotifications(false);
+        setMessage("Ierīci neizdevās pieslēgt paziņojumiem.");
+        return;
+      }
+    } else if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        await fetch("/api/notifications/subscription", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
+          },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        await subscription.unsubscribe();
+      }
+    }
+
     const { error } = await supabase.from("notification_preferences").upsert({
       user_id: userId,
       ...notificationPreferences,
@@ -553,6 +625,44 @@ export default function ProfilePage() {
               />
             </label>
           ))}
+
+          {(notificationPreferences.work_start_reminders ||
+            notificationPreferences.work_end_reminders) && (
+            <div className="grid gap-3 rounded border border-zinc-200 p-3 sm:grid-cols-2 dark:border-zinc-700">
+              {notificationPreferences.work_start_reminders && (
+                <label className="space-y-1">
+                  <span className="text-xs font-medium">Darba sākuma atgādinājums</span>
+                  <input
+                    type="time"
+                    value={notificationPreferences.work_start_reminder_time}
+                    onChange={(event) =>
+                      updateNotificationPreference(
+                        "work_start_reminder_time",
+                        event.target.value,
+                      )
+                    }
+                    className="w-full rounded border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                  />
+                </label>
+              )}
+              {notificationPreferences.work_end_reminders && (
+                <label className="space-y-1">
+                  <span className="text-xs font-medium">Darba beigu atgādinājums</span>
+                  <input
+                    type="time"
+                    value={notificationPreferences.work_end_reminder_time}
+                    onChange={(event) =>
+                      updateNotificationPreference(
+                        "work_end_reminder_time",
+                        event.target.value,
+                      )
+                    }
+                    className="w-full rounded border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                  />
+                </label>
+              )}
+            </div>
+          )}
 
           <div className="space-y-3 rounded border border-zinc-200 p-3 dark:border-zinc-700">
             <label className="flex items-center justify-between gap-3">
