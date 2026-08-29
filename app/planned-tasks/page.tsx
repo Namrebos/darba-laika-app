@@ -388,11 +388,19 @@ export default function PlannedTasksPage() {
   );
 
   const displayedInboxTasks = useMemo(
-    () =>
-      modalTaskId === null
-        ? visibleInboxTasks
-        : newTasks.filter((task) => task.id === modalTaskId),
-    [modalTaskId, newTasks, visibleInboxTasks],
+    () => {
+      if (modalTaskId !== null) {
+        return tasks.filter((task) => task.id === modalTaskId);
+      }
+      const visibleIds = new Set(visibleInboxTasks.map((task) => task.id));
+      return [
+        ...visibleInboxTasks,
+        ...tasks.filter(
+          (task) => expandedTaskIds.has(task.id) && !visibleIds.has(task.id),
+        ),
+      ];
+    },
+    [expandedTaskIds, modalTaskId, tasks, visibleInboxTasks],
   );
 
   const employeeProfiles = useMemo(() => {
@@ -955,6 +963,11 @@ export default function PlannedTasksPage() {
     setSelectedDate(dates[0]);
     setDayTab("planned");
     setModalTaskId(null);
+    setExpandedTaskIds((current) => {
+      const next = new Set(current);
+      next.delete(task.id);
+      return next;
+    });
     setSavingId(null);
     setMessage(`Izveidotas ${dates.length} neatkarīgas kartītes.`);
   }
@@ -1039,6 +1052,11 @@ export default function PlannedTasksPage() {
 
     changeLocalTask(task.id, changes);
     setModalTaskId(null);
+    setExpandedTaskIds((current) => {
+      const next = new Set(current);
+      next.delete(task.id);
+      return next;
+    });
     const hashtagWords = extractHashtagWords(task.title, task.note);
     await Promise.all(hashtagWords.map((word) => addDictionaryWord(word)));
     setSelectedDate(task.scheduled_date!);
