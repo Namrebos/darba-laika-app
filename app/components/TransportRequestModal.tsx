@@ -109,6 +109,8 @@ function ReadonlyField({
   value: string | null;
   multiline?: boolean;
 }) {
+  if (!value?.trim()) return null;
+
   return (
     <label className="block">
       <span className="mb-1 block text-sm font-semibold text-slate-800">
@@ -176,7 +178,9 @@ function PartySection({
             />
           </>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div
+            className={`grid gap-3 ${lastName?.trim() ? "sm:grid-cols-2" : ""}`}
+          >
             <ReadonlyField label="Vārds" value={firstName} />
             <ReadonlyField label="Uzvārds" value={lastName} />
           </div>
@@ -244,7 +248,7 @@ function LocationSection({
             readOnly
           />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className={`grid gap-3 ${time?.trim() ? "sm:grid-cols-2" : ""}`}>
           <ReadonlyField label="Datums" value={date} />
           <ReadonlyField label="Laiks" value={time?.slice(0, 5) || ""} />
         </div>
