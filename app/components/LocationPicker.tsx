@@ -66,7 +66,18 @@ function MapUpdater({
   const map = useMap();
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => map.invalidateSize(), 80);
+    let frame = 0;
+    const refreshSize = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => map.invalidateSize(false));
+    };
+    const container = map.getContainer();
+    const observer = new ResizeObserver(refreshSize);
+    observer.observe(container);
+    const timeouts = [0, 100, 300].map((delay) =>
+      window.setTimeout(refreshSize, delay),
+    );
+
     if (point) {
       map.setView([point.lat, point.lng], Math.max(map.getZoom(), 18));
     } else if (focusPoint) {
@@ -75,7 +86,11 @@ function MapUpdater({
         Math.max(map.getZoom(), 13),
       );
     }
-    return () => window.clearTimeout(timeout);
+    return () => {
+      observer.disconnect();
+      timeouts.forEach((timeout) => window.clearTimeout(timeout));
+      window.cancelAnimationFrame(frame);
+    };
   }, [active, focusPoint, map, point]);
 
   return null;
