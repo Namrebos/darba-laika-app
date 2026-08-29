@@ -87,12 +87,6 @@ function SignaturePad({ label }: SignaturePadProps) {
         className="h-36 w-full touch-none rounded-lg border-2 border-slate-300 bg-white shadow-inner"
         aria-label={label}
       />
-      <p className="delivery-note-no-print text-center text-xs text-slate-500">
-        Paraksties ar pirkstu vai datora peli
-      </p>
-      <div className="border-t border-slate-400 pt-1 text-center text-xs text-slate-500">
-        Paraksts
-      </div>
     </div>
   );
 }
