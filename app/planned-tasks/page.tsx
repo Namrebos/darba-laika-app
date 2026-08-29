@@ -645,13 +645,29 @@ export default function PlannedTasksPage() {
     if (error) changeLocalTask(task.id, { viewed_at: null });
   }
 
+  function discardTemporaryTask(taskId: number) {
+    setTasks((current) => current.filter((item) => item.id !== taskId));
+    setModalTaskId((current) => (current === taskId ? null : current));
+    setExpandedTaskIds((current) => {
+      const next = new Set(current);
+      next.delete(taskId);
+      return next;
+    });
+    setMultiDateConfigs((current) => {
+      const next = { ...current };
+      delete next[taskId];
+      return next;
+    });
+  }
+
   async function toggleTask(task: PlannedTask) {
     const isExpanded = expandedTaskIds.has(task.id);
     if (isExpanded) {
       let closingTaskId = task.id;
       if (task.id < 0) {
         if (!task.title.trim() || !task.note.trim()) {
-          setMessage("Nosaukums un piezīmes ir obligāti.");
+          discardTemporaryTask(task.id);
+          setMessage("Tukšā kartīte netika saglabāta.");
           return;
         }
         setSavingId(task.id);
@@ -1090,13 +1106,8 @@ export default function PlannedTasksPage() {
       return;
     }
     if (task.id < 0) {
-      setTasks((current) => current.filter((item) => item.id !== task.id));
-      setModalTaskId(null);
-      setExpandedTaskIds((current) => {
-        const next = new Set(current);
-        next.delete(task.id);
-        return next;
-      });
+      discardTemporaryTask(task.id);
+      setMessage("Kartīte izdzēsta.");
       return;
     }
     setSavingId(task.id);
