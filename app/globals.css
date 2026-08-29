@@ -10,7 +10,7 @@
 
 @media print {
   @page {
-    size: A4;
+    size: A4 portrait;
     margin: 10mm;
   }
 
@@ -35,6 +35,19 @@
     max-width: none !important;
     padding: 0 !important;
     box-shadow: none !important;
+  }
+
+  .delivery-note-sheet {
+    font-size: 11pt;
+  }
+
+  .delivery-note-sheet textarea {
+    min-height: 0 !important;
+    resize: none !important;
+  }
+
+  .delivery-note-sheet canvas {
+    height: 28mm !important;
   }
 
   .delivery-note-sheet input,

@@ -84,9 +84,12 @@ function SignaturePad({ label }: SignaturePadProps) {
         onPointerMove={draw}
         onPointerUp={stopDrawing}
         onPointerCancel={stopDrawing}
-        className="h-32 w-full touch-none rounded-lg border border-slate-300 bg-white"
+        className="h-36 w-full touch-none rounded-lg border-2 border-slate-300 bg-white shadow-inner"
         aria-label={label}
       />
+      <p className="delivery-note-no-print text-center text-xs text-slate-500">
+        Paraksties ar pirkstu vai datora peli
+      </p>
       <div className="border-t border-slate-400 pt-1 text-center text-xs text-slate-500">
         Paraksts
       </div>
@@ -103,6 +106,7 @@ export default function DeliveryNotePage() {
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [vehicleId, setVehicleId] = useState("");
+  const [carrier, setCarrier] = useState("");
   const [customer, setCustomer] = useState("");
   const [recipient, setRecipient] = useState("");
   const [origin, setOrigin] = useState("");
@@ -144,6 +148,7 @@ export default function DeliveryNotePage() {
     if (!window.confirm("Vai notīrīt visus pavadzīmes laukus?")) return;
     setDate(new Date().toISOString().slice(0, 10));
     setVehicleId("");
+    setCarrier("");
     setCustomer("");
     setRecipient("");
     setOrigin("");
@@ -222,6 +227,17 @@ export default function DeliveryNotePage() {
             piesaistīti brauciena kartītei.
           </div>
         </section>
+
+        <label className="block space-y-1 text-sm font-semibold">
+          <span>Pārvadātājs</span>
+          <textarea
+            value={carrier}
+            onChange={(event) => setCarrier(event.target.value)}
+            placeholder="Uzņēmuma nosaukums, reģistrācijas numurs, adrese un kontaktinformācija"
+            rows={3}
+            className={fieldClass}
+          />
+        </label>
 
         <section className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1 text-sm font-semibold">
