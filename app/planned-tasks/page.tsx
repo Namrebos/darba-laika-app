@@ -335,6 +335,30 @@ export default function PlannedTasksPage() {
     return () => window.clearTimeout(timeout);
   }, [message]);
 
+  useEffect(() => {
+    if (loading || tasks.length === 0) return;
+
+    const parameters = new URLSearchParams(window.location.search);
+    const requestedTaskId = Number(parameters.get("plannedTask")) || null;
+    const requestedRequestId = Number(parameters.get("transportRequest")) || null;
+    const targetTask = tasks.find(
+      (task) =>
+        task.id === requestedTaskId ||
+        task.transport_request_id === requestedRequestId,
+    );
+
+    if (!targetTask) return;
+
+    setInboxTab(targetTask.viewed_at ? "planned" : "new");
+    setInboxExpanded(true);
+    setExpandedTaskIds((current) => new Set(current).add(targetTask.id));
+    window.setTimeout(() => {
+      document
+        .getElementById(`planned-task-${targetTask.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  }, [loading, tasks]);
+
   const newTasks = useMemo(
     () =>
       tasks
@@ -1496,6 +1520,7 @@ export default function PlannedTasksPage() {
           displayedInboxTasks.map((task) => (
             <article
               key={task.id}
+              id={`planned-task-${task.id}`}
               className={`rounded-xl border p-4 transition-colors ${
                 modalTaskId === task.id
                   ? "fixed inset-x-4 bottom-4 top-4 z-50 mx-auto max-w-3xl overflow-y-auto bg-white shadow-2xl dark:bg-zinc-900"
