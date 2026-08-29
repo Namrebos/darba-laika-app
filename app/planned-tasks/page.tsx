@@ -351,6 +351,10 @@ export default function PlannedTasksPage() {
     setInboxTab(targetTask.viewed_at ? "planned" : "new");
     setInboxExpanded(true);
     setExpandedTaskIds((current) => new Set(current).add(targetTask.id));
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("plannedTask");
+    cleanUrl.searchParams.delete("transportRequest");
+    window.history.replaceState({}, "", `${cleanUrl.pathname}${cleanUrl.search}`);
     window.setTimeout(() => {
       document
         .getElementById(`planned-task-${targetTask.id}`)
@@ -396,7 +400,10 @@ export default function PlannedTasksPage() {
       return [
         ...visibleInboxTasks,
         ...tasks.filter(
-          (task) => expandedTaskIds.has(task.id) && !visibleIds.has(task.id),
+          (task) =>
+            task.status === "new" &&
+            expandedTaskIds.has(task.id) &&
+            !visibleIds.has(task.id),
         ),
       ];
     },
