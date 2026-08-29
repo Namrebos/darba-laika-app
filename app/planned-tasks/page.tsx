@@ -227,7 +227,6 @@ export default function PlannedTasksPage() {
   const [multiDateConfigs, setMultiDateConfigs] = useState<
     Record<number, MultiDateConfig>
   >({});
-  const scheduleInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   useEffect(() => {
     async function load() {
@@ -1707,39 +1706,30 @@ export default function PlannedTasksPage() {
                 </label>
                 <div className="flex items-center gap-2 self-end">
                   <div className="relative min-w-0 flex-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const input = scheduleInputRefs.current[task.id];
-                        if (!input) return;
-                        try {
-                          input.showPicker();
-                        } catch {
-                          input.click();
-                        }
-                      }}
+                    <div
                       className="flex min-h-10 w-full items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800"
-                      aria-label="Izvēlēties uzdevuma datumu un laiku"
                     >
                       <CalendarClock size={19} className="shrink-0 text-blue-600" />
                       <span className="truncate font-medium">
                         {scheduledDateTimeLabel(task)}
                       </span>
-                    </button>
+                    </div>
                     <input
-                      ref={(element) => {
-                        scheduleInputRefs.current[task.id] = element;
-                      }}
                       type="datetime-local"
                       required
                       value={`${task.scheduled_date || selectedDate}T${task.scheduled_time?.slice(0, 5) || nextTimeForDate(task.scheduled_date || selectedDate, task.id)}`}
+                      onClick={(event) => {
+                        try {
+                          event.currentTarget.showPicker();
+                        } catch {
+                          // Safari izmanto paša lietotāja pieskārienu sistēmas izvēlnei.
+                        }
+                      }}
                       onChange={(event) =>
                         void saveSchedule(task, event.currentTarget.value)
                       }
                       aria-label="Izvēlēties uzdevuma datumu un laiku"
-                      tabIndex={-1}
-                      aria-hidden="true"
-                      className="pointer-events-none absolute h-px w-px opacity-0"
+                      className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
                     />
                   </div>
                   <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-2 py-2 text-xs font-medium dark:border-zinc-600">
