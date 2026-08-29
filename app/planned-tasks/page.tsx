@@ -2289,6 +2289,8 @@ export default function PlannedTasksPage() {
       <TransportRequestModal
         requestId={openedRequestId}
         onClose={() => setOpenedRequestId(null)}
+        editable
+        onSaved={() => window.location.reload()}
       />
     </div>
   );

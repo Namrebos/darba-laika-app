@@ -2,14 +2,17 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  CalendarClock,
   ExternalLink,
   MapPin,
   Navigation,
   Phone,
+  Save,
   X,
 } from "lucide-react";
+import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
 
 const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), {
@@ -154,21 +157,6 @@ function PartySection({
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h3 className="mb-4 text-xl font-bold text-slate-900">{title}</h3>
       <div className="space-y-4">
-        <div>
-          <span className="mb-2 block text-sm font-semibold text-slate-800">
-            Klienta veids
-          </span>
-          <div className="flex gap-5 text-sm">
-            <label className="flex items-center gap-2">
-              <input type="radio" checked={type === "private"} readOnly />
-              Privātpersona
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="radio" checked={type === "company"} readOnly />
-              Juridiska persona
-            </label>
-          </div>
-        </div>
         {type === "company" ? (
           <>
             <ReadonlyField label="Uzņēmuma nosaukums" value={companyName} />
@@ -259,18 +247,217 @@ function LocationSection({
   );
 }
 
+function EditField({
+  label,
+  value,
+  onChange,
+  required = false,
+  multiline = false,
+}: {
+  label: string;
+  value: string | null;
+  onChange: (value: string) => void;
+  required?: boolean;
+  multiline?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-semibold text-slate-800">
+        {label}{required && <span className="text-red-500"> *</span>}
+      </span>
+      {multiline ? (
+        <textarea
+          value={value || ""}
+          onChange={(event) => onChange(event.target.value)}
+          className="form-input min-h-24 resize-y bg-white"
+        />
+      ) : (
+        <input
+          required={required}
+          value={value || ""}
+          onChange={(event) => onChange(event.target.value)}
+          className="form-input bg-white"
+        />
+      )}
+    </label>
+  );
+}
+
+function EditablePartySection({
+  title,
+  prefix,
+  request,
+  update,
+}: {
+  title: string;
+  prefix: "sender" | "recipient";
+  request: TransportRequest;
+  update: (changes: Partial<TransportRequest>) => void;
+}) {
+  const typeKey = `${prefix}_type` as "sender_type" | "recipient_type";
+  const type = request[typeKey];
+  const key = (name: string) => `${prefix}_${name}` as keyof TransportRequest;
+  const setText = (name: string, value: string) =>
+    update({ [key(name)]: value } as Partial<TransportRequest>);
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h3 className="mb-4 text-xl font-bold text-slate-900">{title}</h3>
+      <div className="space-y-4">
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold text-slate-800">Klienta veids</span>
+          <select
+            value={type}
+            onChange={(event) => update({ [typeKey]: event.target.value } as Partial<TransportRequest>)}
+            className="form-input bg-white"
+          >
+            <option value="private">Privātpersona</option>
+            <option value="company">Juridiska persona</option>
+          </select>
+        </label>
+        {type === "company" ? (
+          <>
+            <EditField label="Uzņēmuma nosaukums" required value={String(request[key("company_name")] || "")} onChange={(value) => setText("company_name", value)} />
+            <EditField label="Reģistrācijas/PVN numurs" value={String(request[key("registration_number")] || "")} onChange={(value) => setText("registration_number", value)} />
+          </>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <EditField label="Vārds" required value={String(request[key("first_name")] || "")} onChange={(value) => setText("first_name", value)} />
+            <EditField label="Uzvārds" value={String(request[key("last_name")] || "")} onChange={(value) => setText("last_name", value)} />
+          </div>
+        )}
+        <EditField label="Tālrunis" required value={String(request[key("phone")] || "")} onChange={(value) => setText("phone", value)} />
+      </div>
+    </section>
+  );
+}
+
+function EditableDateTime({
+  label,
+  date,
+  time,
+  onChange,
+}: {
+  label: string;
+  date: string;
+  time: string | null;
+  onChange: (date: string, time: string) => void;
+}) {
+  const value = `${date}T${time?.slice(0, 5) || "09:00"}`;
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-semibold text-slate-800">{label} *</span>
+      <div className="relative">
+        <div className="form-input flex min-h-12 items-center gap-3 bg-white">
+          <CalendarClock size={20} className="text-blue-600" />
+          <span>{date}{time ? ` ${time.slice(0, 5)}` : ""}</span>
+        </div>
+        <input
+          type="datetime-local"
+          value={value}
+          onChange={(event) => {
+            const [nextDate = "", nextTime = ""] = event.currentTarget.value.split("T");
+            onChange(nextDate, nextTime);
+          }}
+          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+        />
+      </div>
+    </label>
+  );
+}
+
+function EditableLocationSection({
+  title,
+  prefix,
+  request,
+  update,
+  markerColor,
+}: {
+  title: string;
+  prefix: "pickup" | "dropoff";
+  request: TransportRequest;
+  update: (changes: Partial<TransportRequest>) => void;
+  markerColor: "blue" | "red";
+}) {
+  const addressKey = `${prefix}_address` as "pickup_address" | "dropoff_address";
+  const latKey = `${prefix}_lat` as "pickup_lat" | "dropoff_lat";
+  const lngKey = `${prefix}_lng` as "pickup_lng" | "dropoff_lng";
+  const dateKey = `${prefix}_date` as "pickup_date" | "dropoff_date";
+  const timeKey = `${prefix}_time` as "pickup_time" | "dropoff_time";
+  const notesKey = `${prefix}_notes` as "pickup_notes" | "dropoff_notes";
+  const setPoint = useCallback(async (point: { lat: number; lng: number }) => {
+    update({ [latKey]: point.lat, [lngKey]: point.lng } as Partial<TransportRequest>);
+    try {
+      const response = await fetch(`/api/geocode?lat=${point.lat}&lng=${point.lng}`);
+      const result = await response.json();
+      if (result.result?.label) {
+        update({
+          [latKey]: point.lat,
+          [lngKey]: point.lng,
+          [addressKey]: result.result.label,
+        } as Partial<TransportRequest>);
+      }
+    } catch {
+      // Precīzais punkts saglabājas arī tad, ja adresi neizdodas noteikt.
+    }
+  }, [addressKey, latKey, lngKey, update]);
+  const focusPoint = useCallback((point: { lat: number; lng: number }) => {
+    update({ [latKey]: point.lat, [lngKey]: point.lng } as Partial<TransportRequest>);
+  }, [latKey, lngKey, update]);
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h3 className="mb-4 flex items-center gap-2 text-xl font-bold text-slate-900">
+        <MapPin size={20} className="text-blue-600" />{title}
+      </h3>
+      <div className="space-y-4">
+        <div>
+          <span className="mb-1 block text-sm font-semibold text-slate-800">Adrese *</span>
+          <AddressField
+            id={`${prefix}-edit-address`}
+            value={request[addressKey] || ""}
+            onChange={(value) => update({ [addressKey]: value } as Partial<TransportRequest>)}
+            onMapFocus={focusPoint}
+          />
+        </div>
+        <div>
+          <span className="mb-1 block text-sm font-semibold text-slate-800">Precīza vieta kartē *</span>
+          <LocationPicker
+            point={{ lat: request[latKey], lng: request[lngKey] }}
+            onChange={setPoint}
+            markerColor={markerColor}
+          />
+        </div>
+        <EditableDateTime
+          label="Datums un laiks"
+          date={request[dateKey]}
+          time={request[timeKey]}
+          onChange={(date, time) => update({ [dateKey]: date, [timeKey]: time || null } as Partial<TransportRequest>)}
+        />
+        <EditField label="Piezīmes" value={request[notesKey]} multiline onChange={(value) => update({ [notesKey]: value } as Partial<TransportRequest>)} />
+      </div>
+    </section>
+  );
+}
+
 export default function TransportRequestModal({
   requestId,
   onClose,
+  editable = false,
+  onSaved,
 }: {
   requestId: number | null;
   onClose: () => void;
+  editable?: boolean;
+  onSaved?: () => void;
 }) {
   const [transportRequest, setTransportRequest] =
     useState<TransportRequest | null>(null);
   const [images, setImages] = useState<RequestImage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     if (!requestId) return;
@@ -297,6 +484,35 @@ export default function TransportRequestModal({
     void load();
   }, [requestId]);
 
+  const updateRequest = useCallback((changes: Partial<TransportRequest>) => {
+    setTransportRequest((current) => current ? { ...current, ...changes } : current);
+  }, []);
+
+  async function saveRequest() {
+    if (!transportRequest || !requestId) return;
+    setSaving(true);
+    setError("");
+    setMessage("");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch(`/api/transport-requests/${requestId}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(transportRequest),
+    });
+    const result = await response.json();
+    setSaving(false);
+    if (!response.ok) {
+      setError(result.error || "Pieteikumu neizdevās saglabāt.");
+      return;
+    }
+    setTransportRequest(result.request as TransportRequest);
+    setMessage("Pieteikuma izmaiņas saglabātas.");
+    onSaved?.();
+  }
+
   if (!requestId) return null;
 
   return (
@@ -317,8 +533,37 @@ export default function TransportRequestModal({
         <div className="space-y-4 p-4 sm:p-5">
           {loading && <p>Ielādē...</p>}
           {error && <p className="rounded-lg bg-red-50 p-3 text-red-700">{error}</p>}
+          {message && <p className="rounded-lg bg-green-50 p-3 text-green-700">{message}</p>}
 
-          {transportRequest && (
+          {transportRequest && editable && (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <EditablePartySection title="Nosūtītājs" prefix="sender" request={transportRequest} update={updateRequest} />
+                <EditablePartySection title="Saņēmējs" prefix="recipient" request={transportRequest} update={updateRequest} />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <EditableLocationSection title="Uzkraušana" prefix="pickup" request={transportRequest} update={updateRequest} markerColor="blue" />
+                <EditableLocationSection title="Izkraušana" prefix="dropoff" request={transportRequest} update={updateRequest} markerColor="red" />
+              </div>
+              <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-xl font-bold text-slate-900">Kravas informācija</h3>
+                <EditField label="Kravas veids" required value={transportRequest.cargo_type} onChange={(value) => updateRequest({ cargo_type: value })} />
+                <EditField label="Papildu piezīmes" value={transportRequest.additional_notes} multiline onChange={(value) => updateRequest({ additional_notes: value })} />
+              </section>
+              <div className="sticky bottom-0 flex justify-end border-t border-slate-200 bg-slate-50 py-3">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void saveRequest()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
+                >
+                  <Save size={18} />{saving ? "Saglabā..." : "Saglabāt izmaiņas"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {transportRequest && !editable && (
             <>
               <div className="grid gap-4 md:grid-cols-2">
                 <PartySection
