@@ -178,16 +178,25 @@ export default function DeliveryNotePage() {
       </div>
 
       <main className="delivery-note-sheet mx-auto max-w-4xl space-y-6 bg-white p-5 shadow-xl sm:p-8">
-        <header className="flex flex-col justify-between gap-4 border-b-2 border-slate-900 pb-5 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-700">
-              Kravas pārvadājuma dokuments
-            </p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight">Pavadzīme</h1>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:w-96">
+        <header className="space-y-5 border-b-2 border-slate-900 pb-5">
+          <div className="grid gap-4 sm:grid-cols-[1fr_1.15fr] sm:items-start">
+            <h1 className="text-3xl font-black tracking-tight sm:pt-2">
+              Transporta pavadzīme
+            </h1>
             <label className="space-y-1 text-sm font-semibold">
-              <span>Nr.</span>
+              <span>Pārvadātāja dati</span>
+              <textarea
+                value={carrier}
+                onChange={(event) => setCarrier(event.target.value)}
+                placeholder="Firmas nosaukums, reģistrācijas numurs, adrese un kontaktinformācija"
+                rows={3}
+                className={fieldClass}
+              />
+            </label>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="space-y-1 text-sm font-semibold">
+              <span>Pavadzīmes Nr.</span>
               <input
                 value="Tiks piešķirts no kartītes ID"
                 readOnly
@@ -203,88 +212,71 @@ export default function DeliveryNotePage() {
                 className={fieldClass}
               />
             </label>
+            <label className="space-y-1 text-sm font-semibold">
+              <span>Transportlīdzekļa VNZ</span>
+              <select
+                value={vehicleId}
+                onChange={(event) => setVehicleId(event.target.value)}
+                className={fieldClass}
+              >
+                <option value="">Izvēlies auto</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.registration_number} — {vehicle.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </header>
 
         <section className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-1 text-sm font-semibold">
-            <span>Auto un VNZ</span>
-            <select
-              value={vehicleId}
-              onChange={(event) => setVehicleId(event.target.value)}
-              className={fieldClass}
-            >
-              <option value="">Izvēlies auto</option>
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.registration_number} — {vehicle.display_name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
-            Šī ir formas izmēģinājuma versija. Dati vēl netiek saglabāti un nav
-            piesaistīti brauciena kartītei.
+          <div className="space-y-4 rounded-xl border border-slate-300 p-4">
+            <label className="block space-y-1 text-sm font-semibold">
+              <span>Pasūtītājs</span>
+              <input
+                value={customer}
+                onChange={(event) => setCustomer(event.target.value)}
+                placeholder="Vārds, uzvārds vai uzņēmums"
+                className={fieldClass}
+              />
+            </label>
+            <label className="block space-y-1 text-sm font-semibold">
+              <span>Uzkraušanas vieta</span>
+              <textarea
+                value={origin}
+                onChange={(event) => setOrigin(event.target.value)}
+                placeholder="Uzkraušanas adrese"
+                rows={3}
+                className={fieldClass}
+              />
+            </label>
+          </div>
+          <div className="space-y-4 rounded-xl border border-slate-300 p-4">
+            <label className="block space-y-1 text-sm font-semibold">
+              <span>Saņēmējs</span>
+              <input
+                value={recipient}
+                onChange={(event) => setRecipient(event.target.value)}
+                placeholder="Vārds, uzvārds vai uzņēmums"
+                className={fieldClass}
+              />
+            </label>
+            <label className="block space-y-1 text-sm font-semibold">
+              <span>Izkraušanas vieta</span>
+              <textarea
+                value={destination}
+                onChange={(event) => setDestination(event.target.value)}
+                placeholder="Izkraušanas adrese"
+                rows={3}
+                className={fieldClass}
+              />
+            </label>
           </div>
         </section>
 
         <label className="block space-y-1 text-sm font-semibold">
-          <span>Pārvadātājs</span>
-          <textarea
-            value={carrier}
-            onChange={(event) => setCarrier(event.target.value)}
-            placeholder="Uzņēmuma nosaukums, reģistrācijas numurs, adrese un kontaktinformācija"
-            rows={3}
-            className={fieldClass}
-          />
-        </label>
-
-        <section className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-1 text-sm font-semibold">
-            <span>Pasūtītājs / nosūtītājs</span>
-            <input
-              value={customer}
-              onChange={(event) => setCustomer(event.target.value)}
-              placeholder="Vārds, uzvārds vai uzņēmums"
-              className={fieldClass}
-            />
-          </label>
-          <label className="space-y-1 text-sm font-semibold">
-            <span>Saņēmējs</span>
-            <input
-              value={recipient}
-              onChange={(event) => setRecipient(event.target.value)}
-              placeholder="Vārds, uzvārds vai uzņēmums"
-              className={fieldClass}
-            />
-          </label>
-        </section>
-
-        <section className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-1 text-sm font-semibold">
-            <span>No kurienes</span>
-            <textarea
-              value={origin}
-              onChange={(event) => setOrigin(event.target.value)}
-              placeholder="Uzkraušanas adrese"
-              rows={3}
-              className={fieldClass}
-            />
-          </label>
-          <label className="space-y-1 text-sm font-semibold">
-            <span>Uz kurieni</span>
-            <textarea
-              value={destination}
-              onChange={(event) => setDestination(event.target.value)}
-              placeholder="Izkraušanas adrese"
-              rows={3}
-              className={fieldClass}
-            />
-          </label>
-        </section>
-
-        <label className="block space-y-1 text-sm font-semibold">
-          <span>Kas tiek vests</span>
+          <span>Kravas veids</span>
           <textarea
             value={cargo}
             onChange={(event) => setCargo(event.target.value)}
