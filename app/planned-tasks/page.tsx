@@ -637,32 +637,40 @@ export default function PlannedTasksPage() {
     if (error) changeLocalTask(task.id, { viewed_at: null });
   }
 
-  function toggleTask(task: PlannedTask) {
+  async function toggleTask(task: PlannedTask) {
     const isExpanded = expandedTaskIds.has(task.id);
-    if (modalTaskId === task.id && isExpanded) {
-      setModalTaskId(null);
+    if (isExpanded) {
+      let closingTaskId = task.id;
       if (task.id < 0) {
-        setTasks((current) => current.filter((item) => item.id !== task.id));
-        setMultiDateConfigs((current) => {
-          const next = { ...current };
-          delete next[task.id];
-          return next;
-        });
+        if (!task.title.trim() || !task.note.trim()) {
+          setMessage("Nosaukums un piezīmes ir obligāti.");
+          return;
+        }
+        setSavingId(task.id);
+        const persistedTask = await persistTemporaryTask(task);
+        setSavingId(null);
+        if (!persistedTask) return;
+        closingTaskId = persistedTask.id;
+      } else {
+        const saved = await saveDraft(task);
+        if (!saved) return;
       }
+      setModalTaskId((current) => current === task.id ? null : current);
       setExpandedTaskIds((current) => {
         const next = new Set(current);
         next.delete(task.id);
+        next.delete(closingTaskId);
         return next;
       });
+      if (!task.viewed_at) void markTaskViewed(task);
+      setMessage("Kartītes izmaiņas saglabātas.");
       return;
     }
     setExpandedTaskIds((current) => {
       const next = new Set(current);
-      if (next.has(task.id)) next.delete(task.id);
-      else next.add(task.id);
+      next.add(task.id);
       return next;
     });
-    if (isExpanded && !task.viewed_at) void markTaskViewed(task);
   }
 
   function toggleInbox() {
@@ -706,19 +714,6 @@ export default function PlannedTasksPage() {
   const requestEmailSubject = encodeURIComponent(
     "Kravas pārvadājuma pieteikums",
   );
-
-  async function reloadVehicles() {
-    const { data, error } = await supabase
-      .from("vehicles")
-      .select(
-        "id, registration_number, display_name, usage_count, last_used_at",
-      )
-      .eq("is_active", true)
-      .order("usage_count", { ascending: false })
-      .order("last_used_at", { ascending: false, nullsFirst: false })
-      .order("registration_number");
-    if (!error) setVehicles((data || []) as Vehicle[]);
-  }
 
   function isTaskReadyToPlan(task: PlannedTask) {
     return Boolean(
@@ -804,7 +799,7 @@ export default function PlannedTasksPage() {
     return true;
   }
 
-  async function saveSchedule(task: PlannedTask, value: string) {
+  function changeSchedule(task: PlannedTask, value: string) {
     const [date, time] = value.split("T");
     if (!date) {
       setMessage("Datums ir obligāts.");
@@ -820,7 +815,6 @@ export default function PlannedTasksPage() {
       scheduled_date: updated.scheduled_date,
       scheduled_time: updated.scheduled_time,
     });
-    await saveDraft(updated);
   }
 
   function updateMultiDateConfig(
@@ -1022,8 +1016,12 @@ export default function PlannedTasksPage() {
 
     setSavingId(task.id);
     const changes = {
+      assignee_id: task.assignee_id,
       title: task.title.trim(),
       note: task.note.trim(),
+      scheduled_date: task.scheduled_date,
+      scheduled_time: task.scheduled_time,
+      vehicle_id: task.vehicle_id,
       status: "planned" as const,
       position: lastPosition + 1,
       updated_at: new Date().toISOString(),
@@ -1601,8 +1599,7 @@ export default function PlannedTasksPage() {
                         event.currentTarget.value.length,
                     });
                   }}
-                  onBlur={() => saveDraft(task)}
-                  placeholder="Uzdevuma nosaukums"
+                    placeholder="Uzdevuma nosaukums"
                   className="w-full rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
                 />
                 {renderDictionarySuggestions(task.id, "title")}
@@ -1634,7 +1631,6 @@ export default function PlannedTasksPage() {
                         event.currentTarget.value.length,
                     });
                   }}
-                  onBlur={() => saveDraft(task)}
                   placeholder="Piezīmes"
                   rows={4}
                   className="w-full resize-y rounded-lg border border-zinc-300 bg-transparent p-2 dark:border-zinc-600"
@@ -1649,14 +1645,9 @@ export default function PlannedTasksPage() {
                     value={task.assignee_id ?? ""}
                     onChange={(event) => {
                       const assigneeId = event.target.value || null;
-                      const updated = {
-                        ...task,
-                        assignee_id: assigneeId,
-                      };
                       changeLocalTask(task.id, {
                         assignee_id: assigneeId,
                       });
-                      void saveDraft(updated);
                     }}
                     className="w-full rounded-lg border border-zinc-300 bg-white p-2 text-zinc-950 [color-scheme:light] dark:border-zinc-600 dark:bg-zinc-900 dark:text-white dark:[color-scheme:dark]"
                   >
@@ -1677,9 +1668,7 @@ export default function PlannedTasksPage() {
                         const vehicleId = event.target.value
                           ? Number(event.target.value)
                           : null;
-                        const updated = { ...task, vehicle_id: vehicleId };
                         changeLocalTask(task.id, { vehicle_id: vehicleId });
-                        void saveDraft(updated).then(() => reloadVehicles());
                       }}
                       className="w-full min-w-0 rounded-lg border border-zinc-300 bg-white p-2 text-zinc-950 [color-scheme:light] dark:border-zinc-600 dark:bg-zinc-900 dark:text-white dark:[color-scheme:dark]"
                     >
@@ -1726,7 +1715,7 @@ export default function PlannedTasksPage() {
                         }
                       }}
                       onChange={(event) =>
-                        void saveSchedule(task, event.currentTarget.value)
+                        changeSchedule(task, event.currentTarget.value)
                       }
                       aria-label="Izvēlēties uzdevuma datumu un laiku"
                       className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"

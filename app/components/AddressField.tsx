@@ -86,7 +86,8 @@ export default function AddressField({
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         className="form-input pr-10"
         maxLength={250}
-        autoComplete="street-address"
+        autoComplete="off"
+        data-1p-ignore="true"
         placeholder="Sāciet rakstīt pilsētu, ielu un numuru"
       />
       {loading && (
