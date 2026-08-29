@@ -402,6 +402,7 @@ export default function PlannedTasksPage() {
         ...tasks.filter(
           (task) =>
             task.status === "new" &&
+            task.id >= 0 &&
             expandedTaskIds.has(task.id) &&
             !visibleIds.has(task.id),
         ),
@@ -409,6 +410,34 @@ export default function PlannedTasksPage() {
     },
     [expandedTaskIds, modalTaskId, tasks, visibleInboxTasks],
   );
+
+  useEffect(() => {
+    const orphanedTemporaryIds = tasks
+      .filter(
+        (task) =>
+          task.id < 0 &&
+          task.id !== modalTaskId &&
+          !task.title.trim() &&
+          !task.note.trim(),
+      )
+      .map((task) => task.id);
+    if (orphanedTemporaryIds.length === 0) return;
+
+    const orphanedIds = new Set(orphanedTemporaryIds);
+    setTasks((current) =>
+      current.filter((task) => !orphanedIds.has(task.id)),
+    );
+    setExpandedTaskIds((current) => {
+      const next = new Set(current);
+      orphanedIds.forEach((taskId) => next.delete(taskId));
+      return next;
+    });
+    setMultiDateConfigs((current) => {
+      const next = { ...current };
+      orphanedIds.forEach((taskId) => delete next[taskId]);
+      return next;
+    });
+  }, [modalTaskId, tasks]);
 
   const employeeProfiles = useMemo(() => {
     const assignedEmployeeIds = new Set(
