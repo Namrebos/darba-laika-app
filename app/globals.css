@@ -8,6 +8,45 @@
   --foreground: #171717;
 }
 
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  body > div > div > header,
+  body > div > div > aside,
+  .delivery-note-no-print {
+    display: none !important;
+  }
+
+  .delivery-note-page {
+    min-height: auto !important;
+    background: white !important;
+    padding: 0 !important;
+  }
+
+  .delivery-note-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .delivery-note-sheet input,
+  .delivery-note-sheet select,
+  .delivery-note-sheet textarea,
+  .delivery-note-sheet canvas {
+    color: #0f172a !important;
+    background: white !important;
+    print-color-adjust: exact;
+  }
+}
+
 /* 🌚 Tumšais režīms */
 @media (prefers-color-scheme: dark) {
   :root {
