@@ -111,6 +111,7 @@ export default function SummaryPage() {
   const [searchMonth, setSearchMonth] = useState("all");
   const [searchableTasks, setSearchableTasks] = useState<TaskLogRow[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [selectedPlannedTaskId, setSelectedPlannedTaskId] = useState<number | null>(null);
   const [ownerId, setOwnerId] = useState("");
   const [showWorkTime, setShowWorkTime] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -132,7 +133,10 @@ export default function SummaryPage() {
       }
       const { data } = await supabase.rpc("get_accessible_summary_users");
       const users = (data || []) as { id: string; email: string | null }[];
-      const requested = new URLSearchParams(window.location.search).get("user") || "";
+      const parameters = new URLSearchParams(window.location.search);
+      const requested = parameters.get("user") || "";
+      const requestedDate = parameters.get("date") || "";
+      const requestedPlannedTaskId = Number(parameters.get("plannedTask")) || null;
       const storageKey = authData.user
         ? `summary-selected-user:${authData.user.id}`
         : "";
@@ -164,6 +168,13 @@ export default function SummaryPage() {
       }
       if (selected) await loadAvailableMonths(selected);
       else setLoading(false);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+        const [year, month] = requestedDate.split("-").map(Number);
+        setSelectedYear(year);
+        setSelectedMonth(month - 1);
+        setSelectedDate(requestedDate);
+        setSelectedPlannedTaskId(requestedPlannedTaskId);
+      }
     }
     resolveOwner();
   }, []);
@@ -522,9 +533,11 @@ export default function SummaryPage() {
             regularWorkStart={regularWorkStart}
             regularWorkEnd={regularWorkEnd}
             initialTaskId={selectedTaskId}
+            initialPlannedTaskId={selectedPlannedTaskId}
             onWorkTimeChanged={() => loadData(ownerId)}
             onClose={() => {
               setSelectedTaskId(null);
+              setSelectedPlannedTaskId(null);
               setSelectedDate(null);
             }}
           />

@@ -8,6 +8,7 @@ import { calculateWorkHours } from "./utils";
 import ImageGalleryModal from "@/app/components/ImageGalleryModal";
 import TaskPreviewCard from "@/app/components/TaskPreviewCard";
 import TaskDetailsCard from "@/app/components/TaskDetailsCard";
+import TransportRequestModal from "@/app/components/TransportRequestModal";
 
 type DayModalProps = {
   date: string;
@@ -17,6 +18,7 @@ type DayModalProps = {
   regularWorkStart: string;
   regularWorkEnd: string;
   initialTaskId?: number | null;
+  initialPlannedTaskId?: number | null;
   onWorkTimeChanged: () => void | Promise<void>;
   onClose: () => void;
 };
@@ -58,6 +60,7 @@ type PlannedTask = {
   scheduled_time: string | null;
   status: "new" | "planned" | "started" | "completed" | "canceled";
   position: number;
+  transport_request_id: number | null;
 };
 
 type TaskTimerRow = {
@@ -132,6 +135,7 @@ export default function DayModal({
   regularWorkStart,
   regularWorkEnd,
   initialTaskId = null,
+  initialPlannedTaskId = null,
   onWorkTimeChanged,
   onClose,
 }: DayModalProps) {
@@ -165,15 +169,25 @@ export default function DayModal({
   const [workTimeError, setWorkTimeError] = useState("");
   const [corrections, setCorrections] = useState<WorkLogCorrection[]>([]);
   const openedInitialTaskId = useRef<number | null>(null);
+  const plannedTaskRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
-  }, [date, ownerId]);
+  }, [date, ownerId, initialPlannedTaskId]);
 
   useEffect(() => {
     openedInitialTaskId.current = null;
     setSelectedTask(null);
   }, [date, initialTaskId, ownerId]);
+
+  useEffect(() => {
+    if (!initialPlannedTaskId || loading) return;
+    plannedTaskRefs.current[initialPlannedTaskId]?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [initialPlannedTaskId, loading, plannedTasks]);
 
   async function loadData() {
     setLoading(true);
@@ -204,13 +218,20 @@ export default function DayModal({
       .lte("start_time", to)
       .order("start_time", { ascending: true });
 
-    const { data: plannedRows, error: plannedError } = await supabase
+    let plannedQuery = supabase
       .from("planned_tasks")
-      .select("id, title, note, scheduled_time, status, position")
+      .select("id, title, note, scheduled_time, status, position, transport_request_id")
       .eq("assignee_id", ownerId)
-      .eq("scheduled_date", date)
-      .in("status", ["planned", "started"])
-      .order("position", { ascending: true });
+      .eq("scheduled_date", date);
+    plannedQuery = initialPlannedTaskId
+      ? plannedQuery.or(
+          `status.in.(planned,started),id.eq.${initialPlannedTaskId}`,
+        )
+      : plannedQuery.in("status", ["planned", "started"]);
+    const { data: plannedRows, error: plannedError } = await plannedQuery.order(
+      "position",
+      { ascending: true },
+    );
 
     if (workError || taskError || plannedError) {
       console.error("Day modal load error:", {
@@ -671,7 +692,14 @@ export default function DayModal({
                         {plannedTasks.map((task, index) => (
                           <div
                             key={task.id}
-                            className="rounded-lg border border-blue-200 bg-white p-3 dark:border-blue-900 dark:bg-zinc-900"
+                            ref={(element) => {
+                              plannedTaskRefs.current[task.id] = element;
+                            }}
+                            className={`rounded-lg border bg-white p-3 dark:bg-zinc-900 ${
+                              task.id === initialPlannedTaskId
+                                ? "border-amber-400 ring-2 ring-amber-400/50 dark:border-amber-500"
+                                : "border-blue-200 dark:border-blue-900"
+                            }`}
                           >
                             <div className="flex items-start gap-2">
                               <span className="text-sm font-semibold text-blue-600">
@@ -685,6 +713,8 @@ export default function DayModal({
                                       ? "Sākts"
                                       : task.status === "completed"
                                         ? "Pabeigts"
+                                        : task.status === "canceled"
+                                          ? "Atcelts"
                                         : "Plānots"}
                                   </span>
                                 </div>
@@ -722,6 +752,17 @@ export default function DayModal({
                                       ),
                                     )}
                                   </div>
+                                )}
+                                {task.transport_request_id && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setOpenedRequestId(task.transport_request_id)
+                                    }
+                                    className="mt-3 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+                                  >
+                                    Apskatīt pieteikumu
+                                  </button>
                                 )}
                               </div>
                             </div>
@@ -788,6 +829,10 @@ export default function DayModal({
         selectedIndex={selectedIndex}
         setSelectedIndex={setSelectedIndex}
         onClose={closeImageModal}
+      />
+      <TransportRequestModal
+        requestId={openedRequestId}
+        onClose={() => setOpenedRequestId(null)}
       />
     </>
   );
