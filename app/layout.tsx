@@ -162,7 +162,10 @@ export default function RootLayout({
       ) {
         router.replace("/summary");
       }
-      if (pathname === "/users" && currentRole !== "admin") {
+      if (
+        (pathname === "/users" || pathname === "/cargo-types") &&
+        currentRole !== "admin"
+      ) {
         router.replace("/summary");
       }
     }
@@ -232,7 +235,12 @@ export default function RootLayout({
           { href: "/fleet", label: "Autoparks" },
         ]
       : []),
-    ...(role === "admin" ? [{ href: "/users", label: "Lietotāji" }] : []),
+    ...(role === "admin"
+      ? [
+          { href: "/cargo-types", label: "Kravas veidi" },
+          { href: "/users", label: "Lietotāji" },
+        ]
+      : []),
     { href: "/profile", label: "Profils" },
   ];
 

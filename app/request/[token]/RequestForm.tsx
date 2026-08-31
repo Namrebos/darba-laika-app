@@ -88,12 +88,11 @@ const initialForm: FormState = {
   additional_notes: "",
 };
 
-const cargoTypes = [
+const defaultCargoTypes = [
   "Būvmateriāli",
   "Lauksaimniecības tehnika",
   "Celtniecības tehnika",
   "Automašīna",
-  "Cits",
 ];
 
 const countryCodes = [
@@ -220,9 +219,15 @@ function PartyFields({
   >([]);
   const [companySearchLoading, setCompanySearchLoading] = useState(false);
   const [companySearchFocused, setCompanySearchFocused] = useState(false);
+  const selectedCompanyNameRef = useRef("");
 
   useEffect(() => {
     const query = companyName.trim();
+    if (query === selectedCompanyNameRef.current) {
+      setCompanySuggestions([]);
+      setCompanySearchLoading(false);
+      return;
+    }
     if (!companySearchFocused || partyType !== "company" || query.length < 2) {
       setCompanySuggestions([]);
       setCompanySearchLoading(false);
@@ -327,12 +332,13 @@ function PartyFields({
               id={`${prefix}-company-name`}
               value={companyName}
               onFocus={() => setCompanySearchFocused(true)}
-              onChange={(event) =>
+              onChange={(event) => {
+                selectedCompanyNameRef.current = "";
                 update({
                   [field("company_name")]: event.target.value,
                   [field("registration_number")]: "",
-                })
-              }
+                });
+              }}
               className="form-input"
               maxLength={120}
               autoComplete="off"
@@ -355,12 +361,15 @@ function PartyFields({
                     role="option"
                     aria-selected="false"
                     onClick={() => {
+                      selectedCompanyNameRef.current = company.name.trim();
+                      setCompanySearchFocused(false);
+                      setCompanySearchLoading(false);
+                      setCompanySuggestions([]);
                       update({
                         [field("company_name")]: company.name,
                         [field("registration_number")]:
                           company.registrationNumber,
                       });
-                      setCompanySuggestions([]);
                     }}
                     className="block w-full rounded-lg px-3 py-2 text-left hover:bg-blue-50"
                   >
@@ -549,6 +558,7 @@ export default function RequestForm({
   const [images, setImages] = useState<File[]>([]);
   const [step, setStep] = useState(1);
   const [customCargo, setCustomCargo] = useState("");
+  const [cargoTypes, setCargoTypes] = useState(defaultCargoTypes);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
@@ -557,6 +567,19 @@ export default function RequestForm({
   >(internal ? "checking" : "allowed");
   const pickupReverseRequest = useRef(0);
   const dropoffReverseRequest = useRef(0);
+
+  useEffect(() => {
+    async function loadCargoTypes() {
+      const { data, error: cargoTypesError } = await supabase
+        .from("cargo_types")
+        .select("name")
+        .order("name");
+      if (!cargoTypesError && data && data.length > 0) {
+        setCargoTypes(data.map((item) => item.name));
+      }
+    }
+    void loadCargoTypes();
+  }, []);
 
   useEffect(() => {
     if (!internal) return;
@@ -1042,6 +1065,7 @@ export default function RequestForm({
                       {type === "Cits" ? "Cits..." : type}
                     </option>
                   ))}
+                  <option value="Cits">Cits...</option>
                 </select>
               )}
             </label>

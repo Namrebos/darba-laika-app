@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { format } from "date-fns";
-import { Search, X } from "lucide-react";
+import { Copy, Search, X } from "lucide-react";
 import Calendar from "./Calendar";
 import DayModal from "./DayModal";
 import MonthlySummary from "./MonthlySummary";
@@ -43,6 +43,7 @@ type TaskLogRow = {
   start_time: string;
   end_time: string | null;
   session_id?: string | null;
+  transport_request_id?: number | null;
 };
 
 function ensureDayEntry(map: Record<string, DayEntry>, date: string): DayEntry {
@@ -221,7 +222,13 @@ export default function SummaryPage() {
       return;
     }
 
-    setSearchableTasks((taskLogs || []) as TaskLogRow[]);
+    const taskRows = (taskLogs || []) as TaskLogRow[];
+    const taskIds = taskRows.flatMap((task) => task.id ? [task.id] : []);
+    const { data: linkedRequests } = taskIds.length
+      ? await supabase.from("planned_tasks").select("task_log_id, transport_request_id").in("task_log_id", taskIds).not("transport_request_id", "is", null)
+      : { data: [] as { task_log_id: number; transport_request_id: number }[] };
+    const requestByTask = new Map((linkedRequests || []).map((item) => [item.task_log_id, item.transport_request_id]));
+    setSearchableTasks(taskRows.map((task) => ({ ...task, transport_request_id: task.id ? requestByTask.get(task.id) || null : null })));
 
     const allDates = [
       ...((workLogs || []) as { start_time: string }[]).map(
@@ -289,6 +296,17 @@ export default function SummaryPage() {
   }, [searchMonth, searchQuery, searchableTasks]);
 
   const searchActive = searchQuery.trim().length > 0 || searchMonth !== "all";
+
+  async function repeatTrip(requestId: number) {
+    const { data } = await supabase.auth.getSession();
+    const response = await fetch(`/api/admin/transport-requests/${requestId}/repeat`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${data.session?.access_token || ""}` },
+    });
+    const result = await response.json();
+    if (!response.ok) return window.alert(result.error || "Braucienu neizdevās atkārtot.");
+    window.location.href = `/planned-tasks?openRequest=${result.requestId}`;
+  }
 
   async function loadData(selectedOwnerId: string) {
     setLoading(true);
@@ -472,15 +490,11 @@ export default function SummaryPage() {
                     const dateKey = format(taskDate, "yyyy-MM-dd");
 
                     return (
-                      <button
+                      <div
                         key={task.id ?? `${task.start_time}-${task.title}`}
-                        type="button"
-                        onClick={() => {
-                          setSelectedTaskId(task.id ?? null);
-                          setSelectedDate(dateKey);
-                        }}
                         className="block w-full px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
                       >
+                        <button type="button" className="w-full text-left" onClick={() => { setSelectedTaskId(task.id ?? null); setSelectedDate(dateKey); }}>
                         <div className="flex items-start justify-between gap-3">
                           <span className="font-medium">
                             {task.title || "Bez nosaukuma"}
@@ -494,7 +508,9 @@ export default function SummaryPage() {
                             {task.note}
                           </p>
                         )}
-                      </button>
+                        </button>
+                        {isAdmin && task.transport_request_id && <button type="button" onClick={() => void repeatTrip(task.transport_request_id!)} className="mt-2 inline-flex items-center gap-2 rounded-lg border border-blue-500 px-3 py-2 text-sm font-semibold text-blue-600 dark:text-blue-300"><Copy size={16}/>Atkārtot braucienu</button>}
+                      </div>
                     );
                   })}
                 </div>

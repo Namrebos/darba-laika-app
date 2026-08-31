@@ -217,6 +217,11 @@ export default function PlannedTasksPage() {
   const [requestLink, setRequestLink] = useState("");
   const [creatingRequestLink, setCreatingRequestLink] = useState(false);
   const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const requestId = Number(new URLSearchParams(window.location.search).get("openRequest"));
+    if (Number.isInteger(requestId) && requestId > 0) setOpenedRequestId(requestId);
+  }, []);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<number>>(
     () => new Set(),

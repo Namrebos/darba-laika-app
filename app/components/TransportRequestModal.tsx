@@ -513,6 +513,32 @@ export default function TransportRequestModal({
     onSaved?.();
   }
 
+  function reverseRoute() {
+    setTransportRequest((current) => current ? {
+      ...current,
+      sender_type: current.recipient_type,
+      sender_first_name: current.recipient_first_name,
+      sender_last_name: current.recipient_last_name,
+      sender_company_name: current.recipient_company_name,
+      sender_registration_number: current.recipient_registration_number,
+      sender_phone: current.recipient_phone,
+      recipient_type: current.sender_type,
+      recipient_first_name: current.sender_first_name,
+      recipient_last_name: current.sender_last_name,
+      recipient_company_name: current.sender_company_name,
+      recipient_registration_number: current.sender_registration_number,
+      recipient_phone: current.sender_phone,
+      pickup_address: current.dropoff_address,
+      pickup_lat: current.dropoff_lat,
+      pickup_lng: current.dropoff_lng,
+      pickup_notes: current.dropoff_notes,
+      dropoff_address: current.pickup_address,
+      dropoff_lat: current.pickup_lat,
+      dropoff_lng: current.pickup_lng,
+      dropoff_notes: current.pickup_notes,
+    } : current);
+  }
+
   if (!requestId) return null;
 
   return (
@@ -550,7 +576,10 @@ export default function TransportRequestModal({
                 <EditField label="Kravas veids" required value={transportRequest.cargo_type} onChange={(value) => updateRequest({ cargo_type: value })} />
                 <EditField label="Papildu piezīmes" value={transportRequest.additional_notes} multiline onChange={(value) => updateRequest({ additional_notes: value })} />
               </section>
-              <div className="sticky bottom-0 flex justify-end border-t border-slate-200 bg-slate-50 py-3">
+              <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 py-3">
+                <button type="button" onClick={reverseRoute} className="rounded-lg border border-slate-400 px-4 py-3 font-semibold text-slate-800">
+                  Apgriezt maršrutu
+                </button>
                 <button
                   type="button"
                   disabled={saving}
