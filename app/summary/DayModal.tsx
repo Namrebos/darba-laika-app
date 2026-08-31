@@ -519,11 +519,7 @@ export default function DayModal({
   };
 
   async function repeatTrip(requestId: number) {
-    const { data } = await supabase.auth.getSession();
-    const response = await fetch(`/api/admin/transport-requests/${requestId}/repeat`, { method: "POST", headers: { Authorization: `Bearer ${data.session?.access_token || ""}` } });
-    const result = await response.json();
-    if (!response.ok) return window.alert(result.error || "Braucienu neizdevās atkārtot.");
-    window.location.href = `/planned-tasks?openRequest=${result.requestId}`;
+    window.location.href = `/planned-tasks/new-trip?repeat=${requestId}`;
   }
 
   useEffect(() => {

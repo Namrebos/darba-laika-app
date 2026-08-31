@@ -14,6 +14,7 @@ import {
   ImagePlus,
   Link2,
   Send,
+  Repeat2,
   Trash2,
   Truck,
   X,
@@ -545,10 +546,12 @@ export default function RequestForm({
   token,
   initiallyValid,
   internal = false,
+  sourceRequestId,
 }: {
   token: string;
   initiallyValid: boolean;
   internal?: boolean;
+  sourceRequestId?: number;
 }) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [pickupPoint, setPickupPoint] = useState<Point | null>(null);
@@ -567,6 +570,39 @@ export default function RequestForm({
   >(internal ? "checking" : "allowed");
   const pickupReverseRequest = useRef(0);
   const dropoffReverseRequest = useRef(0);
+
+  useEffect(() => {
+    if (!internal || !sourceRequestId) return;
+    async function loadSource() {
+      const { data } = await supabase.auth.getSession();
+      const response = await fetch(`/api/transport-requests/${sourceRequestId}`, { headers: { Authorization: `Bearer ${data.session?.access_token || ""}` } });
+      const result = await response.json();
+      if (!response.ok) { setError(result.error || "Iepriekšējo braucienu neizdevās ielādēt."); return; }
+      const request = result.request as Record<string, string | number | null>;
+      const splitPhone = (value: string) => {
+        const compact = String(value || "").replace(/\D/g, "");
+        const match = countryCodes.find(([code]) => compact.startsWith(code.slice(1)));
+        const code = match?.[0] || "+371";
+        return { code, number: compact.slice(code.length - 1) };
+      };
+      const senderPhone = splitPhone(String(request.sender_phone || ""));
+      const recipientPhone = splitPhone(String(request.recipient_phone || ""));
+      setForm({
+        sender_type: request.sender_type as PartyType, sender_first_name: String(request.sender_first_name || ""), sender_last_name: String(request.sender_last_name || ""), sender_company_name: String(request.sender_company_name || ""), sender_registration_number: String(request.sender_registration_number || ""), sender_phone_code: senderPhone.code, sender_phone: senderPhone.number,
+        recipient_type: request.recipient_type as PartyType, recipient_first_name: String(request.recipient_first_name || ""), recipient_last_name: String(request.recipient_last_name || ""), recipient_company_name: String(request.recipient_company_name || ""), recipient_registration_number: String(request.recipient_registration_number || ""), recipient_phone_code: recipientPhone.code, recipient_phone: recipientPhone.number,
+        pickup_address: String(request.pickup_address || ""), pickup_date: String(request.pickup_date || ""), pickup_time: String(request.pickup_time || "").slice(0, 5), pickup_notes: String(request.pickup_notes || ""),
+        dropoff_address: String(request.dropoff_address || ""), dropoff_date: String(request.dropoff_date || ""), dropoff_time: String(request.dropoff_time || "").slice(0, 5), dropoff_notes: String(request.dropoff_notes || ""), cargo_type: String(request.cargo_type || ""), additional_notes: String(request.additional_notes || ""),
+      });
+      const pickup = { lat: Number(request.pickup_lat), lng: Number(request.pickup_lng) };
+      const dropoff = { lat: Number(request.dropoff_lat), lng: Number(request.dropoff_lng) };
+      setPickupPoint(pickup); setPickupFocus(pickup); setDropoffPoint(dropoff); setDropoffFocus(dropoff);
+      const copiedImages = await Promise.all((result.images || []).map(async (image: { url: string; fileName: string }) => {
+        const fileResponse = await fetch(image.url); const blob = await fileResponse.blob(); return new File([blob], image.fileName, { type: blob.type });
+      }));
+      setImages(copiedImages);
+    }
+    void loadSource();
+  }, [internal, sourceRequestId]);
 
   useEffect(() => {
     async function loadCargoTypes() {
@@ -617,6 +653,17 @@ export default function RequestForm({
 
   const update = (changes: Partial<FormState>) =>
     setForm((current) => ({ ...current, ...changes }));
+
+  const reverseRoute = () => {
+    setForm((current) => ({
+      ...current,
+      sender_type: current.recipient_type, sender_first_name: current.recipient_first_name, sender_last_name: current.recipient_last_name, sender_company_name: current.recipient_company_name, sender_registration_number: current.recipient_registration_number, sender_phone_code: current.recipient_phone_code, sender_phone: current.recipient_phone,
+      recipient_type: current.sender_type, recipient_first_name: current.sender_first_name, recipient_last_name: current.sender_last_name, recipient_company_name: current.sender_company_name, recipient_registration_number: current.sender_registration_number, recipient_phone_code: current.sender_phone_code, recipient_phone: current.sender_phone,
+      pickup_address: current.dropoff_address, pickup_notes: current.dropoff_notes,
+      dropoff_address: current.pickup_address, dropoff_notes: current.pickup_notes,
+    }));
+    setPickupPoint(dropoffPoint); setPickupFocus(dropoffPoint); setDropoffPoint(pickupPoint); setDropoffFocus(pickupPoint);
+  };
 
   const identityComplete = (prefix: "sender" | "recipient") => {
     const type = form[`${prefix}_type`];
@@ -877,14 +924,17 @@ export default function RequestForm({
           </p>
         </div>
         {internal && (
+          <div className="absolute right-0 top-0 flex gap-2">
+          {sourceRequestId && <button type="button" onClick={reverseRoute} aria-label="Apgriezt maršrutu" title="Apgriezt maršrutu" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm"><Repeat2 size={23}/></button>}
           <Link
             href="/planned-tasks"
             aria-label="Aizvērt formu bez saglabāšanas"
             title="Aizvērt"
-            className="absolute right-0 top-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
           >
             <X size={24} />
           </Link>
+          </div>
         )}
       </header>
 
