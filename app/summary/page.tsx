@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { format } from "date-fns";
-import { Copy, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import Calendar from "./Calendar";
 import DayModal from "./DayModal";
 import MonthlySummary from "./MonthlySummary";
@@ -297,17 +297,6 @@ export default function SummaryPage() {
 
   const searchActive = searchQuery.trim().length > 0 || searchMonth !== "all";
 
-  async function repeatTrip(requestId: number) {
-    const { data } = await supabase.auth.getSession();
-    const response = await fetch(`/api/admin/transport-requests/${requestId}/repeat`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${data.session?.access_token || ""}` },
-    });
-    const result = await response.json();
-    if (!response.ok) return window.alert(result.error || "Braucienu neizdevās atkārtot.");
-    window.location.href = `/planned-tasks?openRequest=${result.requestId}`;
-  }
-
   async function loadData(selectedOwnerId: string) {
     setLoading(true);
 
@@ -509,7 +498,6 @@ export default function SummaryPage() {
                           </p>
                         )}
                         </button>
-                        {isAdmin && task.transport_request_id && <button type="button" onClick={() => void repeatTrip(task.transport_request_id!)} className="mt-2 inline-flex items-center gap-2 rounded-lg border border-blue-500 px-3 py-2 text-sm font-semibold text-blue-600 dark:text-blue-300"><Copy size={16}/>Atkārtot braucienu</button>}
                       </div>
                     );
                   })}

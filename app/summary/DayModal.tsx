@@ -88,6 +88,7 @@ type SelectedTask = {
   timeline: { id: string; label: string; timeText: string; durationFromPrevious?: string }[];
   imageUrls: string[];
   badgeText?: string;
+  transportRequestId?: number | null;
 };
 
 function formatHours(hours: number) {
@@ -466,7 +467,7 @@ export default function DayModal({
     setSelectedIndex(index);
   };
 
-  const openTaskDetails = (task: Task) => {
+  const openTaskDetails = async (task: Task) => {
     const timers = (timersByTask[task.id] || []).map((timer) => ({
       id: timer.id,
       label: timer.label,
@@ -509,8 +510,21 @@ export default function DayModal({
       timeline,
       imageUrls: imagesByTask[task.id] || [],
       badgeText: undefined,
+      transportRequestId: null,
     });
+    if (isAdmin) {
+      const { data } = await supabase.from("planned_tasks").select("transport_request_id").eq("task_log_id", task.id).not("transport_request_id", "is", null).maybeSingle();
+      if (data?.transport_request_id) setSelectedTask((current) => current?.id === task.id ? { ...current, transportRequestId: data.transport_request_id } : current);
+    }
   };
+
+  async function repeatTrip(requestId: number) {
+    const { data } = await supabase.auth.getSession();
+    const response = await fetch(`/api/admin/transport-requests/${requestId}/repeat`, { method: "POST", headers: { Authorization: `Bearer ${data.session?.access_token || ""}` } });
+    const result = await response.json();
+    if (!response.ok) return window.alert(result.error || "Braucienu neizdevās atkārtot.");
+    window.location.href = `/planned-tasks?openRequest=${result.requestId}`;
+  }
 
   useEffect(() => {
     if (
@@ -754,15 +768,15 @@ export default function DayModal({
                                   </div>
                                 )}
                                 {task.transport_request_id && (
-                                  <button
+                                  <div className="mt-3 flex flex-wrap gap-2"><button
                                     type="button"
                                     onClick={() =>
                                       setOpenedRequestId(task.transport_request_id)
                                     }
-                                    className="mt-3 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+                                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
                                   >
                                     Apskatīt pieteikumu
-                                  </button>
+                                  </button>{isAdmin && <button type="button" onClick={() => void repeatTrip(task.transport_request_id!)} className="rounded-lg border border-blue-500 px-3 py-2 text-sm font-semibold text-blue-600 dark:text-blue-300">Atkārtot braucienu</button>}</div>
                                 )}
                               </div>
                             </div>
@@ -819,6 +833,7 @@ export default function DayModal({
                 else setSelectedTask(null);
               }}
               badgeText={selectedTask.badgeText}
+              onRepeatTrip={selectedTask.transportRequestId ? () => void repeatTrip(selectedTask.transportRequestId!) : undefined}
             />
           </div>
         </div>

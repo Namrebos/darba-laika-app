@@ -26,6 +26,7 @@ type Props = {
   onOpenImage: (index: number) => void
   onClose: () => void
   badgeText?: string
+  onRepeatTrip?: () => void
 }
 
 export default function TaskDetailsCard({
@@ -38,6 +39,7 @@ export default function TaskDetailsCard({
   onOpenImage,
   onClose,
   badgeText,
+  onRepeatTrip,
 }: Props) {
   return (
     <div className="border p-4 rounded bg-gray-100 dark:bg-zinc-800 space-y-4">
@@ -114,12 +116,10 @@ export default function TaskDetailsCard({
         size="small"
       />
 
-      <button
-        className="text-sm text-gray-600 underline"
-        onClick={onClose}
-      >
-        Aizvērt
-      </button>
+      <div className="flex flex-wrap justify-between gap-2">
+        <button className="text-sm text-gray-600 underline" onClick={onClose}>Aizvērt</button>
+        {onRepeatTrip && <button type="button" onClick={onRepeatTrip} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">Atkārtot braucienu</button>}
+      </div>
     </div>
   )
 }

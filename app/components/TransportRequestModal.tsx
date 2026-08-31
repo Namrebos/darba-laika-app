@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CalendarClock,
   ExternalLink,
@@ -10,6 +10,7 @@ import {
   Navigation,
   Phone,
   Save,
+  Repeat2,
   X,
 } from "lucide-react";
 import AddressField from "@/app/components/AddressField";
@@ -294,11 +295,24 @@ function EditablePartySection({
   request: TransportRequest;
   update: (changes: Partial<TransportRequest>) => void;
 }) {
+  const [suggestions, setSuggestions] = useState<{ name: string; registrationNumber: string }[]>([]);
+  const [focused, setFocused] = useState(false);
   const typeKey = `${prefix}_type` as "sender_type" | "recipient_type";
   const type = request[typeKey];
   const key = (name: string) => `${prefix}_${name}` as keyof TransportRequest;
   const setText = (name: string, value: string) =>
     update({ [key(name)]: value } as Partial<TransportRequest>);
+  const companyName = String(request[key("company_name")] || "");
+  useEffect(() => {
+    if (!focused || type !== "company" || companyName.trim().length < 2) return setSuggestions([]);
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      const response = await fetch(`/api/companies?q=${encodeURIComponent(companyName.trim())}`, { signal: controller.signal });
+      const result = await response.json();
+      setSuggestions(result.companies || []);
+    }, 250);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [companyName, focused, type]);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -317,7 +331,8 @@ function EditablePartySection({
         </label>
         {type === "company" ? (
           <>
-            <EditField label="Uzņēmuma nosaukums" required value={String(request[key("company_name")] || "")} onChange={(value) => setText("company_name", value)} />
+            <div className="relative"><label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Uzņēmuma nosaukums *</span><input value={companyName} onFocus={() => setFocused(true)} onChange={(e) => setText("company_name", e.target.value)} className="form-input bg-white" /></label>
+            {suggestions.length > 0 && <div className="absolute z-30 mt-1 max-h-52 w-full overflow-auto rounded-lg border bg-white shadow-xl">{suggestions.map((company) => <button type="button" key={`${company.registrationNumber}-${company.name}`} onClick={() => { update({ [key("company_name")]: company.name, [key("registration_number")]: company.registrationNumber } as Partial<TransportRequest>); setFocused(false); setSuggestions([]); }} className="block w-full px-3 py-2 text-left hover:bg-blue-50"><strong>{company.name}</strong><span className="block text-xs text-slate-500">Reģ. Nr. {company.registrationNumber}</span></button>)}</div>}</div>
             <EditField label="Reģistrācijas/PVN numurs" value={String(request[key("registration_number")] || "")} onChange={(value) => setText("registration_number", value)} />
           </>
         ) : (
@@ -326,7 +341,7 @@ function EditablePartySection({
             <EditField label="Uzvārds" value={String(request[key("last_name")] || "")} onChange={(value) => setText("last_name", value)} />
           </div>
         )}
-        <EditField label="Tālrunis" required value={String(request[key("phone")] || "")} onChange={(value) => setText("phone", value)} />
+        <label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Tālrunis *</span><input type="tel" value={String(request[key("phone")] || "")} onChange={(e) => setText("phone", e.target.value.replace(/[^+\d\s()-]/g, ""))} pattern="\+[1-9]\d{7,14}" className="form-input bg-white" />{!/^\+[1-9]\d{7,14}$/.test(String(request[key("phone")] || "").replace(/[\s()-]/g, "")) && <span className="mt-1 block text-xs text-red-600">Ievadi valsts kodu un 8–15 ciparus.</span>}</label>
       </div>
     </section>
   );
@@ -343,23 +358,25 @@ function EditableDateTime({
   time: string | null;
   onChange: (date: string, time: string) => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const value = `${date}T${time?.slice(0, 5) || "09:00"}`;
   return (
     <label className="block">
       <span className="mb-1 block text-sm font-semibold text-slate-800">{label} *</span>
       <div className="relative">
-        <div className="form-input flex min-h-12 items-center gap-3 bg-white">
+        <button type="button" onClick={() => { const input = inputRef.current; if (!input) return; if (typeof input.showPicker === "function") input.showPicker(); else { input.focus(); input.click(); } }} className="form-input flex min-h-12 w-full items-center gap-3 bg-white text-left">
           <CalendarClock size={20} className="text-blue-600" />
           <span>{date}{time ? ` ${time.slice(0, 5)}` : ""}</span>
-        </div>
+        </button>
         <input
+          ref={inputRef}
           type="datetime-local"
           value={value}
           onChange={(event) => {
             const [nextDate = "", nextTime = ""] = event.currentTarget.value.split("T");
             onChange(nextDate, nextTime);
           }}
-          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+          className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
         />
       </div>
     </label>
@@ -458,6 +475,7 @@ export default function TransportRequestModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [cargoTypes, setCargoTypes] = useState<string[]>([]);
 
   useEffect(() => {
     if (!requestId) return;
@@ -484,12 +502,25 @@ export default function TransportRequestModal({
     void load();
   }, [requestId]);
 
+  useEffect(() => {
+    supabase.from("cargo_types").select("name").order("name").then(({ data }) => setCargoTypes((data || []).map((item) => item.name)));
+  }, []);
+
   const updateRequest = useCallback((changes: Partial<TransportRequest>) => {
     setTransportRequest((current) => current ? { ...current, ...changes } : current);
   }, []);
 
   async function saveRequest() {
     if (!transportRequest || !requestId) return;
+    const validPhone = (value: string) => /^\+[1-9]\d{7,14}$/.test(value.replace(/[\s()-]/g, ""));
+    if (!validPhone(transportRequest.sender_phone) || !validPhone(transportRequest.recipient_phone)) {
+      setError("Pārbaudi abus tālruņa numurus: nepieciešams valsts kods un 8–15 cipari.");
+      return;
+    }
+    if (!transportRequest.pickup_date || !transportRequest.dropoff_date) {
+      setError("Izvēlies uzkraušanas un izkraušanas datumu.");
+      return;
+    }
     setSaving(true);
     setError("");
     setMessage("");
@@ -573,12 +604,12 @@ export default function TransportRequestModal({
               </div>
               <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-xl font-bold text-slate-900">Kravas informācija</h3>
-                <EditField label="Kravas veids" required value={transportRequest.cargo_type} onChange={(value) => updateRequest({ cargo_type: value })} />
+                <label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Kravas veids *</span><select value={transportRequest.cargo_type} onChange={(event) => updateRequest({ cargo_type: event.target.value })} className="form-input bg-white"><option value="">Izvēlies</option>{cargoTypes.map((name) => <option key={name} value={name}>{name}</option>)}{transportRequest.cargo_type && !cargoTypes.includes(transportRequest.cargo_type) && <option value={transportRequest.cargo_type}>{transportRequest.cargo_type}</option>}</select></label>
                 <EditField label="Papildu piezīmes" value={transportRequest.additional_notes} multiline onChange={(value) => updateRequest({ additional_notes: value })} />
               </section>
               <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 py-3">
-                <button type="button" onClick={reverseRoute} className="rounded-lg border border-slate-400 px-4 py-3 font-semibold text-slate-800">
-                  Apgriezt maršrutu
+                <button type="button" onClick={reverseRoute} aria-label="Apgriezt maršrutu" title="Apgriezt maršrutu" className="rounded-lg border border-slate-400 p-3 text-slate-800">
+                  <Repeat2 size={22} />
                 </button>
                 <button
                   type="button"
