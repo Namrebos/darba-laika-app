@@ -39,7 +39,7 @@ export default function RootLayout({
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [permissions, setPermissions] = useState<SectionPermissions>({
     can_access_workday: false,
@@ -171,6 +171,7 @@ export default function RootLayout({
   }, [isAuthPage, pathname, router]);
 
   useEffect(() => {
+    setCurrentTime(new Date());
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
@@ -420,13 +421,17 @@ export default function RootLayout({
 
               <div className="flex-1 text-center">
                 <div className="text-xl font-bold">
-                  {currentTime.toLocaleDateString("lv-LV")}
+                  {currentTime
+                    ? currentTime.toLocaleDateString("lv-LV")
+                    : "\u00a0"}
                 </div>
                 <div className="text-2xl text-gray-500 dark:text-gray-400">
-                  {currentTime.toLocaleTimeString("lv-LV", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {currentTime
+                    ? currentTime.toLocaleTimeString("lv-LV", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "\u00a0"}
                 </div>
               </div>
 
