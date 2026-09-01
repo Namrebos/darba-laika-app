@@ -1,6 +1,6 @@
 "use client";
 
-import { Eraser, Printer, RotateCcw } from "lucide-react";
+import { Check, Eraser, PenLine, Printer, RotateCcw, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -18,6 +18,22 @@ type SignaturePadProps = {
 function SignaturePad({ label }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
+  const hasInkRef = useRef(false);
+  const [open, setOpen] = useState(false);
+  const [signature, setSignature] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    hasInkRef.current = Boolean(signature);
+    if (!signature) return;
+    const image = new window.Image();
+    image.onload = () => context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    image.src = signature;
+  }, [open, signature]);
 
   function point(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = event.currentTarget;
@@ -50,6 +66,7 @@ function SignaturePad({ label }: SignaturePadProps) {
     context.lineJoin = "round";
     context.lineTo(position.x, position.y);
     context.stroke();
+    hasInkRef.current = true;
   }
 
   function stopDrawing(event: React.PointerEvent<HTMLCanvasElement>) {
@@ -62,31 +79,129 @@ function SignaturePad({ label }: SignaturePadProps) {
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
     if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height);
+    hasInkRef.current = false;
+  }
+
+  function save() {
+    const canvas = canvasRef.current;
+    if (!canvas || !hasInkRef.current) {
+      setSignature(null);
+      setOpen(false);
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    let left = canvas.width;
+    let right = 0;
+    let top = canvas.height;
+    let bottom = 0;
+    for (let y = 0; y < canvas.height; y += 1) {
+      for (let x = 0; x < canvas.width; x += 1) {
+        if (pixels.data[(y * canvas.width + x) * 4 + 3] === 0) continue;
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y);
+      }
+    }
+
+    const sourceWidth = Math.max(1, right - left + 1);
+    const sourceHeight = Math.max(1, bottom - top + 1);
+    const normalized = document.createElement("canvas");
+    normalized.width = 700;
+    normalized.height = 180;
+    const normalizedContext = normalized.getContext("2d");
+    if (!normalizedContext) return;
+    const padding = 14;
+    const scale = Math.min(
+      (normalized.width - padding * 2) / sourceWidth,
+      (normalized.height - padding * 2) / sourceHeight,
+    );
+    const targetWidth = sourceWidth * scale;
+    const targetHeight = sourceHeight * scale;
+    normalizedContext.drawImage(
+      canvas,
+      left,
+      top,
+      sourceWidth,
+      sourceHeight,
+      (normalized.width - targetWidth) / 2,
+      (normalized.height - targetHeight) / 2,
+      targetWidth,
+      targetHeight,
+    );
+    setSignature(normalized.toDataURL("image/png"));
+    setOpen(false);
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-semibold text-slate-800">{label}</span>
-        <button
-          type="button"
-          onClick={clear}
-          className="delivery-note-no-print flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-900"
+    <div className="space-y-2 border-t border-slate-200 pt-4">
+      <span className="text-sm font-semibold text-slate-800">{label}</span>
+      {signature && (
+        <div className="flex h-24 items-center justify-center rounded-lg border border-slate-300 bg-white p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={signature} alt={label} className="h-full max-w-full object-contain" />
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="delivery-note-no-print flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 font-semibold text-white hover:bg-blue-800"
+      >
+        <PenLine size={18} /> {signature ? "Mainīt parakstu" : "Parakstīt"}
+      </button>
+
+      {open && (
+        <div
+          className="delivery-note-no-print fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3"
+          role="dialog"
+          aria-modal="true"
+          aria-label={label}
         >
-          <Eraser size={15} /> Notīrīt
-        </button>
-      </div>
-      <canvas
-        ref={canvasRef}
-        width={700}
-        height={180}
-        onPointerDown={startDrawing}
-        onPointerMove={draw}
-        onPointerUp={stopDrawing}
-        onPointerCancel={stopDrawing}
-        className="h-36 w-full touch-none rounded-lg border-2 border-slate-300 bg-white shadow-inner"
-        aria-label={label}
-      />
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-xl font-bold text-slate-950">{label}</h2>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                aria-label="Aizvērt"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <canvas
+              ref={canvasRef}
+              width={900}
+              height={420}
+              onPointerDown={startDrawing}
+              onPointerMove={draw}
+              onPointerUp={stopDrawing}
+              onPointerCancel={stopDrawing}
+              className="h-[45vh] max-h-[420px] min-h-64 w-full touch-none rounded-xl border-2 border-slate-300 bg-white shadow-inner"
+              aria-label={label}
+            />
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={clear}
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              >
+                <Eraser size={14} /> Notīrīt
+              </button>
+              <button
+                type="button"
+                onClick={save}
+                className="flex items-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 font-semibold text-white hover:bg-green-700"
+              >
+                <Check size={18} /> Saglabāt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
