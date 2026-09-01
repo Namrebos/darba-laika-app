@@ -1,4 +1,3 @@
-import "leaflet/dist/leaflet.css";
 import RequestForm from "@/app/request/[token]/RequestForm";
 
 export default async function NewTripPage({ searchParams }: { searchParams: Promise<{ repeat?: string }> }) {

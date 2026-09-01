@@ -1,4 +1,3 @@
-import "leaflet/dist/leaflet.css";
 import RequestForm from "./RequestForm";
 
 export default async function TransportRequestPage({

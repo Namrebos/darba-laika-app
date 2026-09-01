@@ -24,6 +24,7 @@ import {
   type SectionPermissions,
 } from "@/lib/access";
 import { APP_VERSION } from "@/lib/appVersion";
+import "leaflet/dist/leaflet.css";
 
 type SummaryUser = {
   id: string;
