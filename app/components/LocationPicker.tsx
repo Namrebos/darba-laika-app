@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   MapContainer,
   Marker,
@@ -112,6 +112,7 @@ export default function LocationPicker({
   footer,
 }: Props) {
   const [baseLayer, setBaseLayer] = useState<"map" | "ortho">("map");
+  const mapRef = useRef<L.Map | null>(null);
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
       alert("Šī ierīce neatbalsta atrašanās vietas noteikšanu.");
@@ -136,9 +137,10 @@ export default function LocationPicker({
     <div className="space-y-2">
       <div className="relative h-64 overflow-hidden rounded-xl border border-slate-200">
         <MapContainer
+          ref={mapRef}
           center={point ? [point.lat, point.lng] : defaultCenter}
           zoom={point ? 18 : 7}
-          zoomControl
+          zoomControl={false}
           scrollWheelZoom
           className="h-full w-full"
           style={{ height: "100%", width: "100%" }}
@@ -174,6 +176,26 @@ export default function LocationPicker({
             />
           )}
         </MapContainer>
+        <div className="absolute left-2.5 top-2.5 z-[1000] overflow-hidden rounded border border-slate-400 bg-white text-slate-900 shadow-md">
+          <button
+            type="button"
+            onClick={() => mapRef.current?.zoomIn()}
+            className="flex h-8 w-8 items-center justify-center border-b border-slate-300 text-xl leading-none"
+            aria-label="Pietuvināt karti"
+            title="Pietuvināt"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => mapRef.current?.zoomOut()}
+            className="flex h-8 w-8 items-center justify-center text-xl leading-none"
+            aria-label="Attālināt karti"
+            title="Attālināt"
+          >
+            −
+          </button>
+        </div>
         <div className="absolute left-2.5 top-[4.75rem] z-[1000] flex flex-col gap-1.5">
           <button
             type="button"
