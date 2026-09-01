@@ -139,7 +139,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const safePayload = {
+  const safePayload: Record<string, unknown> = {
+    partner_id: null,
     sender_type: payload.sender_type,
     sender_first_name: cleanText(payload.sender_first_name, 60),
     sender_last_name: cleanText(payload.sender_last_name, 60),
@@ -149,6 +150,8 @@ export async function POST(request: NextRequest) {
       30,
     ),
     sender_phone: cleanText(payload.sender_phone, 30),
+    sender_address: cleanText(payload.sender_address, 250),
+    sender_email: cleanText(payload.sender_email, 150),
     recipient_type: "private",
     recipient_first_name: cleanText(payload.dropoff_contact_name, 120),
     recipient_last_name: "",
@@ -201,6 +204,12 @@ export async function POST(request: NextRequest) {
         { error: "Nav pieejas plānoto uzdevumu sadaļai." },
         { status: 403 },
       );
+    }
+    if (profile?.role === "admin") {
+      const requestedPartnerId = Number(payload.partner_id);
+      safePayload.partner_id = Number.isSafeInteger(requestedPartnerId) && requestedPartnerId > 0
+        ? requestedPartnerId
+        : null;
     }
 
     submissionTokenHash = tokenHash(randomBytes(32).toString("base64url"));

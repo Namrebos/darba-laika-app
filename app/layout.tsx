@@ -163,7 +163,7 @@ export default function RootLayout({
         router.replace("/summary");
       }
       if (
-        (pathname === "/users" || pathname === "/cargo-types") &&
+        (pathname === "/users" || pathname === "/cargo-types" || pathname === "/partners") &&
         currentRole !== "admin"
       ) {
         router.replace("/summary");
@@ -238,6 +238,7 @@ export default function RootLayout({
     ...(role === "admin"
       ? [
           { href: "/cargo-types", label: "Kravas veidi" },
+          { href: "/partners", label: "Partneri" },
           { href: "/users", label: "Lietotāji" },
         ]
       : []),

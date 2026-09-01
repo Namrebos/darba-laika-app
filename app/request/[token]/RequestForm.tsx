@@ -34,6 +34,18 @@ type CompanySuggestion = {
   address: string;
 };
 
+type Partner = {
+  id: number;
+  partner_type: PartyType;
+  first_name: string | null;
+  last_name: string | null;
+  company_name: string | null;
+  registration_number: string | null;
+  address: string;
+  phone: string;
+  email: string | null;
+};
+
 type FormState = {
   sender_type: PartyType;
   sender_first_name: string;
@@ -42,6 +54,8 @@ type FormState = {
   sender_registration_number: string;
   sender_phone_code: string;
   sender_phone: string;
+  sender_address: string;
+  sender_email: string;
   recipient_type: PartyType;
   recipient_first_name: string;
   recipient_last_name: string;
@@ -75,6 +89,8 @@ const initialForm: FormState = {
   sender_registration_number: "",
   sender_phone_code: "+371",
   sender_phone: "",
+  sender_address: "",
+  sender_email: "",
   recipient_type: "private",
   recipient_first_name: "",
   recipient_last_name: "",
@@ -457,6 +473,29 @@ function PartyFields({
           </span>
         )}
       </div>
+      {prefix === "sender" && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label>
+            <FieldLabel>Adrese</FieldLabel>
+            <input
+              value={form.sender_address}
+              onChange={(event) => update({ sender_address: event.target.value })}
+              className="form-input"
+              maxLength={250}
+            />
+          </label>
+          <label>
+            <FieldLabel>E-pasts</FieldLabel>
+            <input
+              type="email"
+              value={form.sender_email}
+              onChange={(event) => update({ sender_email: event.target.value })}
+              className="form-input"
+              maxLength={150}
+            />
+          </label>
+        </div>
+      )}
     </div>
   );
 }
@@ -517,6 +556,9 @@ export default function RequestForm({
   const [internalAccess, setInternalAccess] = useState<
     "checking" | "allowed" | "denied"
   >(internal ? "checking" : "allowed");
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const [internalIsAdmin, setInternalIsAdmin] = useState(false);
   const pickupReverseRequest = useRef(0);
   const dropoffReverseRequest = useRef(0);
   const formTopRef = useRef<HTMLDivElement>(null);
@@ -549,13 +591,14 @@ export default function RequestForm({
       const senderPhone = splitPhone(String(request.sender_phone || ""));
       const recipientPhone = splitPhone(String(request.recipient_phone || ""));
       setForm({
-        sender_type: request.sender_type as PartyType, sender_first_name: String(request.sender_first_name || ""), sender_last_name: String(request.sender_last_name || ""), sender_company_name: String(request.sender_company_name || ""), sender_registration_number: String(request.sender_registration_number || ""), sender_phone_code: senderPhone.code, sender_phone: senderPhone.number,
+        sender_type: request.sender_type as PartyType, sender_first_name: String(request.sender_first_name || ""), sender_last_name: String(request.sender_last_name || ""), sender_company_name: String(request.sender_company_name || ""), sender_registration_number: String(request.sender_registration_number || ""), sender_phone_code: senderPhone.code, sender_phone: senderPhone.number, sender_address: String(request.sender_address || ""), sender_email: String(request.sender_email || ""),
         recipient_type: request.recipient_type as PartyType, recipient_first_name: String(request.recipient_first_name || ""), recipient_last_name: String(request.recipient_last_name || ""), recipient_company_name: String(request.recipient_company_name || ""), recipient_registration_number: String(request.recipient_registration_number || ""), recipient_phone_code: recipientPhone.code, recipient_phone: recipientPhone.number,
         pickup_contact_name: String(request.pickup_contact_name || request.sender_company_name || request.sender_first_name || ""), pickup_contact_phone_code: splitPhone(String(request.pickup_contact_phone || request.sender_phone || "")).code, pickup_contact_phone: splitPhone(String(request.pickup_contact_phone || request.sender_phone || "")).number,
         dropoff_contact_name: String(request.dropoff_contact_name || request.recipient_company_name || request.recipient_first_name || ""), dropoff_contact_phone_code: splitPhone(String(request.dropoff_contact_phone || request.recipient_phone || "")).code, dropoff_contact_phone: splitPhone(String(request.dropoff_contact_phone || request.recipient_phone || "")).number,
         pickup_address: String(request.pickup_address || ""), pickup_date: String(request.pickup_date || ""), pickup_time: String(request.pickup_time || "").slice(0, 5), pickup_notes: String(request.pickup_notes || ""),
         dropoff_address: String(request.dropoff_address || ""), dropoff_date: String(request.dropoff_date || ""), dropoff_time: String(request.dropoff_time || "").slice(0, 5), dropoff_notes: String(request.dropoff_notes || ""), cargo_type: String(request.cargo_type || ""), additional_notes: String(request.additional_notes || ""),
       });
+      setSelectedPartnerId(String(request.partner_id || ""));
       const pickup = { lat: Number(request.pickup_lat), lng: Number(request.pickup_lng) };
       const dropoff = { lat: Number(request.dropoff_lat), lng: Number(request.dropoff_lng) };
       setPickupPoint(pickup); setPickupFocus(pickup); setDropoffPoint(dropoff); setDropoffFocus(dropoff);
@@ -594,11 +637,21 @@ export default function RequestForm({
         .select("role, can_access_planned_tasks")
         .eq("id", authData.user.id)
         .single();
+      const isAdmin = profile?.role === "admin";
+      setInternalIsAdmin(isAdmin);
       setInternalAccess(
-        profile?.role === "admin" || profile?.can_access_planned_tasks === true
+        isAdmin || profile?.can_access_planned_tasks === true
           ? "allowed"
           : "denied",
       );
+      if (isAdmin) {
+        const { data: partnerRows } = await supabase
+          .from("partners")
+          .select("id, partner_type, first_name, last_name, company_name, registration_number, address, phone, email")
+          .order("company_name", { nullsFirst: false })
+          .order("first_name", { nullsFirst: false });
+        setPartners((partnerRows || []) as Partner[]);
+      }
     }
 
     void checkInternalAccess();
@@ -616,6 +669,29 @@ export default function RequestForm({
 
   const update = (changes: Partial<FormState>) =>
     setForm((current) => ({ ...current, ...changes }));
+
+  const selectPartner = (partnerId: string) => {
+    setSelectedPartnerId(partnerId);
+    const partner = partners.find((item) => String(item.id) === partnerId);
+    if (!partner) return;
+    const compactPhone = partner.phone.replace(/\D/g, "");
+    const matchedCode = countryCodes.find(([code]) =>
+      compactPhone.startsWith(code.slice(1)),
+    )?.[0] || "+371";
+    const phoneNumber = compactPhone.slice(matchedCode.length - 1);
+    setForm((current) => ({
+      ...current,
+      sender_type: partner.partner_type,
+      sender_first_name: partner.partner_type === "private" ? partner.first_name || "" : "",
+      sender_last_name: partner.partner_type === "private" ? partner.last_name || "" : "",
+      sender_company_name: partner.partner_type === "company" ? partner.company_name || "" : "",
+      sender_registration_number: partner.partner_type === "company" ? partner.registration_number || "" : "",
+      sender_phone_code: matchedCode,
+      sender_phone: phoneNumber,
+      sender_address: partner.address,
+      sender_email: partner.email || "",
+    }));
+  };
 
   const reverseRoute = () => {
     setForm((current) => ({
@@ -789,6 +865,7 @@ export default function RequestForm({
     setError("");
     const payload = {
       ...form,
+      partner_id: selectedPartnerId || null,
       sender_phone: `${form.sender_phone_code}${phoneDigits(form.sender_phone)}`,
       recipient_type: "private",
       recipient_first_name: form.dropoff_contact_name,
@@ -1039,6 +1116,25 @@ export default function RequestForm({
 
         <div className={`order-1 space-y-4 md:col-span-2 ${sectionClass(1)}`}>
           <FormCard title="Pasūtītājs">
+            {internalIsAdmin && (
+              <label className="mb-4 block">
+                <FieldLabel>Izvēlēties no partneriem</FieldLabel>
+                <select
+                  value={selectedPartnerId}
+                  onChange={(event) => selectPartner(event.target.value)}
+                  className="form-input"
+                >
+                  <option value="">Ievadīt manuāli</option>
+                  {partners.map((partner) => (
+                    <option key={partner.id} value={partner.id}>
+                      {partner.partner_type === "company"
+                        ? partner.company_name
+                        : [partner.first_name, partner.last_name].filter(Boolean).join(" ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <PartyFields prefix="sender" form={form} update={update} />
           </FormCard>
           <FormCard title="Kas jāved">
