@@ -12,7 +12,6 @@ import {
   CalendarClock,
   CheckCircle2,
   ImagePlus,
-  Link2,
   Send,
   Repeat2,
   Trash2,
@@ -492,79 +491,6 @@ function ContactFields({ prefix, form, update }: { prefix: "pickup" | "dropoff";
   </div>;
 }
 
-function LocationImportField({
-  onPoint,
-}: {
-  onPoint: (point: Point) => void | Promise<void>;
-}) {
-  const [value, setValue] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const importLocation = async () => {
-    if (!value.trim()) {
-      setError("Ielīmē Google Maps saiti vai koordinātes.");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch("/api/location-link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value }),
-      });
-      const result = (await response.json()) as {
-        point?: Point;
-        error?: string;
-      };
-      if (!response.ok || !result.point) {
-        setError(result.error || "Lokāciju neizdevās nolasīt.");
-        return;
-      }
-      await onPoint(result.point);
-      setValue("");
-    } catch {
-      setError("Lokāciju neizdevās nolasīt.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div>
-      <FieldLabel>Google Maps saite vai koordinātes</FieldLabel>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              void importLocation();
-            }
-          }}
-          className="form-input min-w-0 flex-1"
-          placeholder="Ielīmē WhatsApp saņemto saiti"
-          autoComplete="off"
-        />
-        <button
-          type="button"
-          onClick={() => void importLocation()}
-          disabled={loading}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        >
-          <Link2 size={17} />
-          <span className="hidden sm:inline">Ielādēt</span>
-        </button>
-      </div>
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
-    </div>
-  );
-}
-
 export default function RequestForm({
   token,
   initiallyValid,
@@ -1007,6 +933,7 @@ export default function RequestForm({
                   value={form.pickup_address}
                   onChange={(value) => update({ pickup_address: value })}
                   onMapFocus={focusPickupMap}
+                  onLocationImport={updatePickupPointFromMap}
                 />
               </div>
               <div>
@@ -1017,9 +944,6 @@ export default function RequestForm({
                   onChange={updatePickupPointFromMap}
                   markerColor="blue"
                   active={step === 1}
-                  footer={
-                    <LocationImportField onPoint={updatePickupPointFromMap} />
-                  }
                 />
               </div>
               <ContactFields prefix="pickup" form={form} update={update} />
@@ -1063,6 +987,7 @@ export default function RequestForm({
                   value={form.dropoff_address}
                   onChange={(value) => update({ dropoff_address: value })}
                   onMapFocus={focusDropoffMap}
+                  onLocationImport={updateDropoffPointFromMap}
                 />
               </div>
               <div>
@@ -1073,9 +998,6 @@ export default function RequestForm({
                   onChange={updateDropoffPointFromMap}
                   markerColor="red"
                   active={step === 2}
-                  footer={
-                    <LocationImportField onPoint={updateDropoffPointFromMap} />
-                  }
                 />
               </div>
               <ContactFields prefix="dropoff" form={form} update={update} />

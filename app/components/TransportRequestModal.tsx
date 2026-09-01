@@ -446,6 +446,7 @@ function EditableLocationSection({
             value={request[addressKey] || ""}
             onChange={(value) => update({ [addressKey]: value } as Partial<TransportRequest>)}
             onMapFocus={focusPoint}
+            onLocationImport={setPoint}
           />
         </div>
         <div>
