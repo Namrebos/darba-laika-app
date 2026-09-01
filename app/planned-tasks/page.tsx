@@ -1038,7 +1038,26 @@ export default function PlannedTasksPage() {
       setSavingId(task.id);
       const persistedTask = await persistTemporaryTask(task);
       setSavingId(null);
-      if (persistedTask) await sendTask(persistedTask);
+      if (!persistedTask) return;
+
+      // Nepilnīgi aizpildīta jauna kartīte jau ir saglabāta kā drafts ar
+      // persistTemporaryTask. Aizveram gan pagaidu, gan datubāzes kartītes
+      // stāvokli tieši šeit, nevis atkārtoti palaižam sendTask un paļaujamies
+      // uz secīgiem React stāvokļa atjauninājumiem.
+      if (!isTaskReadyToPlan(persistedTask)) {
+        setModalTaskId(null);
+        setInboxTab("planned");
+        setExpandedTaskIds((current) => {
+          const next = new Set(current);
+          next.delete(task.id);
+          next.delete(persistedTask.id);
+          return next;
+        });
+        setMessage("Kartīte saglabāta draftos.");
+        return;
+      }
+
+      await sendTask(persistedTask);
       return;
     }
     const multiDateConfig = multiDateConfigs[task.id];
