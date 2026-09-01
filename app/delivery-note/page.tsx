@@ -126,13 +126,17 @@ export default function DeliveryNotePage() {
         router.replace("/summary");
         return;
       }
-      const { data } = await supabase
-        .from("vehicles")
-        .select("id, registration_number, display_name")
-        .eq("is_active", true)
-        .order("usage_count", { ascending: false })
-        .order("last_used_at", { ascending: false, nullsFirst: false });
+      const [{ data }, { data: carrierSettings }] = await Promise.all([
+        supabase
+          .from("vehicles")
+          .select("id, registration_number, display_name")
+          .eq("is_active", true)
+          .order("usage_count", { ascending: false })
+          .order("last_used_at", { ascending: false, nullsFirst: false }),
+        supabase.from("carrier_settings").select("company_name").eq("id", "default").maybeSingle(),
+      ]);
       setVehicles((data || []) as Vehicle[]);
+      setCarrier(carrierSettings?.company_name || "");
       setLoading(false);
     }
     void load();
