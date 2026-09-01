@@ -36,6 +36,7 @@ type CompanySuggestion = {
 
 type Partner = {
   id: number;
+  display_name: string;
   partner_type: PartyType;
   first_name: string | null;
   last_name: string | null;
@@ -647,9 +648,8 @@ export default function RequestForm({
       if (isAdmin) {
         const { data: partnerRows } = await supabase
           .from("partners")
-          .select("id, partner_type, first_name, last_name, company_name, registration_number, address, phone, email")
-          .order("company_name", { nullsFirst: false })
-          .order("first_name", { nullsFirst: false });
+          .select("id, display_name, partner_type, first_name, last_name, company_name, registration_number, address, phone, email")
+          .order("display_name");
         setPartners((partnerRows || []) as Partner[]);
       }
     }
@@ -1127,9 +1127,7 @@ export default function RequestForm({
                   <option value="">Ievadīt manuāli</option>
                   {partners.map((partner) => (
                     <option key={partner.id} value={partner.id}>
-                      {partner.partner_type === "company"
-                        ? partner.company_name
-                        : [partner.first_name, partner.last_name].filter(Boolean).join(" ")}
+                      {partner.display_name}
                     </option>
                   ))}
                 </select>

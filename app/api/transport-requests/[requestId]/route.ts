@@ -211,9 +211,18 @@ export async function PUT(
     return NextResponse.json({ error: "Pieteikumu neizdevās saglabāt." }, { status: 400 });
   }
 
-  const taskTitle = senderType === "company"
+  let taskTitle = senderType === "company"
     ? text("sender_company_name")
     : [text("sender_first_name"), text("sender_last_name")].filter(Boolean).join(" ");
+  if (updatedRequest.partner_id) {
+    const { data: partner } = await adminClient
+      .from("partners")
+      .select("display_name")
+      .eq("id", updatedRequest.partner_id)
+      .maybeSingle();
+    const partnerDisplayName = String(partner?.display_name || "").trim();
+    if (partnerDisplayName) taskTitle = partnerDisplayName;
+  }
   const taskNote = [text("cargo_type"), text("additional_notes")].filter(Boolean).join("\n");
   await adminClient
     .from("planned_tasks")
