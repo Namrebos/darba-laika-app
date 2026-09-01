@@ -270,7 +270,6 @@ export default function DeliveryNotePage() {
     if (!window.confirm("Vai notīrīt visus pavadzīmes laukus?")) return;
     setDate(new Date().toISOString().slice(0, 10));
     setVehicleId("");
-    setCarrier("");
     setCustomer("");
     setRecipient("");
     setOrigin("");
@@ -301,22 +300,10 @@ export default function DeliveryNotePage() {
 
       <main className="delivery-note-sheet mx-auto min-h-[297mm] w-full max-w-[210mm] space-y-6 bg-white p-5 shadow-xl sm:p-[15mm]">
         <header className="space-y-5 border-b-2 border-slate-900 pb-5">
-          <div className="grid gap-4 sm:grid-cols-[1fr_1.15fr] sm:items-start">
-            <h1 className="text-3xl font-black tracking-tight sm:pt-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(9rem,0.8fr)] items-end gap-4">
+            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
               Transporta pavadzīme
             </h1>
-            <label className="space-y-1 text-sm font-semibold">
-              <span>Pārvadātāja dati</span>
-              <textarea
-                value={carrier}
-                onChange={(event) => setCarrier(event.target.value)}
-                placeholder="Firmas nosaukums, reģistrācijas numurs un adrese"
-                rows={3}
-                className={fieldClass}
-              />
-            </label>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
             <label className="space-y-1 text-sm font-semibold">
               <span>Pavadzīmes Nr.</span>
               <input
@@ -325,6 +312,14 @@ export default function DeliveryNotePage() {
                 className={`${fieldClass} bg-slate-100 text-slate-500`}
               />
             </label>
+          </div>
+          <div className="text-sm">
+            <p className="mb-1 font-semibold">Pārvadātāja dati</p>
+            <p className="whitespace-pre-line leading-relaxed text-slate-800">
+              {carrier || "Pārvadātāja dati nav norādīti"}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1 text-sm font-semibold">
               <span>Datums</span>
               <input
