@@ -149,6 +149,8 @@ export async function PUT(
     !["private", "company"].includes(recipientType) ||
     !senderName || !recipientName || !text("sender_phone") ||
     !text("recipient_phone") || !text("pickup_address") ||
+    !text("pickup_contact_name") || !text("pickup_contact_phone") ||
+    !text("dropoff_contact_name") || !text("dropoff_contact_phone") ||
     !text("dropoff_address") || !text("pickup_date") ||
     !text("dropoff_date") || !text("cargo_type") ||
     !Number.isFinite(pickupLat) || !Number.isFinite(pickupLng) ||
@@ -178,6 +180,10 @@ export async function PUT(
     recipient_company_name: nullableText("recipient_company_name"),
     recipient_registration_number: nullableText("recipient_registration_number"),
     recipient_phone: text("recipient_phone"),
+    pickup_contact_name: text("pickup_contact_name"),
+    pickup_contact_phone: text("pickup_contact_phone"),
+    dropoff_contact_name: text("dropoff_contact_name"),
+    dropoff_contact_phone: text("dropoff_contact_phone"),
     pickup_address: text("pickup_address"),
     pickup_lat: pickupLat,
     pickup_lng: pickupLng,

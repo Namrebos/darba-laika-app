@@ -50,6 +50,12 @@ type FormState = {
   recipient_registration_number: string;
   recipient_phone_code: string;
   recipient_phone: string;
+  pickup_contact_name: string;
+  pickup_contact_phone_code: string;
+  pickup_contact_phone: string;
+  dropoff_contact_name: string;
+  dropoff_contact_phone_code: string;
+  dropoff_contact_phone: string;
   pickup_address: string;
   pickup_date: string;
   pickup_time: string;
@@ -77,6 +83,12 @@ const initialForm: FormState = {
   recipient_registration_number: "",
   recipient_phone_code: "+371",
   recipient_phone: "",
+  pickup_contact_name: "",
+  pickup_contact_phone_code: "+371",
+  pickup_contact_phone: "",
+  dropoff_contact_name: "",
+  dropoff_contact_phone_code: "+371",
+  dropoff_contact_phone: "",
   pickup_address: "",
   pickup_date: "",
   pickup_time: "",
@@ -469,6 +481,17 @@ function FormCard({
   );
 }
 
+function ContactFields({ prefix, form, update }: { prefix: "pickup" | "dropoff"; form: FormState; update: (changes: Partial<FormState>) => void }) {
+  const nameKey = `${prefix}_contact_name` as "pickup_contact_name" | "dropoff_contact_name";
+  const codeKey = `${prefix}_contact_phone_code` as "pickup_contact_phone_code" | "dropoff_contact_phone_code";
+  const phoneKey = `${prefix}_contact_phone` as "pickup_contact_phone" | "dropoff_contact_phone";
+  const phoneInvalid = form[phoneKey].length > 0 && !isValidPhone(form[codeKey], form[phoneKey]);
+  return <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
+    <label><FieldLabel required>Kontaktpersona</FieldLabel><input value={form[nameKey]} onChange={(event) => update({ [nameKey]: event.target.value })} className="form-input" maxLength={120}/></label>
+    <div><FieldLabel required>Kontakttālrunis</FieldLabel><div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2"><select value={form[codeKey]} onChange={(event) => update({ [codeKey]: event.target.value })} className="form-input" aria-label="Valsts tālruņa kods">{countryCodes.map(([code]) => <option key={code} value={code}>{code}</option>)}</select><input type="tel" inputMode="numeric" value={form[phoneKey]} onChange={(event) => { const max = form[codeKey] === "+371" ? 8 : 15 - phoneDigits(form[codeKey]).length; update({ [phoneKey]: phoneDigits(event.target.value).slice(0, max) }); }} className="form-input" aria-invalid={phoneInvalid}/></div>{phoneInvalid && <span className="mt-1 block text-sm text-red-600">{form[codeKey] === "+371" ? "Ievadiet tieši 8 tālruņa numura ciparus." : "Ievadiet korektu tālruņa numuru."}</span>}</div>
+  </div>;
+}
+
 function LocationImportField({
   onPoint,
 }: {
@@ -590,6 +613,8 @@ export default function RequestForm({
       setForm({
         sender_type: request.sender_type as PartyType, sender_first_name: String(request.sender_first_name || ""), sender_last_name: String(request.sender_last_name || ""), sender_company_name: String(request.sender_company_name || ""), sender_registration_number: String(request.sender_registration_number || ""), sender_phone_code: senderPhone.code, sender_phone: senderPhone.number,
         recipient_type: request.recipient_type as PartyType, recipient_first_name: String(request.recipient_first_name || ""), recipient_last_name: String(request.recipient_last_name || ""), recipient_company_name: String(request.recipient_company_name || ""), recipient_registration_number: String(request.recipient_registration_number || ""), recipient_phone_code: recipientPhone.code, recipient_phone: recipientPhone.number,
+        pickup_contact_name: String(request.pickup_contact_name || request.sender_company_name || request.sender_first_name || ""), pickup_contact_phone_code: splitPhone(String(request.pickup_contact_phone || request.sender_phone || "")).code, pickup_contact_phone: splitPhone(String(request.pickup_contact_phone || request.sender_phone || "")).number,
+        dropoff_contact_name: String(request.dropoff_contact_name || request.recipient_company_name || request.recipient_first_name || ""), dropoff_contact_phone_code: splitPhone(String(request.dropoff_contact_phone || request.recipient_phone || "")).code, dropoff_contact_phone: splitPhone(String(request.dropoff_contact_phone || request.recipient_phone || "")).number,
         pickup_address: String(request.pickup_address || ""), pickup_date: String(request.pickup_date || ""), pickup_time: String(request.pickup_time || "").slice(0, 5), pickup_notes: String(request.pickup_notes || ""),
         dropoff_address: String(request.dropoff_address || ""), dropoff_date: String(request.dropoff_date || ""), dropoff_time: String(request.dropoff_time || "").slice(0, 5), dropoff_notes: String(request.dropoff_notes || ""), cargo_type: String(request.cargo_type || ""), additional_notes: String(request.additional_notes || ""),
       });
@@ -657,10 +682,10 @@ export default function RequestForm({
   const reverseRoute = () => {
     setForm((current) => ({
       ...current,
-      sender_type: current.recipient_type, sender_first_name: current.recipient_first_name, sender_last_name: current.recipient_last_name, sender_company_name: current.recipient_company_name, sender_registration_number: current.recipient_registration_number, sender_phone_code: current.recipient_phone_code, sender_phone: current.recipient_phone,
-      recipient_type: current.sender_type, recipient_first_name: current.sender_first_name, recipient_last_name: current.sender_last_name, recipient_company_name: current.sender_company_name, recipient_registration_number: current.sender_registration_number, recipient_phone_code: current.sender_phone_code, recipient_phone: current.sender_phone,
       pickup_address: current.dropoff_address, pickup_notes: current.dropoff_notes,
       dropoff_address: current.pickup_address, dropoff_notes: current.pickup_notes,
+      pickup_contact_name: current.dropoff_contact_name, pickup_contact_phone_code: current.dropoff_contact_phone_code, pickup_contact_phone: current.dropoff_contact_phone,
+      dropoff_contact_name: current.pickup_contact_name, dropoff_contact_phone_code: current.pickup_contact_phone_code, dropoff_contact_phone: current.pickup_contact_phone,
     }));
     setPickupPoint(dropoffPoint); setPickupFocus(dropoffPoint); setDropoffPoint(pickupPoint); setDropoffFocus(pickupPoint);
   };
@@ -685,6 +710,8 @@ export default function RequestForm({
       return Boolean(
         identityComplete("sender") &&
           isValidPhone(form.sender_phone_code, form.sender_phone) &&
+          form.pickup_contact_name.trim() &&
+          isValidPhone(form.pickup_contact_phone_code, form.pickup_contact_phone) &&
           form.pickup_address.trim() &&
           pickupPoint &&
           form.pickup_date,
@@ -692,8 +719,8 @@ export default function RequestForm({
     }
     if (targetStep === 2) {
       return Boolean(
-        identityComplete("recipient") &&
-          isValidPhone(form.recipient_phone_code, form.recipient_phone) &&
+        form.dropoff_contact_name.trim() &&
+          isValidPhone(form.dropoff_contact_phone_code, form.dropoff_contact_phone) &&
           form.dropoff_address.trim() &&
           dropoffPoint &&
           form.dropoff_date &&
@@ -814,7 +841,14 @@ export default function RequestForm({
     const payload = {
       ...form,
       sender_phone: `${form.sender_phone_code}${phoneDigits(form.sender_phone)}`,
-      recipient_phone: `${form.recipient_phone_code}${phoneDigits(form.recipient_phone)}`,
+      recipient_type: "private",
+      recipient_first_name: form.dropoff_contact_name,
+      recipient_last_name: "",
+      recipient_company_name: "",
+      recipient_registration_number: "",
+      recipient_phone: `${form.dropoff_contact_phone_code}${phoneDigits(form.dropoff_contact_phone)}`,
+      pickup_contact_phone: `${form.pickup_contact_phone_code}${phoneDigits(form.pickup_contact_phone)}`,
+      dropoff_contact_phone: `${form.dropoff_contact_phone_code}${phoneDigits(form.dropoff_contact_phone)}`,
       cargo_type:
         form.cargo_type === "Cits" ? customCargo.trim() : form.cargo_type,
       pickup_lat: pickupPoint.lat,
@@ -942,9 +976,9 @@ export default function RequestForm({
         <div className="mb-2 flex justify-between text-sm font-semibold text-slate-700">
           <span>
             {step === 1
-              ? "Nosūtītājs un uzkraušana"
+              ? "Pasūtītājs un uzkraušana"
               : step === 2
-                ? "Saņēmējs un izkraušana"
+                ? "Izkraušana"
                 : "Krava un papildinformācija"}
           </span>
           <span>{step}. no 3</span>
@@ -959,7 +993,7 @@ export default function RequestForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className={`space-y-4 ${sectionClass(1)}`}>
-          <FormCard title="Nosūtītājs">
+          <FormCard title="Pasūtītājs">
             <PartyFields prefix="sender" form={form} update={update} />
           </FormCard>
           <FormCard title="Uzkraušanas vieta">
@@ -988,6 +1022,7 @@ export default function RequestForm({
                   }
                 />
               </div>
+              <ContactFields prefix="pickup" form={form} update={update} />
               <DateTimeField
                 label="Uzkraušanas datums un laiks"
                 date={form.pickup_date}
@@ -1017,9 +1052,6 @@ export default function RequestForm({
         </div>
 
         <div className={`space-y-4 ${sectionClass(2)}`}>
-          <FormCard title="Saņēmējs">
-            <PartyFields prefix="recipient" form={form} update={update} />
-          </FormCard>
           <FormCard title="Izkraušanas vieta">
             <div className="space-y-4">
               <div>
@@ -1046,6 +1078,7 @@ export default function RequestForm({
                   }
                 />
               </div>
+              <ContactFields prefix="dropoff" form={form} update={update} />
               <DateTimeField
                 label="Izkraušanas datums un laiks"
                 date={form.dropoff_date}

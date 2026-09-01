@@ -40,24 +40,19 @@ function validDropoffOrder(input: Record<string, unknown>) {
 
 function validatePayload(input: Record<string, unknown>) {
   const senderType = input.sender_type;
-  const recipientType = input.recipient_type;
   if (!["private", "company"].includes(String(senderType))) return false;
-  if (!["private", "company"].includes(String(recipientType))) return false;
 
   const senderIdentity =
     senderType === "company"
       ? cleanText(input.sender_company_name, 120)
       : cleanText(input.sender_first_name, 60);
-  const recipientIdentity =
-    recipientType === "company"
-      ? cleanText(input.recipient_company_name, 120)
-      : cleanText(input.recipient_first_name, 60);
-
   return Boolean(
     senderIdentity &&
-      recipientIdentity &&
       validInternationalPhone(input.sender_phone) &&
-      validInternationalPhone(input.recipient_phone) &&
+      cleanText(input.pickup_contact_name, 120) &&
+      validInternationalPhone(input.pickup_contact_phone) &&
+      cleanText(input.dropoff_contact_name, 120) &&
+      validInternationalPhone(input.dropoff_contact_phone) &&
       cleanText(input.pickup_address, 250) &&
       cleanText(input.dropoff_address, 250) &&
       cleanText(input.pickup_date, 10) &&
@@ -154,15 +149,16 @@ export async function POST(request: NextRequest) {
       30,
     ),
     sender_phone: cleanText(payload.sender_phone, 30),
-    recipient_type: payload.recipient_type,
-    recipient_first_name: cleanText(payload.recipient_first_name, 60),
-    recipient_last_name: cleanText(payload.recipient_last_name, 60),
-    recipient_company_name: cleanText(payload.recipient_company_name, 120),
-    recipient_registration_number: cleanText(
-      payload.recipient_registration_number,
-      30,
-    ),
-    recipient_phone: cleanText(payload.recipient_phone, 30),
+    recipient_type: "private",
+    recipient_first_name: cleanText(payload.dropoff_contact_name, 120),
+    recipient_last_name: "",
+    recipient_company_name: "",
+    recipient_registration_number: "",
+    recipient_phone: cleanText(payload.dropoff_contact_phone, 30),
+    pickup_contact_name: cleanText(payload.pickup_contact_name, 120),
+    pickup_contact_phone: cleanText(payload.pickup_contact_phone, 30),
+    dropoff_contact_name: cleanText(payload.dropoff_contact_name, 120),
+    dropoff_contact_phone: cleanText(payload.dropoff_contact_phone, 30),
     pickup_address: cleanText(payload.pickup_address, 250),
     pickup_lat: Number(payload.pickup_lat),
     pickup_lng: Number(payload.pickup_lng),

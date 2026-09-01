@@ -34,6 +34,10 @@ type TransportRequest = {
   recipient_company_name: string | null;
   recipient_registration_number: string | null;
   recipient_phone: string;
+  pickup_contact_name: string | null;
+  pickup_contact_phone: string | null;
+  dropoff_contact_name: string | null;
+  dropoff_contact_phone: string | null;
   pickup_address: string | null;
   pickup_lat: number;
   pickup_lng: number;
@@ -207,6 +211,8 @@ function LocationSection({
   date,
   time,
   notes,
+  contactName,
+  contactPhone,
   markerColor,
 }: {
   title: string;
@@ -216,6 +222,8 @@ function LocationSection({
   date: string;
   time: string | null;
   notes: string;
+  contactName: string | null;
+  contactPhone: string | null;
   markerColor: "blue" | "red";
 }) {
   return (
@@ -237,6 +245,7 @@ function LocationSection({
             readOnly
           />
         </div>
+        <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2"><ReadonlyField label="Kontaktpersona" value={contactName} /><ReadonlyField label="Kontakttālrunis" value={contactPhone} /></div>
         <div className={`grid gap-3 ${time?.trim() ? "sm:grid-cols-2" : ""}`}>
           <ReadonlyField label="Datums" value={date} />
           <ReadonlyField label="Laiks" value={time?.slice(0, 5) || ""} />
@@ -402,6 +411,8 @@ function EditableLocationSection({
   const dateKey = `${prefix}_date` as "pickup_date" | "dropoff_date";
   const timeKey = `${prefix}_time` as "pickup_time" | "dropoff_time";
   const notesKey = `${prefix}_notes` as "pickup_notes" | "dropoff_notes";
+  const contactNameKey = `${prefix}_contact_name` as "pickup_contact_name" | "dropoff_contact_name";
+  const contactPhoneKey = `${prefix}_contact_phone` as "pickup_contact_phone" | "dropoff_contact_phone";
   const setPoint = useCallback(async (point: { lat: number; lng: number }) => {
     update({ [latKey]: point.lat, [lngKey]: point.lng } as Partial<TransportRequest>);
     try {
@@ -451,6 +462,10 @@ function EditableLocationSection({
           time={request[timeKey]}
           onChange={(date, time) => update({ [dateKey]: date, [timeKey]: time || null } as Partial<TransportRequest>)}
         />
+        <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
+          <EditField label="Kontaktpersona" required value={request[contactNameKey]} onChange={(value) => update({ [contactNameKey]: value } as Partial<TransportRequest>)} />
+          <EditField label="Kontakttālrunis" required value={request[contactPhoneKey]} onChange={(value) => update({ [contactPhoneKey]: value } as Partial<TransportRequest>)} />
+        </div>
         <EditField label="Piezīmes" value={request[notesKey]} multiline onChange={(value) => update({ [notesKey]: value } as Partial<TransportRequest>)} />
       </div>
     </section>
@@ -563,10 +578,14 @@ export default function TransportRequestModal({
       pickup_lat: current.dropoff_lat,
       pickup_lng: current.dropoff_lng,
       pickup_notes: current.dropoff_notes,
+      pickup_contact_name: current.dropoff_contact_name,
+      pickup_contact_phone: current.dropoff_contact_phone,
       dropoff_address: current.pickup_address,
       dropoff_lat: current.pickup_lat,
       dropoff_lng: current.pickup_lng,
       dropoff_notes: current.pickup_notes,
+      dropoff_contact_name: current.pickup_contact_name,
+      dropoff_contact_phone: current.pickup_contact_phone,
     } : current);
   }
 
@@ -595,8 +614,7 @@ export default function TransportRequestModal({
           {transportRequest && editable && (
             <>
               <div className="grid gap-4 md:grid-cols-2">
-                <EditablePartySection title="Nosūtītājs" prefix="sender" request={transportRequest} update={updateRequest} />
-                <EditablePartySection title="Saņēmējs" prefix="recipient" request={transportRequest} update={updateRequest} />
+                <EditablePartySection title="Pasūtītājs" prefix="sender" request={transportRequest} update={updateRequest} />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <EditableLocationSection title="Uzkraušana" prefix="pickup" request={transportRequest} update={updateRequest} markerColor="blue" />
@@ -627,7 +645,7 @@ export default function TransportRequestModal({
             <>
               <div className="grid gap-4 md:grid-cols-2">
                 <PartySection
-                  title="Nosūtītājs"
+                  title="Pasūtītājs"
                   type={transportRequest.sender_type}
                   firstName={transportRequest.sender_first_name}
                   lastName={transportRequest.sender_last_name}
@@ -636,17 +654,6 @@ export default function TransportRequestModal({
                     transportRequest.sender_registration_number
                   }
                   phone={transportRequest.sender_phone}
-                />
-                <PartySection
-                  title="Saņēmējs"
-                  type={transportRequest.recipient_type}
-                  firstName={transportRequest.recipient_first_name}
-                  lastName={transportRequest.recipient_last_name}
-                  companyName={transportRequest.recipient_company_name}
-                  registrationNumber={
-                    transportRequest.recipient_registration_number
-                  }
-                  phone={transportRequest.recipient_phone}
                 />
               </div>
 
@@ -659,6 +666,8 @@ export default function TransportRequestModal({
                   date={transportRequest.pickup_date}
                   time={transportRequest.pickup_time}
                   notes={transportRequest.pickup_notes}
+                  contactName={transportRequest.pickup_contact_name}
+                  contactPhone={transportRequest.pickup_contact_phone}
                   markerColor="blue"
                 />
                 <LocationSection
@@ -669,6 +678,8 @@ export default function TransportRequestModal({
                   date={transportRequest.dropoff_date}
                   time={transportRequest.dropoff_time}
                   notes={transportRequest.dropoff_notes}
+                  contactName={transportRequest.dropoff_contact_name}
+                  contactPhone={transportRequest.dropoff_contact_phone}
                   markerColor="red"
                 />
               </div>
