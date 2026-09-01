@@ -872,16 +872,13 @@ export default function RequestForm({
   return (
     <div className="mx-auto max-w-6xl">
       <header className="relative mb-5 flex items-start gap-3 pr-12">
-        <div className="rounded-xl bg-blue-100 p-3 text-blue-700">
+        <div className={`rounded-xl bg-blue-100 p-3 text-blue-700 ${step === 1 ? "" : "hidden md:block"}`}>
           <Truck size={30} />
         </div>
-        <div>
+        <div className={step === 1 ? "" : "hidden md:block"}>
           <h1 className="text-2xl font-bold text-slate-950 sm:text-3xl">
-            Jauns kravas pārvadājuma pieprasījums
+            Pieteikums
           </h1>
-          <p className="mt-1 text-sm text-slate-600 sm:text-base">
-            Aizpildiet nepieciešamos laukus un nosūtiet pieprasījumu.
-          </p>
         </div>
         {internal && (
           <div className="absolute right-0 top-0 flex gap-2">
@@ -899,14 +896,7 @@ export default function RequestForm({
       </header>
 
       <div className="mb-5 md:hidden">
-        <div className="mb-2 flex justify-between text-sm font-semibold text-slate-700">
-          <span>
-            {step === 1
-              ? "Pasūtītājs"
-              : step === 2
-                ? "No kurienes"
-                : "Uz kurieni"}
-          </span>
+        <div className="mb-2 flex justify-end text-sm font-semibold text-slate-700">
           <span>{step}. no 3</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-slate-200">
