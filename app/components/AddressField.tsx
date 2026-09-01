@@ -26,8 +26,29 @@ export default function AddressField({
   const [importError, setImportError] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
   const selectedAddressRef = useRef("");
   const userQueryRef = useRef("");
+
+  useEffect(() => {
+    if (!helpOpen) return;
+
+    const closeHelpOutside = (event: PointerEvent) => {
+      if (!fieldRef.current?.contains(event.target as Node)) {
+        setHelpOpen(false);
+      }
+    };
+    const closeHelpWithEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setHelpOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeHelpOutside);
+    document.addEventListener("keydown", closeHelpWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeHelpOutside);
+      document.removeEventListener("keydown", closeHelpWithEscape);
+    };
+  }, [helpOpen]);
 
   const looksLikeLocation = (text: string) =>
     /https?:\/\//i.test(text) ||
@@ -107,7 +128,7 @@ export default function AddressField({
   }, [onMapFocus, value]);
 
   return (
-    <div className="relative">
+    <div ref={fieldRef} className="relative">
       <input
         ref={inputRef}
         id={id}
