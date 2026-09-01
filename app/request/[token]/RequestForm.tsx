@@ -10,6 +10,8 @@ import {
   ArrowRight,
   Camera,
   CalendarClock,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   ImagePlus,
   Send,
@@ -560,6 +562,8 @@ export default function RequestForm({
   const [partners, setPartners] = useState<Partner[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
   const [internalIsAdmin, setInternalIsAdmin] = useState(false);
+  const [recipientOpen, setRecipientOpen] = useState(false);
+  const [recipientSameAsSender, setRecipientSameAsSender] = useState(true);
   const pickupReverseRequest = useRef(0);
   const dropoffReverseRequest = useRef(0);
   const formTopRef = useRef<HTMLDivElement>(null);
@@ -693,6 +697,28 @@ export default function RequestForm({
     }));
   };
 
+  const useSenderAsRecipient = () => {
+    setRecipientSameAsSender(true);
+    setRecipientOpen(false);
+  };
+
+  const editRecipient = () => {
+    if (recipientSameAsSender) {
+      setForm((current) => ({
+        ...current,
+        recipient_type: current.sender_type,
+        recipient_first_name: current.sender_first_name,
+        recipient_last_name: current.sender_last_name,
+        recipient_company_name: current.sender_company_name,
+        recipient_registration_number: current.sender_registration_number,
+        recipient_phone_code: current.sender_phone_code,
+        recipient_phone: current.sender_phone,
+      }));
+    }
+    setRecipientSameAsSender(false);
+    setRecipientOpen(true);
+  };
+
   const reverseRoute = () => {
     setForm((current) => ({
       ...current,
@@ -724,6 +750,12 @@ export default function RequestForm({
       return Boolean(
         identityComplete("sender") &&
           isValidPhone(form.sender_phone_code, form.sender_phone) &&
+          (recipientSameAsSender ||
+            (identityComplete("recipient") &&
+              isValidPhone(
+                form.recipient_phone_code,
+                form.recipient_phone,
+              ))) &&
           (form.cargo_type === "Cits"
             ? customCargo.trim()
             : form.cargo_type.trim()),
@@ -867,12 +899,24 @@ export default function RequestForm({
       ...form,
       partner_id: selectedPartnerId || null,
       sender_phone: `${form.sender_phone_code}${phoneDigits(form.sender_phone)}`,
-      recipient_type: "private",
-      recipient_first_name: form.dropoff_contact_name,
-      recipient_last_name: "",
-      recipient_company_name: "",
-      recipient_registration_number: "",
-      recipient_phone: `${form.dropoff_contact_phone_code}${phoneDigits(form.dropoff_contact_phone)}`,
+      recipient_type: recipientSameAsSender
+        ? form.sender_type
+        : form.recipient_type,
+      recipient_first_name: recipientSameAsSender
+        ? form.sender_first_name
+        : form.recipient_first_name,
+      recipient_last_name: recipientSameAsSender
+        ? form.sender_last_name
+        : form.recipient_last_name,
+      recipient_company_name: recipientSameAsSender
+        ? form.sender_company_name
+        : form.recipient_company_name,
+      recipient_registration_number: recipientSameAsSender
+        ? form.sender_registration_number
+        : form.recipient_registration_number,
+      recipient_phone: recipientSameAsSender
+        ? `${form.sender_phone_code}${phoneDigits(form.sender_phone)}`
+        : `${form.recipient_phone_code}${phoneDigits(form.recipient_phone)}`,
       pickup_contact_phone: `${form.pickup_contact_phone_code}${phoneDigits(form.pickup_contact_phone)}`,
       dropoff_contact_phone: `${form.dropoff_contact_phone_code}${phoneDigits(form.dropoff_contact_phone)}`,
       cargo_type:
@@ -1135,6 +1179,50 @@ export default function RequestForm({
             )}
             <PartyFields prefix="sender" form={form} update={update} />
           </FormCard>
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <button
+              type="button"
+              onClick={() =>
+                recipientOpen ? setRecipientOpen(false) : editRecipient()
+              }
+              className="flex w-full items-center justify-between gap-3 text-left"
+              aria-expanded={recipientOpen}
+            >
+              <span>
+                <span className="block text-xl font-bold text-slate-900">
+                  Saņēmējs
+                </span>
+                {!recipientOpen && (
+                  <span className="mt-1 block text-sm text-slate-500">
+                    {recipientSameAsSender
+                      ? "Tāds pats kā pasūtītājs"
+                      : form.recipient_type === "company"
+                        ? form.recipient_company_name || "Nav norādīts"
+                        : [form.recipient_first_name, form.recipient_last_name]
+                            .filter(Boolean)
+                            .join(" ") || "Nav norādīts"}
+                  </span>
+                )}
+              </span>
+              {recipientOpen ? (
+                <ChevronUp className="h-5 w-5 shrink-0" />
+              ) : (
+                <ChevronDown className="h-5 w-5 shrink-0" />
+              )}
+            </button>
+            {recipientOpen && (
+              <div className="mt-4 border-t border-slate-200 pt-4">
+                <PartyFields prefix="recipient" form={form} update={update} />
+                <button
+                  type="button"
+                  onClick={useSenderAsRecipient}
+                  className="mt-4 rounded-xl border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-700"
+                >
+                  Izmantot pasūtītāja datus
+                </button>
+              </div>
+            )}
+          </section>
           <FormCard title="Kas jāved">
             <label>
               <FieldLabel required>Kravas veids</FieldLabel>

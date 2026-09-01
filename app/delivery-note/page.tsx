@@ -239,7 +239,7 @@ export default function DeliveryNotePage() {
         <section className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-4 rounded-xl border border-slate-300 p-4">
             <label className="block space-y-1 text-sm font-semibold">
-              <span>Pasūtītājs</span>
+              <span>Nosūtītājs / pasūtītājs</span>
               <input
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
@@ -286,11 +286,23 @@ export default function DeliveryNotePage() {
           <textarea
             value={cargo}
             onChange={(event) => setCargo(event.target.value)}
-            placeholder="Kravas nosaukums, daudzums un cita nepieciešamā informācija"
-            rows={5}
+            placeholder="Kas tiek vests"
+            rows={3}
             className={fieldClass}
           />
         </label>
+
+        <section className="space-y-2 border-t border-slate-300 pt-4 text-xs leading-relaxed text-slate-700">
+          <p>
+            1. Pārvadātājs piestāda rēķinu Pasūtītājam par katru veikto
+            uzdevumu.
+          </p>
+          <p>
+            2. Pasūtītājs maksā Pārvadātājam ar bankas pārskaitījumu uz rēķinā
+            norādīto kontu 5 (piecu) dienu laikā no rēķina saņemšanas brīža
+            e-pastā. Rēķins tiks sagatavots un derīgs bez abu pušu parakstiem.
+          </p>
+        </section>
 
         <section className="grid gap-6 border-t border-slate-300 pt-6 sm:grid-cols-2">
           <SignaturePad label="Nosūtītāja paraksts" />
