@@ -18,7 +18,7 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
   const [point, setPoint] = useState<Point | null>(null);
   const [focusPoint, setFocusPoint] = useState<Point | null>(null);
   const [suggestions, setSuggestions] = useState<Company[]>([]);
-  const [focused, setFocused] = useState(false);
+  const [searchField, setSearchField] = useState<"name" | "registration" | null>(null);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formOpen, setFormOpen] = useState(true);
@@ -45,8 +45,8 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
   }, []);
 
   useEffect(() => {
-    const query = form.company_name.trim();
-    if (form.partner_type !== "company" || !focused || query.length < 2 || query === selectedName.current) {
+    const query = (searchField === "registration" ? form.registration_number : form.company_name).trim();
+    if (form.partner_type !== "company" || !searchField || query.length < 2 || (searchField === "name" && query === selectedName.current)) {
       setSuggestions([]); setSearching(false); return;
     }
     const controller = new AbortController();
@@ -60,7 +60,7 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
       finally { if (!controller.signal.aborted) setSearching(false); }
     }, 350);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [focused, form.company_name, form.partner_type]);
+  }, [searchField, form.company_name, form.partner_type, form.registration_number]);
 
   const updatePoint = useCallback(async (nextPoint: Point) => {
     const requestId = ++reverseRequest.current;
@@ -73,7 +73,7 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
   }, []);
 
   function chooseCompany(company: Company) {
-    selectedName.current = company.name.trim(); setFocused(false); setSuggestions([]);
+    selectedName.current = company.name.trim(); setSearchField(null); setSuggestions([]);
     setForm((current) => ({ ...current, company_name: company.name, registration_number: company.registrationNumber, address: company.address || current.address, display_name: current.display_name || company.name }));
   }
 
@@ -121,12 +121,16 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
         <label className="flex items-center gap-2"><input type="radio" checked={form.partner_type === "private"} onChange={() => setForm((current) => ({ ...current, partner_type: "private" }))} /> Privātpersona</label>
       </div>
       {form.partner_type === "company" ? <div className="grid gap-3 sm:grid-cols-2">
-        <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setFocused(false); setSuggestions([]); } }}>
-          <label className="space-y-1 text-sm"><span className="font-medium">Uzņēmuma nosaukums *</span><input value={form.company_name} onFocus={() => setFocused(true)} onChange={(event) => { selectedName.current = ""; setForm((current) => ({ ...current, company_name: event.target.value, registration_number: "" })); }} autoComplete="off" className={inputClass} /></label>
-          {searching && <span className="mt-1 block text-xs text-zinc-500">Meklē uzņēmumu...</span>}
-          {suggestions.length > 0 && <div className="absolute z-[2000] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">{suggestions.map((company) => <button key={`${company.registrationNumber}-${company.name}`} type="button" onPointerDown={(event) => { event.preventDefault(); chooseCompany(company); }} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-zinc-800"><strong className="block">{company.name}</strong><span className="text-xs text-zinc-500">Reģ. Nr. {company.registrationNumber}</span></button>)}</div>}
+        <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setSearchField(null); setSuggestions([]); } }}>
+          <label className="space-y-1 text-sm"><span className="font-medium">Uzņēmuma nosaukums *</span><input value={form.company_name} onFocus={() => setSearchField("name")} onChange={(event) => { selectedName.current = ""; setForm((current) => ({ ...current, company_name: event.target.value, registration_number: "" })); }} autoComplete="off" className={inputClass} /></label>
+          {searchField === "name" && searching && <span className="mt-1 block text-xs text-zinc-500">Meklē uzņēmumu...</span>}
+          {searchField === "name" && suggestions.length > 0 && <div className="absolute z-[2000] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">{suggestions.map((company) => <button key={`${company.registrationNumber}-${company.name}`} type="button" onPointerDown={(event) => { event.preventDefault(); chooseCompany(company); }} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-zinc-800"><strong className="block">{company.name}</strong><span className="text-xs text-zinc-500">Reģ. Nr. {company.registrationNumber}</span></button>)}</div>}
         </div>
-        <label className="space-y-1 text-sm"><span className="font-medium">Reģistrācijas/PVN numurs *</span><input value={form.registration_number} onChange={(event) => setForm((current) => ({ ...current, registration_number: event.target.value }))} className={inputClass} /></label>
+        <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setSearchField(null); setSuggestions([]); } }}>
+          <label className="space-y-1 text-sm"><span className="font-medium">Reģistrācijas/PVN numurs *</span><input value={form.registration_number} onFocus={() => setSearchField("registration")} onChange={(event) => setForm((current) => ({ ...current, registration_number: event.target.value }))} autoComplete="off" className={inputClass} /></label>
+          {searchField === "registration" && searching && <span className="mt-1 block text-xs text-zinc-500">Meklē uzņēmumu...</span>}
+          {searchField === "registration" && suggestions.length > 0 && <div className="absolute z-[2000] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">{suggestions.map((company) => <button key={`${company.registrationNumber}-${company.name}`} type="button" onPointerDown={(event) => { event.preventDefault(); chooseCompany(company); }} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-zinc-800"><strong className="block">{company.name}</strong><span className="text-xs text-zinc-500">Reģ. Nr. {company.registrationNumber}</span></button>)}</div>}
+        </div>
       </div> : <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1 text-sm"><span className="font-medium">Vārds *</span><input value={form.first_name} onChange={(event) => setForm((current) => ({ ...current, first_name: event.target.value }))} className={inputClass} /></label>
         <label className="space-y-1 text-sm"><span className="font-medium">Uzvārds</span><input value={form.last_name} onChange={(event) => setForm((current) => ({ ...current, last_name: event.target.value }))} className={inputClass} /></label>

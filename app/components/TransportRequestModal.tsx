@@ -304,24 +304,38 @@ function EditablePartySection({
   request: TransportRequest;
   update: (changes: Partial<TransportRequest>) => void;
 }) {
-  const [suggestions, setSuggestions] = useState<{ name: string; registrationNumber: string }[]>([]);
-  const [focused, setFocused] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ name: string; registrationNumber: string; address?: string }[]>([]);
+  const [searchField, setSearchField] = useState<"name" | "registration" | null>(null);
   const typeKey = `${prefix}_type` as "sender_type" | "recipient_type";
   const type = request[typeKey];
   const key = (name: string) => `${prefix}_${name}` as keyof TransportRequest;
   const setText = (name: string, value: string) =>
     update({ [key(name)]: value } as Partial<TransportRequest>);
   const companyName = String(request[key("company_name")] || "");
+  const registrationNumber = String(request[key("registration_number")] || "");
   useEffect(() => {
-    if (!focused || type !== "company" || companyName.trim().length < 2) return setSuggestions([]);
+    const query = (searchField === "registration" ? registrationNumber : companyName).trim();
+    if (!searchField || type !== "company" || query.length < 2) return setSuggestions([]);
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
-      const response = await fetch(`/api/companies?q=${encodeURIComponent(companyName.trim())}`, { signal: controller.signal });
+      const response = await fetch(`/api/companies?q=${encodeURIComponent(query)}`, { signal: controller.signal });
       const result = await response.json();
       setSuggestions(result.companies || []);
     }, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [companyName, focused, type]);
+  }, [companyName, registrationNumber, searchField, type]);
+
+  const chooseCompany = (company: { name: string; registrationNumber: string; address?: string }) => {
+    update({
+      [key("company_name")]: company.name,
+      [key("registration_number")]: company.registrationNumber,
+      ...(prefix === "sender" && company.address
+        ? { sender_address: company.address }
+        : {}),
+    } as Partial<TransportRequest>);
+    setSearchField(null);
+    setSuggestions([]);
+  };
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -340,9 +354,10 @@ function EditablePartySection({
         </label>
         {type === "company" ? (
           <>
-            <div className="relative"><label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Uzņēmuma nosaukums *</span><input value={companyName} onFocus={() => setFocused(true)} onChange={(e) => setText("company_name", e.target.value)} className="form-input bg-white" /></label>
-            {suggestions.length > 0 && <div className="absolute z-30 mt-1 max-h-52 w-full overflow-auto rounded-lg border bg-white shadow-xl">{suggestions.map((company) => <button type="button" key={`${company.registrationNumber}-${company.name}`} onClick={() => { update({ [key("company_name")]: company.name, [key("registration_number")]: company.registrationNumber } as Partial<TransportRequest>); setFocused(false); setSuggestions([]); }} className="block w-full px-3 py-2 text-left hover:bg-blue-50"><strong>{company.name}</strong><span className="block text-xs text-slate-500">Reģ. Nr. {company.registrationNumber}</span></button>)}</div>}</div>
-            <EditField label="Reģistrācijas/PVN numurs" value={String(request[key("registration_number")] || "")} onChange={(value) => setText("registration_number", value)} />
+            <div className="relative"><label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Uzņēmuma nosaukums *</span><input value={companyName} onFocus={() => setSearchField("name")} onChange={(e) => setText("company_name", e.target.value)} className="form-input bg-white" autoComplete="off" /></label>
+            {searchField === "name" && suggestions.length > 0 && <div className="absolute z-30 mt-1 max-h-52 w-full overflow-auto rounded-lg border bg-white shadow-xl">{suggestions.map((company) => <button type="button" key={`${company.registrationNumber}-${company.name}`} onPointerDown={(event) => { event.preventDefault(); chooseCompany(company); }} className="block w-full px-3 py-2 text-left hover:bg-blue-50"><strong>{company.name}</strong><span className="block text-xs text-slate-500">Reģ. Nr. {company.registrationNumber}</span></button>)}</div>}</div>
+            <div className="relative"><label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Reģistrācijas/PVN numurs</span><input value={registrationNumber} onFocus={() => setSearchField("registration")} onChange={(event) => setText("registration_number", event.target.value)} className="form-input bg-white" autoComplete="off" /></label>
+            {searchField === "registration" && suggestions.length > 0 && <div className="absolute z-30 mt-1 max-h-52 w-full overflow-auto rounded-lg border bg-white shadow-xl">{suggestions.map((company) => <button type="button" key={`${company.registrationNumber}-${company.name}`} onPointerDown={(event) => { event.preventDefault(); chooseCompany(company); }} className="block w-full px-3 py-2 text-left hover:bg-blue-50"><strong>{company.name}</strong><span className="block text-xs text-slate-500">Reģ. Nr. {company.registrationNumber}</span></button>)}</div>}</div>
           </>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">

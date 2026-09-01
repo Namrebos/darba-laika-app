@@ -48,7 +48,7 @@ export default function PartnersPage() {
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [companySuggestions, setCompanySuggestions] = useState<CompanySuggestion[]>([]);
-  const [companySearchFocused, setCompanySearchFocused] = useState(false);
+  const [companySearchField, setCompanySearchField] = useState<"name" | "registration" | null>(null);
   const [companySearchLoading, setCompanySearchLoading] = useState(false);
   const selectedCompanyNameRef = useRef("");
   const reverseRequestRef = useRef(0);
@@ -87,8 +87,8 @@ export default function PartnersPage() {
   }, [router]);
 
   useEffect(() => {
-    const query = form.company_name.trim();
-    if (form.partner_type !== "company" || !companySearchFocused || query.length < 2 || query === selectedCompanyNameRef.current) {
+    const query = (companySearchField === "registration" ? form.registration_number : form.company_name).trim();
+    if (form.partner_type !== "company" || !companySearchField || query.length < 2 || (companySearchField === "name" && query === selectedCompanyNameRef.current)) {
       setCompanySuggestions([]); setCompanySearchLoading(false); return;
     }
     const controller = new AbortController();
@@ -103,7 +103,7 @@ export default function PartnersPage() {
       } finally { if (!controller.signal.aborted) setCompanySearchLoading(false); }
     }, 350);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [companySearchFocused, form.company_name, form.partner_type]);
+  }, [companySearchField, form.company_name, form.partner_type, form.registration_number]);
 
   const updatePoint = useCallback(async (nextPoint: Point) => {
     const requestId = ++reverseRequestRef.current;
@@ -147,7 +147,7 @@ export default function PartnersPage() {
 
   function selectCompany(company: CompanySuggestion) {
     selectedCompanyNameRef.current = company.name.trim();
-    setCompanySearchFocused(false);
+    setCompanySearchField(null);
     setCompanySuggestions([]);
     setForm((current) => ({
       ...current,
@@ -235,14 +235,20 @@ export default function PartnersPage() {
           </div>
           {form.partner_type === "company" ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setCompanySearchFocused(false); setCompanySuggestions([]); } }}>
-                <label className="space-y-1 text-sm"><span className="font-medium">Uzņēmuma nosaukums *</span><input value={form.company_name} onFocus={() => setCompanySearchFocused(true)} onChange={(event) => { selectedCompanyNameRef.current = ""; setForm((current) => ({ ...current, company_name: event.target.value, registration_number: "" })); }} autoComplete="off" className={inputClass} /></label>
-                {companySearchLoading && <span className="mt-1 block text-xs text-zinc-500">Meklē uzņēmumu...</span>}
-                {companySuggestions.length > 0 && <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setCompanySearchField(null); setCompanySuggestions([]); } }}>
+                <label className="space-y-1 text-sm"><span className="font-medium">Uzņēmuma nosaukums *</span><input value={form.company_name} onFocus={() => setCompanySearchField("name")} onChange={(event) => { selectedCompanyNameRef.current = ""; setForm((current) => ({ ...current, company_name: event.target.value, registration_number: "" })); }} autoComplete="off" className={inputClass} /></label>
+                {companySearchField === "name" && companySearchLoading && <span className="mt-1 block text-xs text-zinc-500">Meklē uzņēmumu...</span>}
+                {companySearchField === "name" && companySuggestions.length > 0 && <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
                   {companySuggestions.map((company) => <button key={`${company.registrationNumber}-${company.name}`} type="button" onPointerDown={(event) => { event.preventDefault(); selectCompany(company); }} onClick={() => selectCompany(company)} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-zinc-800"><strong className="block">{company.name}</strong><span className="block text-xs text-zinc-500">Reģ. Nr. {company.registrationNumber}{company.address ? ` · ${company.address}` : ""}</span></button>)}
                 </div>}
               </div>
-              <label className="space-y-1 text-sm"><span className="font-medium">Reģistrācijas/PVN numurs *</span><input value={form.registration_number} onChange={(event) => setForm((current) => ({ ...current, registration_number: event.target.value }))} className={inputClass} /></label>
+              <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setCompanySearchField(null); setCompanySuggestions([]); } }}>
+                <label className="space-y-1 text-sm"><span className="font-medium">Reģistrācijas/PVN numurs *</span><input value={form.registration_number} onFocus={() => setCompanySearchField("registration")} onChange={(event) => setForm((current) => ({ ...current, registration_number: event.target.value }))} autoComplete="off" className={inputClass} /></label>
+                {companySearchField === "registration" && companySearchLoading && <span className="mt-1 block text-xs text-zinc-500">Meklē uzņēmumu...</span>}
+                {companySearchField === "registration" && companySuggestions.length > 0 && <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                  {companySuggestions.map((company) => <button key={`${company.registrationNumber}-${company.name}`} type="button" onPointerDown={(event) => { event.preventDefault(); selectCompany(company); }} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-zinc-800"><strong className="block">{company.name}</strong><span className="block text-xs text-zinc-500">Reģ. Nr. {company.registrationNumber}{company.address ? ` · ${company.address}` : ""}</span></button>)}
+                </div>}
+              </div>
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">

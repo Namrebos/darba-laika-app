@@ -245,21 +245,30 @@ function PartyFields({
   const phoneInvalid = phone.length > 0 && !isValidPhone(phoneCode, phone);
   const phoneErrorId = `${prefix}-phone-error`;
   const companyName = String(form[field("company_name")]);
+  const registrationNumber = String(form[field("registration_number")]);
   const [companySuggestions, setCompanySuggestions] = useState<
     CompanySuggestion[]
   >([]);
   const [companySearchLoading, setCompanySearchLoading] = useState(false);
-  const [companySearchFocused, setCompanySearchFocused] = useState(false);
+  const [companySearchField, setCompanySearchField] = useState<
+    "name" | "registration" | null
+  >(null);
   const selectedCompanyNameRef = useRef("");
 
   useEffect(() => {
-    const query = companyName.trim();
-    if (query === selectedCompanyNameRef.current) {
+    const query = (companySearchField === "registration"
+      ? registrationNumber
+      : companyName
+    ).trim();
+    if (
+      companySearchField === "name" &&
+      query === selectedCompanyNameRef.current
+    ) {
       setCompanySuggestions([]);
       setCompanySearchLoading(false);
       return;
     }
-    if (!companySearchFocused || partyType !== "company" || query.length < 2) {
+    if (!companySearchField || partyType !== "company" || query.length < 2) {
       setCompanySuggestions([]);
       setCompanySearchLoading(false);
       return;
@@ -294,7 +303,53 @@ function PartyFields({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [companyName, companySearchFocused, partyType]);
+  }, [companyName, companySearchField, partyType, registrationNumber]);
+
+  const selectCompany = (company: CompanySuggestion) => {
+    selectedCompanyNameRef.current = company.name.trim();
+    setCompanySearchField(null);
+    setCompanySearchLoading(false);
+    setCompanySuggestions([]);
+    update({
+      [field("company_name")]: company.name,
+      [field("registration_number")]: company.registrationNumber,
+      ...(prefix === "sender" && company.address
+        ? { sender_address: company.address }
+        : {}),
+    });
+  };
+
+  const suggestionMenu = companySuggestions.length > 0 && (
+    <div
+      role="listbox"
+      className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+    >
+      {companySuggestions.map((company) => (
+        <button
+          key={`${company.registrationNumber}-${company.name}`}
+          type="button"
+          role="option"
+          aria-selected="false"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            selectCompany(company);
+          }}
+          className="block w-full rounded-lg px-3 py-2 text-left hover:bg-blue-50"
+        >
+          <span className="block text-sm font-semibold text-slate-900">
+            {company.name}
+          </span>
+          <span className="block text-xs text-slate-600">
+            Reģ. Nr. {company.registrationNumber}
+            {company.address ? ` · ${company.address}` : ""}
+          </span>
+        </button>
+      ))}
+      <p className="px-3 py-1 text-[11px] text-slate-500">
+        Datu avots: Latvijas Republikas Uzņēmumu reģistra atvērtie dati
+      </p>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -351,7 +406,7 @@ function PartyFields({
             className="relative"
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                setCompanySearchFocused(false);
+                setCompanySearchField(null);
                 setCompanySuggestions([]);
               }
             }}
@@ -362,7 +417,7 @@ function PartyFields({
             <input
               id={`${prefix}-company-name`}
               value={companyName}
-              onFocus={() => setCompanySearchFocused(true)}
+              onFocus={() => setCompanySearchField("name")}
               onChange={(event) => {
                 selectedCompanyNameRef.current = "";
                 update({
@@ -375,54 +430,18 @@ function PartyFields({
               autoComplete="off"
               aria-autocomplete="list"
             />
-            {companySearchLoading && (
+            {companySearchField === "name" && companySearchLoading && (
               <span className="mt-1 block text-xs text-slate-500">
                 Meklē uzņēmumu...
               </span>
             )}
-            {companySuggestions.length > 0 && (
-              <div
-                role="listbox"
-                className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
-              >
-                {companySuggestions.map((company) => (
-                  <button
-                    key={`${company.registrationNumber}-${company.name}`}
-                    type="button"
-                    role="option"
-                    aria-selected="false"
-                    onClick={() => {
-                      selectedCompanyNameRef.current = company.name.trim();
-                      setCompanySearchFocused(false);
-                      setCompanySearchLoading(false);
-                      setCompanySuggestions([]);
-                      update({
-                        [field("company_name")]: company.name,
-                        [field("registration_number")]:
-                          company.registrationNumber,
-                      });
-                    }}
-                    className="block w-full rounded-lg px-3 py-2 text-left hover:bg-blue-50"
-                  >
-                    <span className="block text-sm font-semibold text-slate-900">
-                      {company.name}
-                    </span>
-                    <span className="block text-xs text-slate-600">
-                      Reģ. Nr. {company.registrationNumber}
-                      {company.address ? ` · ${company.address}` : ""}
-                    </span>
-                  </button>
-                ))}
-                <p className="px-3 py-1 text-[11px] text-slate-500">
-                  Datu avots: Latvijas Republikas Uzņēmumu reģistra atvērtie dati
-                </p>
-              </div>
-            )}
+            {companySearchField === "name" && suggestionMenu}
           </div>
-          <label>
+          <label className="relative">
             <FieldLabel>Reģistrācijas/PVN numurs</FieldLabel>
             <input
-              value={String(form[field("registration_number")])}
+              value={registrationNumber}
+              onFocus={() => setCompanySearchField("registration")}
               onChange={(event) =>
                 update({
                   [field("registration_number")]: event.target.value,
@@ -430,7 +449,9 @@ function PartyFields({
               }
               className="form-input"
               maxLength={30}
+              autoComplete="off"
             />
+            {companySearchField === "registration" && suggestionMenu}
           </label>
         </div>
       )}
