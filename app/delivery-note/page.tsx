@@ -133,17 +133,18 @@ export default function DeliveryNotePage() {
           .eq("is_active", true)
           .order("usage_count", { ascending: false })
           .order("last_used_at", { ascending: false, nullsFirst: false }),
-        supabase.from("carrier_settings").select("display_name, partner_type, first_name, last_name, company_name, registration_number, address, email, contacts").eq("id", "default").maybeSingle(),
+        supabase.from("carrier_settings").select("partner_type, first_name, last_name, company_name, registration_number, address, email").eq("id", "default").maybeSingle(),
       ]);
       setVehicles((data || []) as Vehicle[]);
       if (carrierSettings) {
         const identity = carrierSettings.partner_type === "company"
           ? [carrierSettings.company_name, carrierSettings.registration_number ? `Reģ. Nr. ${carrierSettings.registration_number}` : ""]
           : [`${carrierSettings.first_name || ""} ${carrierSettings.last_name || ""}`.trim()];
-        const contacts = Array.isArray(carrierSettings.contacts)
-          ? carrierSettings.contacts.map((item: { name?: string; phone?: string }) => [item.name, item.phone].filter(Boolean).join(" · "))
-          : [];
-        setCarrier([...identity, carrierSettings.address, ...contacts, carrierSettings.email].filter(Boolean).join("\n"));
+        setCarrier(
+          [...identity, carrierSettings.address, carrierSettings.email]
+            .filter(Boolean)
+            .join("\n"),
+        );
       }
       setLoading(false);
     }
@@ -183,7 +184,7 @@ export default function DeliveryNotePage() {
         </button>
       </div>
 
-      <main className="delivery-note-sheet mx-auto max-w-4xl space-y-6 bg-white p-5 shadow-xl sm:p-8">
+      <main className="delivery-note-sheet mx-auto min-h-[297mm] w-full max-w-[210mm] space-y-6 bg-white p-5 shadow-xl sm:p-[15mm]">
         <header className="space-y-5 border-b-2 border-slate-900 pb-5">
           <div className="grid gap-4 sm:grid-cols-[1fr_1.15fr] sm:items-start">
             <h1 className="text-3xl font-black tracking-tight sm:pt-2">
@@ -194,7 +195,7 @@ export default function DeliveryNotePage() {
               <textarea
                 value={carrier}
                 onChange={(event) => setCarrier(event.target.value)}
-                placeholder="Firmas nosaukums, reģistrācijas numurs, adrese un kontaktinformācija"
+                placeholder="Firmas nosaukums, reģistrācijas numurs un adrese"
                 rows={3}
                 className={fieldClass}
               />
@@ -257,6 +258,7 @@ export default function DeliveryNotePage() {
                 className={fieldClass}
               />
             </label>
+            <SignaturePad label="Nosūtītāja paraksts" />
           </div>
           <div className="space-y-4 rounded-xl border border-slate-300 p-4">
             <label className="block space-y-1 text-sm font-semibold">
@@ -278,6 +280,7 @@ export default function DeliveryNotePage() {
                 className={fieldClass}
               />
             </label>
+            <SignaturePad label="Saņēmēja paraksts" />
           </div>
         </section>
 
@@ -302,11 +305,6 @@ export default function DeliveryNotePage() {
             norādīto kontu 5 (piecu) dienu laikā no rēķina saņemšanas brīža
             e-pastā. Rēķins tiks sagatavots un derīgs bez abu pušu parakstiem.
           </p>
-        </section>
-
-        <section className="grid gap-6 border-t border-slate-300 pt-6 sm:grid-cols-2">
-          <SignaturePad label="Nosūtītāja paraksts" />
-          <SignaturePad label="Saņēmēja paraksts" />
         </section>
       </main>
     </div>
