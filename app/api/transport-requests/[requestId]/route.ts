@@ -37,7 +37,7 @@ export async function GET(
       .single(),
     adminClient
       .from("planned_tasks")
-      .select("assignee_id, created_by")
+      .select("assignee_id, created_by, vehicle_id")
       .eq("transport_request_id", numericId)
       .maybeSingle(),
   ]);
@@ -92,6 +92,7 @@ export async function GET(
 
   return NextResponse.json({
     request: transportRequest,
+    vehicleId: task?.vehicle_id || null,
     images: signedImages.filter((image) => image.url),
   });
 }

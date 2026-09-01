@@ -11,6 +11,25 @@ type Vehicle = {
   display_name: string;
 };
 
+type TransportRequest = {
+  id: number;
+  sender_type: "private" | "company";
+  sender_first_name: string | null;
+  sender_last_name: string | null;
+  sender_company_name: string | null;
+  sender_registration_number: string | null;
+  sender_address: string | null;
+  recipient_type: "private" | "company";
+  recipient_first_name: string | null;
+  recipient_last_name: string | null;
+  recipient_company_name: string | null;
+  recipient_registration_number: string | null;
+  pickup_address: string | null;
+  pickup_date: string;
+  dropoff_address: string | null;
+  cargo_type: string;
+};
+
 type SignaturePadProps = {
   label: string;
 };
@@ -214,6 +233,7 @@ export default function DeliveryNotePage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [noteNumber, setNoteNumber] = useState("Tiks piešķirts no kartītes ID");
   const [vehicleId, setVehicleId] = useState("");
   const [carrier, setCarrier] = useState("");
   const [customer, setCustomer] = useState("");
@@ -224,24 +244,40 @@ export default function DeliveryNotePage() {
 
   useEffect(() => {
     async function load() {
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData.session;
+      if (!session?.user) {
         router.replace("/login");
         return;
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role, can_access_planned_tasks")
-        .eq("id", authData.user.id)
+        .select("role, can_access_planned_tasks, can_access_workday")
+        .eq("id", session.user.id)
         .single();
       if (
         profile?.role !== "admin" &&
-        profile?.can_access_planned_tasks !== true
+        profile?.can_access_planned_tasks !== true &&
+        profile?.can_access_workday !== true
       ) {
         router.replace("/summary");
         return;
       }
-      const [{ data }, { data: carrierSettings }] = await Promise.all([
+      const requestId = Number(
+        new URLSearchParams(window.location.search).get("requestId"),
+      );
+      const requestPromise = Number.isSafeInteger(requestId) && requestId > 0
+        ? fetch(`/api/transport-requests/${requestId}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          }).then(async (response) => ({
+            ok: response.ok,
+            body: (await response.json()) as {
+              request?: TransportRequest;
+              vehicleId?: number | null;
+            },
+          }))
+        : Promise.resolve(null);
+      const [{ data }, { data: carrierSettings }, requestResult] = await Promise.all([
         supabase
           .from("vehicles")
           .select("id, registration_number, display_name")
@@ -249,6 +285,7 @@ export default function DeliveryNotePage() {
           .order("usage_count", { ascending: false })
           .order("last_used_at", { ascending: false, nullsFirst: false }),
         supabase.from("carrier_settings").select("partner_type, first_name, last_name, company_name, registration_number, address, email").eq("id", "default").maybeSingle(),
+        requestPromise,
       ]);
       setVehicles((data || []) as Vehicle[]);
       if (carrierSettings) {
@@ -260,6 +297,53 @@ export default function DeliveryNotePage() {
             .filter(Boolean)
             .join("\n"),
         );
+      }
+      if (requestResult?.ok && requestResult.body.request) {
+        const transportRequest = requestResult.body.request;
+        const senderName = transportRequest.sender_type === "company"
+          ? transportRequest.sender_company_name
+          : [transportRequest.sender_first_name, transportRequest.sender_last_name]
+              .filter(Boolean)
+              .join(" ");
+        const recipientName = transportRequest.recipient_type === "company"
+          ? transportRequest.recipient_company_name
+          : [
+              transportRequest.recipient_first_name,
+              transportRequest.recipient_last_name,
+            ]
+              .filter(Boolean)
+              .join(" ");
+        setNoteNumber(String(transportRequest.id));
+        setDate(transportRequest.pickup_date);
+        setVehicleId(
+          requestResult.body.vehicleId
+            ? String(requestResult.body.vehicleId)
+            : "",
+        );
+        setCustomer(
+          [
+            senderName,
+            transportRequest.sender_registration_number
+              ? `Reģ. Nr. ${transportRequest.sender_registration_number}`
+              : "",
+            transportRequest.sender_address,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
+        setRecipient(
+          [
+            recipientName,
+            transportRequest.recipient_registration_number
+              ? `Reģ. Nr. ${transportRequest.recipient_registration_number}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
+        setOrigin(transportRequest.pickup_address || "");
+        setDestination(transportRequest.dropoff_address || "");
+        setCargo(transportRequest.cargo_type || "");
       }
       setLoading(false);
     }
@@ -307,7 +391,7 @@ export default function DeliveryNotePage() {
             <label className="space-y-1 text-sm font-semibold">
               <span>Pavadzīmes Nr.</span>
               <input
-                value="Tiks piešķirts no kartītes ID"
+                value={noteNumber}
                 readOnly
                 className={`${fieldClass} bg-slate-100 text-slate-500`}
               />
@@ -351,10 +435,11 @@ export default function DeliveryNotePage() {
           <div className="space-y-4 rounded-xl border border-slate-300 p-4">
             <label className="block space-y-1 text-sm font-semibold">
               <span>Nosūtītājs / pasūtītājs</span>
-              <input
+              <textarea
                 value={customer}
                 onChange={(event) => setCustomer(event.target.value)}
-                placeholder="Vārds, uzvārds vai uzņēmums"
+                placeholder="Nosaukums, reģistrācijas numurs un adrese"
+                rows={3}
                 className={fieldClass}
               />
             </label>
@@ -373,10 +458,11 @@ export default function DeliveryNotePage() {
           <div className="space-y-4 rounded-xl border border-slate-300 p-4">
             <label className="block space-y-1 text-sm font-semibold">
               <span>Saņēmējs</span>
-              <input
+              <textarea
                 value={recipient}
                 onChange={(event) => setRecipient(event.target.value)}
-                placeholder="Vārds, uzvārds vai uzņēmums"
+                placeholder="Nosaukums un reģistrācijas numurs"
+                rows={3}
                 className={fieldClass}
               />
             </label>

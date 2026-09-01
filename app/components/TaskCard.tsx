@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import imageCompression from "browser-image-compression";
 import {
   CirclePlay,
   Clock3,
   ExternalLink,
+  FileText,
   OctagonX,
   Pencil,
   Plus,
@@ -1356,8 +1358,8 @@ export default function TaskCard({
   const renderTaskForm = (readonly: boolean) => (
     <>
       <div className="space-y-4 overflow-x-hidden rounded border p-4">
-        <div className="flex items-start gap-2">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap items-start gap-2">
+          <div className="relative min-w-[12rem] flex-1">
             <input
               ref={titleRef}
               type="text"
@@ -1400,15 +1402,25 @@ export default function TaskCard({
           {!readonly && (
             <>
               {task.transportRequestId && (
-                <button
-                  type="button"
-                  onClick={() => setRequestOpen(true)}
-                  className="flex h-10 shrink-0 items-center gap-2 rounded bg-violet-600 px-3 text-sm font-semibold text-white hover:bg-violet-700"
-                  title="Apskatīt klienta pieteikumu"
-                >
-                  <ExternalLink size={17} />
-                  Pieteikums
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setRequestOpen(true)}
+                    className="flex h-10 shrink-0 items-center gap-2 rounded bg-violet-600 px-3 text-sm font-semibold text-white hover:bg-violet-700"
+                    title="Apskatīt klienta pieteikumu"
+                  >
+                    <ExternalLink size={17} />
+                    Pieteikums
+                  </button>
+                  <Link
+                    href={`/delivery-note?requestId=${task.transportRequestId}`}
+                    className="flex h-10 shrink-0 items-center gap-2 rounded bg-blue-700 px-3 text-sm font-semibold text-white hover:bg-blue-800"
+                    title="Atvērt transporta pavadzīmi"
+                  >
+                    <FileText size={17} />
+                    Pavadzīme
+                  </Link>
+                </>
               )}
 
               <button
