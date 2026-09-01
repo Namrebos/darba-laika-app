@@ -9,6 +9,7 @@ import type {
   SectionPermissions,
 } from "@/lib/access";
 import UserAvatar from "@/app/components/UserAvatar";
+import CarrierCard from "@/app/components/CarrierCard";
 
 const sectionOptions: { key: SectionAccessKey; label: string }[] = [
   { key: "can_access_workday", label: "Darbadiena" },
@@ -38,8 +39,6 @@ export default function UsersPage() {
   const [copiedToast, setCopiedToast] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState("");
   const [expandedUserId, setExpandedUserId] = useState("");
-  const [carrierCompanyName, setCarrierCompanyName] = useState("");
-  const [savingCarrier, setSavingCarrier] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -60,7 +59,7 @@ export default function UsersPage() {
         return;
       }
 
-      const [{ data, error }, { data: accessRows }, { data: carrierSettings }] = await Promise.all([
+      const [{ data, error }, { data: accessRows }] = await Promise.all([
         supabase
           .from("profiles")
           .select(`
@@ -77,7 +76,6 @@ export default function UsersPage() {
           `)
           .order("created_at", { ascending: true }),
         supabase.from("summary_access").select("viewer_id, owner_id"),
-        supabase.from("carrier_settings").select("company_name").eq("id", "default").maybeSingle(),
       ]);
 
       if (error) setMessage("Neizdevās ielādēt lietotājus.");
@@ -90,7 +88,6 @@ export default function UsersPage() {
       });
       setSummaryAccess(accessMap);
       setAdminId(rows.find((profile) => profile.role === "admin")?.id || authData.user.id);
-      setCarrierCompanyName(carrierSettings?.company_name || "");
       setLoading(false);
     }
 
@@ -120,20 +117,6 @@ export default function UsersPage() {
     setMessage("Sadaļas piekļuve saglabāta.");
   }
 
-  async function saveCarrierSettings(event: React.FormEvent) {
-    event.preventDefault();
-    setSavingCarrier(true);
-    setMessage("");
-    const { data: authData } = await supabase.auth.getUser();
-    const { error } = await supabase.from("carrier_settings").upsert({
-      id: "default",
-      company_name: carrierCompanyName.trim(),
-      updated_at: new Date().toISOString(),
-      updated_by: authData.user?.id || null,
-    });
-    setSavingCarrier(false);
-    setMessage(error ? "Pārvadātāja nosaukumu neizdevās saglabāt." : "Pārvadātāja nosaukums saglabāts.");
-  }
 
   async function toggleSummaryAccess(viewerId: string, ownerId: string, allowed: boolean) {
     const request = allowed
@@ -244,23 +227,7 @@ export default function UsersPage() {
 
       {message && <p className="rounded bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">{message}</p>}
 
-      <form onSubmit={saveCarrierSettings} className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-        <div>
-          <h2 className="font-semibold">Pārvadātājs</h2>
-          <p className="text-sm text-zinc-500">Firmas nosaukums, kas automātiski tiks norādīts pavadzīmē.</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            value={carrierCompanyName}
-            onChange={(event) => setCarrierCompanyName(event.target.value)}
-            placeholder="Pārvadātāja firmas nosaukums"
-            className="min-w-0 flex-1 rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
-          />
-          <button disabled={savingCarrier} className="rounded bg-green-600 px-4 py-2 font-medium text-white disabled:opacity-50">
-            {savingCarrier ? "Saglabā..." : "Saglabāt"}
-          </button>
-        </div>
-      </form>
+      <CarrierCard onMessage={setMessage} />
 
       <form onSubmit={createInvitation} className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
         <h2 className="font-semibold">Jauns uzaicinājums</h2>

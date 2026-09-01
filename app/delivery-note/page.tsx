@@ -133,10 +133,18 @@ export default function DeliveryNotePage() {
           .eq("is_active", true)
           .order("usage_count", { ascending: false })
           .order("last_used_at", { ascending: false, nullsFirst: false }),
-        supabase.from("carrier_settings").select("company_name").eq("id", "default").maybeSingle(),
+        supabase.from("carrier_settings").select("display_name, partner_type, first_name, last_name, company_name, registration_number, address, email, contacts").eq("id", "default").maybeSingle(),
       ]);
       setVehicles((data || []) as Vehicle[]);
-      setCarrier(carrierSettings?.company_name || "");
+      if (carrierSettings) {
+        const identity = carrierSettings.partner_type === "company"
+          ? [carrierSettings.company_name, carrierSettings.registration_number ? `Reģ. Nr. ${carrierSettings.registration_number}` : ""]
+          : [`${carrierSettings.first_name || ""} ${carrierSettings.last_name || ""}`.trim()];
+        const contacts = Array.isArray(carrierSettings.contacts)
+          ? carrierSettings.contacts.map((item: { name?: string; phone?: string }) => [item.name, item.phone].filter(Boolean).join(" · "))
+          : [];
+        setCarrier([...identity, carrierSettings.address, ...contacts, carrierSettings.email].filter(Boolean).join("\n"));
+      }
       setLoading(false);
     }
     void load();
