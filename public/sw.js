@@ -1,4 +1,4 @@
-const CACHE_NAME = "darba-laiks-static-v4";
+const CACHE_NAME = "darba-laiks-static-v5";
 const STATIC_FILES = [
   "/manifest.webmanifest",
   "/icon-192.png",
@@ -47,14 +47,13 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    (isPage
-      ? fetch(event.request).catch(() => caches.match(event.request).then((response) => response || caches.match("/workday")))
-      : caches.match(event.request).then((cachedResponse) => cachedResponse || fetch(event.request))
-    ).then((networkResponse) => {
+    fetch(event.request)
+      .catch(() => caches.match(event.request).then((response) => response || (isPage ? caches.match("/workday") : undefined)))
+      .then((networkResponse) => {
         if (!networkResponse) return new Response("Bezsaistes lapa nav pieejama.", { status: 503 });
         const responseClone = networkResponse.clone();
 
-        caches.open(CACHE_NAME).then((cache) => {
+        if (networkResponse.ok) caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, responseClone);
         });
 

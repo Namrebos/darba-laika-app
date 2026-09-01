@@ -192,8 +192,8 @@ export default function AddressField({
             <button
               key={`${suggestion.lat}-${suggestion.lng}-${suggestion.label}`}
               type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
+              onPointerDown={(event) => {
+                event.preventDefault();
                 selectedAddressRef.current = suggestion.label.trim();
                 onChange(suggestion.label);
                 onMapFocus({ lat: suggestion.lat, lng: suggestion.lng });
