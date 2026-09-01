@@ -74,9 +74,12 @@ function MapUpdater({
     const container = map.getContainer();
     const observer = new ResizeObserver(refreshSize);
     observer.observe(container);
-    const timeouts = [0, 100, 300].map((delay) =>
+    const timeouts = [0, 100, 300, 700, 1500].map((delay) =>
       window.setTimeout(refreshSize, delay),
     );
+    window.addEventListener("resize", refreshSize);
+    window.addEventListener("orientationchange", refreshSize);
+    container.addEventListener("transitionend", refreshSize);
 
     if (point) {
       map.setView([point.lat, point.lng], Math.max(map.getZoom(), 18));
@@ -88,6 +91,9 @@ function MapUpdater({
     }
     return () => {
       observer.disconnect();
+      window.removeEventListener("resize", refreshSize);
+      window.removeEventListener("orientationchange", refreshSize);
+      container.removeEventListener("transitionend", refreshSize);
       timeouts.forEach((timeout) => window.clearTimeout(timeout));
       window.cancelAnimationFrame(frame);
     };
@@ -132,8 +138,10 @@ export default function LocationPicker({
         <MapContainer
           center={point ? [point.lat, point.lng] : defaultCenter}
           zoom={point ? 18 : 7}
+          zoomControl
           scrollWheelZoom
           className="h-full w-full"
+          style={{ height: "100%", width: "100%" }}
         >
           {baseLayer === "map" ? (
             <TileLayer
