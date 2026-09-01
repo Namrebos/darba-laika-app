@@ -520,6 +520,17 @@ export default function RequestForm({
   const pickupReverseRequest = useRef(0);
   const dropoffReverseRequest = useRef(0);
   const formTopRef = useRef<HTMLDivElement>(null);
+  const successTopRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!submitted) return;
+    window.requestAnimationFrame(() => {
+      successTopRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [submitted]);
 
   useEffect(() => {
     if (!internal || !sourceRequestId) return;
@@ -856,16 +867,11 @@ export default function RequestForm({
 
   if (submitted) {
     return (
-      <div className="mx-auto max-w-lg rounded-2xl bg-white p-8 text-center shadow">
+      <div ref={successTopRef} className="mx-auto max-w-lg scroll-mt-4 rounded-2xl bg-white p-8 text-center shadow">
         <CheckCircle2 className="mx-auto text-green-600" size={56} />
         <h1 className="mt-4 text-2xl font-bold">
-          {internal ? "Brauciens izveidots!" : "Pieteikums nosūtīts!"}
+          Paldies, pieteikums saņemts!
         </h1>
-        {!internal && (
-          <p className="mt-3 text-slate-600">
-            Paldies! Pakalpojuma sniedzējs ir saņēmis jūsu informāciju.
-          </p>
-        )}
         {internal && (
           <Link
             href="/planned-tasks"
