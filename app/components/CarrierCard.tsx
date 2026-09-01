@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
@@ -21,6 +21,7 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
   const [focused, setFocused] = useState(false);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [formOpen, setFormOpen] = useState(true);
   const selectedName = useRef("");
   const reverseRequest = useRef(0);
 
@@ -39,6 +40,7 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
         const savedPoint = { lat: Number(data.latitude), lng: Number(data.longitude) };
         setPoint(savedPoint); setFocusPoint(savedPoint);
       }
+      if (data.display_name || data.company_name) setFormOpen(false);
     })();
   }, []);
 
@@ -94,8 +96,20 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
       email: form.email.trim() || null, contacts: normalizedContacts,
       updated_at: new Date().toISOString(), updated_by: authData.user?.id || null,
     });
-    setSaving(false); onMessage(error ? "Pārvadātāju neizdevās saglabāt." : "Pārvadātājs saglabāts.");
+    setSaving(false);
+    if (error) {
+      onMessage("Pārvadātāju neizdevās saglabāt.");
+      return;
+    }
+    setForm((current) => ({ ...current, display_name: displayName }));
+    setFormOpen(false);
+    onMessage("Pārvadātājs saglabāts.");
   }
+
+  if (!formOpen) return <section className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+    <div><h2 className="font-semibold">Pārvadātājs</h2><p className="text-sm text-zinc-500">{form.display_name || form.company_name}</p></div>
+    <button type="button" onClick={() => setFormOpen(true)} className="rounded-lg border border-zinc-300 p-2 dark:border-zinc-600" aria-label="Rediģēt pārvadātāju"><Pencil size={18} /></button>
+  </section>;
 
   return <section className="space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
     <h2 className="font-semibold">Pārvadātājs</h2>
