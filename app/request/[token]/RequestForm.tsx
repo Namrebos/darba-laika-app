@@ -636,6 +636,13 @@ export default function RequestForm({
       return Boolean(
         identityComplete("sender") &&
           isValidPhone(form.sender_phone_code, form.sender_phone) &&
+          (form.cargo_type === "Cits"
+            ? customCargo.trim()
+            : form.cargo_type.trim()),
+      );
+    }
+    if (targetStep === 2) {
+      return Boolean(
           form.pickup_contact_name.trim() &&
           isValidPhone(form.pickup_contact_phone_code, form.pickup_contact_phone) &&
           form.pickup_address.trim() &&
@@ -643,22 +650,15 @@ export default function RequestForm({
           form.pickup_date,
       );
     }
-    if (targetStep === 2) {
-      return Boolean(
+    return Boolean(
         form.dropoff_contact_name.trim() &&
           isValidPhone(form.dropoff_contact_phone_code, form.dropoff_contact_phone) &&
           form.dropoff_address.trim() &&
           dropoffPoint &&
           form.dropoff_date &&
-          dropoffNotBeforePickup(),
-      );
-    }
-    return Boolean(
-      (form.cargo_type === "Cits"
-        ? customCargo.trim()
-        : form.cargo_type.trim()) &&
-        stepValid(1) &&
-        stepValid(2),
+          dropoffNotBeforePickup() &&
+          stepValid(1) &&
+          stepValid(2),
     );
   };
 
@@ -902,10 +902,10 @@ export default function RequestForm({
         <div className="mb-2 flex justify-between text-sm font-semibold text-slate-700">
           <span>
             {step === 1
-              ? "Pasūtītājs un uzkraušana"
+              ? "Pasūtītājs"
               : step === 2
-                ? "Izkraušana"
-                : "Krava un papildinformācija"}
+                ? "No kurienes"
+                : "Uz kurieni"}
           </span>
           <span>{step}. no 3</span>
         </div>
@@ -918,11 +918,8 @@ export default function RequestForm({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className={`space-y-4 ${sectionClass(1)}`}>
-          <FormCard title="Pasūtītājs">
-            <PartyFields prefix="sender" form={form} update={update} />
-          </FormCard>
-          <FormCard title="Uzkraušanas vieta">
+        <div className={`order-2 space-y-4 ${sectionClass(2)}`}>
+          <FormCard title="No kurienes">
             <div className="space-y-4">
               <div>
                 <label htmlFor="pickup_address">
@@ -943,7 +940,7 @@ export default function RequestForm({
                   focusPoint={pickupFocus}
                   onChange={updatePickupPointFromMap}
                   markerColor="blue"
-                  active={step === 1}
+                  active={step === 2}
                 />
               </div>
               <ContactFields prefix="pickup" form={form} update={update} />
@@ -975,8 +972,8 @@ export default function RequestForm({
           </FormCard>
         </div>
 
-        <div className={`space-y-4 ${sectionClass(2)}`}>
-          <FormCard title="Izkraušanas vieta">
+        <div className={`order-3 space-y-4 ${sectionClass(3)}`}>
+          <FormCard title="Uz kurieni">
             <div className="space-y-4">
               <div>
                 <label htmlFor="dropoff_address">
@@ -997,7 +994,7 @@ export default function RequestForm({
                   focusPoint={dropoffFocus}
                   onChange={updateDropoffPointFromMap}
                   markerColor="red"
-                  active={step === 2}
+                  active={step === 3}
                 />
               </div>
               <ContactFields prefix="dropoff" form={form} update={update} />
@@ -1032,8 +1029,11 @@ export default function RequestForm({
           </FormCard>
         </div>
 
-        <div className={`space-y-4 md:col-span-2 ${sectionClass(3)}`}>
-          <FormCard title="Kravas informācija">
+        <div className={`order-1 space-y-4 md:col-span-2 ${sectionClass(1)}`}>
+          <FormCard title="Pasūtītājs">
+            <PartyFields prefix="sender" form={form} update={update} />
+          </FormCard>
+          <FormCard title="Kas jāved">
             <label>
               <FieldLabel required>Kravas veids</FieldLabel>
               {form.cargo_type === "Cits" ? (
