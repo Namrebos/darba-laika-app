@@ -519,6 +519,7 @@ export default function RequestForm({
   >(internal ? "checking" : "allowed");
   const pickupReverseRequest = useRef(0);
   const dropoffReverseRequest = useRef(0);
+  const formTopRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!internal || !sourceRequestId) return;
@@ -662,14 +663,25 @@ export default function RequestForm({
     );
   };
 
+  const moveToStep = (nextStep: number) => {
+    setStep(nextStep);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        formTopRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    });
+  };
+
   const nextStep = () => {
     if (!stepValid(step)) {
       setError("Aizpildi obligātos laukus un atzīmē vietu kartē.");
       return;
     }
     setError("");
-    setStep((current) => Math.min(3, current + 1));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    moveToStep(Math.min(3, step + 1));
   };
 
   const focusPickupMap = useCallback(
@@ -870,7 +882,7 @@ export default function RequestForm({
     step === targetStep ? "block" : "hidden md:block";
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div ref={formTopRef} className="mx-auto max-w-6xl scroll-mt-4">
       <header className="relative mb-5 flex items-start gap-3 pr-12">
         <div className={`rounded-xl bg-blue-100 p-3 text-blue-700 ${step === 1 ? "" : "hidden md:block"}`}>
           <Truck size={30} />
@@ -1157,7 +1169,7 @@ export default function RequestForm({
         {step > 1 && (
           <button
             type="button"
-            onClick={() => setStep((current) => current - 1)}
+            onClick={() => moveToStep(Math.max(1, step - 1))}
             className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold md:hidden"
           >
             <ArrowLeft size={18} />
