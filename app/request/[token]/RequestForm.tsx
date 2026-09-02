@@ -594,6 +594,9 @@ export default function RequestForm({
   >(internal ? "checking" : "allowed");
   const [partners, setPartners] = useState<Partner[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const [newCustomerOpen, setNewCustomerOpen] = useState(
+    !internal || Boolean(sourceRequestId),
+  );
   const [partnerSaving, setPartnerSaving] = useState(false);
   const [partnerMessage, setPartnerMessage] = useState("");
   const [internalIsAdmin, setInternalIsAdmin] = useState(false);
@@ -737,6 +740,7 @@ export default function RequestForm({
     setPartnerMessage("");
     const partner = partners.find((item) => String(item.id) === partnerId);
     if (!partner) return;
+    setNewCustomerOpen(false);
     const primaryContact = [...(partner.partner_contacts || [])].sort(
       (a, b) => a.sort_order - b.sort_order,
     )[0];
@@ -774,6 +778,24 @@ export default function RequestForm({
       setPickupPoint(null);
       setPickupFocus(null);
     }
+  };
+
+  const startNewCustomer = () => {
+    setSelectedPartnerId("");
+    setPartnerMessage("");
+    setNewCustomerOpen(true);
+    setForm((current) => ({
+      ...current,
+      sender_type: "private",
+      sender_first_name: "",
+      sender_last_name: "",
+      sender_company_name: "",
+      sender_registration_number: "",
+      sender_phone_code: "+371",
+      sender_phone: "",
+      sender_address: "",
+      sender_email: "",
+    }));
   };
 
   const addSenderToPartners = async () => {
@@ -1372,24 +1394,37 @@ export default function RequestForm({
         <div className={`order-1 space-y-4 md:col-span-2 ${sectionClass(1)}`}>
           <FormCard title="Pasūtītājs">
             {internalIsAdmin && (
-              <label className="mb-4 block">
-                <FieldLabel>Izvēlēties no partneriem</FieldLabel>
+              <div className={newCustomerOpen ? "mb-4 grid gap-3 sm:grid-cols-2" : "grid gap-3 sm:grid-cols-2"}>
                 <select
                   value={selectedPartnerId}
                   onChange={(event) => selectPartner(event.target.value)}
                   className="form-input"
+                  aria-label="Izvēlēties no partneriem"
                 >
-                  <option value="">Ievadīt manuāli</option>
+                  <option value="">Izvēlēties no partneriem</option>
                   {partners.map((partner) => (
                     <option key={partner.id} value={partner.id}>
                       {partner.display_name}
                     </option>
                   ))}
                 </select>
-              </label>
+                <button
+                  type="button"
+                  onClick={startNewCustomer}
+                  className={`min-h-12 rounded-xl border px-4 py-3 text-sm font-semibold transition ${
+                    newCustomerOpen
+                      ? "border-blue-600 bg-blue-50 text-blue-800"
+                      : "border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+                  }`}
+                >
+                  Jauns klients
+                </button>
+              </div>
             )}
-            <PartyFields prefix="sender" form={form} update={update} />
-            {internalIsAdmin && !selectedPartnerId && !matchingPartner && (
+            {(!internalIsAdmin || newCustomerOpen) && (
+              <PartyFields prefix="sender" form={form} update={update} />
+            )}
+            {internalIsAdmin && newCustomerOpen && !selectedPartnerId && !matchingPartner && (
               <div className="mt-4 border-t border-slate-200 pt-4">
                 <button
                   type="button"
@@ -1405,7 +1440,7 @@ export default function RequestForm({
                 )}
               </div>
             )}
-            {internalIsAdmin && !selectedPartnerId && matchingPartner && (
+            {internalIsAdmin && newCustomerOpen && !selectedPartnerId && matchingPartner && (
               <p className="mt-3 text-sm text-slate-600">
                 Šis klients jau ir partneru sarakstā.
               </p>
