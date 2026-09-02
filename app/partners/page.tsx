@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Building2, Check, Pencil, Plus, Trash2, UserRound, X } from "lucide-react";
+import { Building2, Check, Copy, Link2, Link2Off, Pencil, Plus, RefreshCw, Trash2, UserRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
@@ -21,6 +21,7 @@ type Partner = {
   latitude: number | null; longitude: number | null;
   phone: string; email: string | null; contacts: PartnerContact[];
 };
+type PartnerRequestLink = { partnerId: number; active: boolean; url: string };
 
 const emptyForm = {
   display_name: "", partner_type: "company" as PartnerType,
@@ -46,6 +47,9 @@ export default function PartnersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [requestLinks, setRequestLinks] = useState<Record<number, PartnerRequestLink>>({});
+  const [linkMenuPartnerId, setLinkMenuPartnerId] = useState<number | null>(null);
+  const [linkBusyPartnerId, setLinkBusyPartnerId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [companySuggestions, setCompanySuggestions] = useState<CompanySuggestion[]>([]);
   const [companySearchField, setCompanySearchField] = useState<"name" | "registration" | null>(null);
@@ -74,13 +78,23 @@ export default function PartnersPage() {
     })));
   }
 
+  async function loadPartnerLinks() {
+    const { data } = await supabase.auth.getSession();
+    const response = await fetch("/api/admin/partner-request-links", {
+      headers: { Authorization: `Bearer ${data.session?.access_token || ""}` },
+    });
+    if (!response.ok) return;
+    const result = await response.json() as { links?: PartnerRequestLink[] };
+    setRequestLinks(Object.fromEntries((result.links || []).map((link) => [link.partnerId, link])));
+  }
+
   useEffect(() => {
     async function load() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace("/login"); return; }
       const { data: profile } = await supabase.from("profiles").select("role").eq("id", authData.user.id).single();
       if (profile?.role !== "admin") { router.replace("/summary"); return; }
-      await loadPartners();
+      await Promise.all([loadPartners(), loadPartnerLinks()]);
       setLoading(false);
     }
     void load();
@@ -209,6 +223,41 @@ export default function PartnersPage() {
     await loadPartners(); setMessage("Partneris izdzēsts.");
   }
 
+  async function copyPartnerLink(url: string) {
+    await navigator.clipboard.writeText(url);
+    setMessage("Partnera pieteikuma saite nokopēta.");
+    setLinkMenuPartnerId(null);
+  }
+
+  async function updatePartnerLink(partnerId: number, action: "create" | "rotate" | "deactivate") {
+    setLinkBusyPartnerId(partnerId);
+    setMessage("");
+    const { data } = await supabase.auth.getSession();
+    const response = await fetch("/api/admin/partner-request-links", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${data.session?.access_token || ""}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ partnerId, action }),
+    });
+    const result = await response.json() as { active?: boolean; url?: string; error?: string };
+    setLinkBusyPartnerId(null);
+    if (!response.ok) {
+      setMessage(result.error || "Darbību ar saiti neizdevās izpildīt.");
+      return;
+    }
+    const link = { partnerId, active: Boolean(result.active), url: result.url || "" };
+    setRequestLinks((current) => ({ ...current, [partnerId]: link }));
+    setLinkMenuPartnerId(null);
+    if (action === "deactivate") {
+      setMessage("Partnera pieteikuma saite deaktivizēta.");
+    } else {
+      await navigator.clipboard.writeText(link.url);
+      setMessage(action === "rotate" ? "Izveidota un nokopēta jauna saite. Vecā saite vairs nav derīga." : "Pieteikuma saite izveidota un nokopēta.");
+    }
+  }
+
   if (loading) return <p className="p-6">Ielādē...</p>;
   const inputClass = "w-full rounded-lg border border-zinc-300 bg-transparent p-2.5 dark:border-zinc-600";
 
@@ -281,8 +330,18 @@ export default function PartnersPage() {
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><h2 className="font-semibold">Partneri ({partners.length})</h2><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Meklēt partneri" className={`${inputClass} sm:max-w-xs`} /></div>
         {filteredPartners.length === 0 ? <p className="rounded-xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-500 dark:border-zinc-700">Partneri nav atrasti.</p> : filteredPartners.map((partner) => (
           <article key={partner.id} className="flex items-start justify-between gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-            <div className="flex min-w-0 gap-3"><div className="mt-0.5 rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">{partner.partner_type === "company" ? <Building2 size={20} /> : <UserRound size={20} />}</div><div className="min-w-0"><h3 className="font-semibold">{partner.display_name}</h3>{partner.company_name && partner.company_name !== partner.display_name && <p className="text-sm text-zinc-500">{partner.company_name}</p>}{partner.registration_number && <p className="text-sm text-zinc-500">Reģ./PVN: {partner.registration_number}</p>}{partner.contacts.map((contact) => <p key={contact.id ?? `${contact.name}-${contact.phone}`} className="text-sm text-zinc-500">{contact.name}: {contact.phone}</p>)}<p className="text-sm text-zinc-500">{partner.address}</p>{partner.email && <p className="text-sm text-zinc-500">{partner.email}</p>}</div></div>
-            <div className="flex shrink-0 gap-2"><button type="button" onClick={() => editPartner(partner)} className="rounded-lg border border-zinc-300 p-2 dark:border-zinc-600" aria-label="Rediģēt partneri"><Pencil size={18} /></button><button type="button" onClick={() => void deletePartner(partner)} className="rounded-lg border border-red-300 p-2 text-red-600 dark:border-red-800" aria-label="Dzēst partneri"><Trash2 size={18} /></button></div>
+            <div className="flex min-w-0 gap-3"><div className="mt-0.5 rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">{partner.partner_type === "company" ? <Building2 size={20} /> : <UserRound size={20} />}</div><div className="min-w-0"><h3 className="font-semibold">{partner.display_name}</h3>{partner.company_name && partner.company_name !== partner.display_name && <p className="text-sm text-zinc-500">{partner.company_name}</p>}{partner.registration_number && <p className="text-sm text-zinc-500">Reģ./PVN: {partner.registration_number}</p>}{partner.contacts.map((contact) => <p key={contact.id ?? `${contact.name}-${contact.phone}`} className="text-sm text-zinc-500">{contact.name}: {contact.phone}</p>)}<p className="text-sm text-zinc-500">{partner.address}</p>{partner.email && <p className="text-sm text-zinc-500">{partner.email}</p>}{requestLinks[partner.id]?.active && <div className="mt-3 max-w-xl rounded-lg bg-zinc-100 px-3 py-2 text-sm dark:bg-zinc-800"><span className="block font-medium">Pieteikuma saite</span><a href={requestLinks[partner.id].url} target="_blank" rel="noreferrer" className="block truncate text-blue-600 underline">{requestLinks[partner.id].url}</a></div>}</div></div>
+            <div className="relative flex shrink-0 gap-2">
+              <button type="button" onClick={() => setLinkMenuPartnerId((current) => current === partner.id ? null : partner.id)} className="rounded-lg border border-zinc-300 p-2 text-blue-600 dark:border-zinc-600" aria-label="Pieteikuma saite"><Link2 size={18} /></button>
+              <button type="button" onClick={() => editPartner(partner)} className="rounded-lg border border-zinc-300 p-2 dark:border-zinc-600" aria-label="Rediģēt partneri"><Pencil size={18} /></button><button type="button" onClick={() => void deletePartner(partner)} className="rounded-lg border border-red-300 p-2 text-red-600 dark:border-red-800" aria-label="Dzēst partneri"><Trash2 size={18} /></button>
+              {linkMenuPartnerId === partner.id && <div className="absolute right-0 top-11 z-30 w-64 space-y-1 rounded-xl border border-zinc-200 bg-white p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                {!requestLinks[partner.id]?.active ? <button type="button" disabled={linkBusyPartnerId === partner.id} onClick={() => void updatePartnerLink(partner.id, "create")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"><Link2 size={17} /> Izveidot pieteikuma saiti</button> : <>
+                  <button type="button" onClick={() => void copyPartnerLink(requestLinks[partner.id].url)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Copy size={17} /> Kopēt saiti</button>
+                  <button type="button" disabled={linkBusyPartnerId === partner.id} onClick={() => void updatePartnerLink(partner.id, "deactivate")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"><Link2Off size={17} /> Deaktivizēt saiti</button>
+                  <button type="button" disabled={linkBusyPartnerId === partner.id} onClick={() => void updatePartnerLink(partner.id, "rotate")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"><RefreshCw size={17} /> Izveidot jaunu saiti</button>
+                </>}
+              </div>}
+            </div>
           </article>
         ))}
       </section>

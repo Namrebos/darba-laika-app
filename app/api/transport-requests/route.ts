@@ -107,8 +107,9 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const internalRequest = formData.get("mode") === "internal";
   const token = String(formData.get("token") || "").trim();
+  const partnerToken = String(formData.get("partner_token") || "").trim();
   const payloadText = String(formData.get("payload") || "");
-  if ((!internalRequest && !token) || !payloadText) {
+  if ((!internalRequest && !token && !partnerToken) || !payloadText) {
     return NextResponse.json(
       { error: "Trūkst pieteikuma datu." },
       { status: 400 },
@@ -189,7 +190,7 @@ export async function POST(request: NextRequest) {
     additional_notes: cleanText(payload.additional_notes, 500),
   };
 
-  let submissionTokenHash = tokenHash(token);
+  let submissionTokenHash = token ? tokenHash(token) : "";
   if (internalRequest) {
     const bearer = request.headers.get("authorization");
     const accessToken = bearer?.startsWith("Bearer ") ? bearer.slice(7) : "";
@@ -236,6 +237,44 @@ export async function POST(request: NextRequest) {
         { error: "Braucienu neizdevās sagatavot." },
         { status: 500 },
       );
+    }
+  } else if (partnerToken) {
+    const { data: partnerLink } = await adminClient
+      .from("partner_request_links")
+      .select("partner_id, created_by")
+      .eq("token_hash", tokenHash(partnerToken))
+      .eq("active", true)
+      .maybeSingle();
+    if (!partnerLink) {
+      return NextResponse.json({ error: "Partnera pieteikuma saite nav derīga." }, { status: 400 });
+    }
+    const persistentLink = partnerLink as { partner_id: number; created_by: string };
+    const { data: partner } = await adminClient
+      .from("partners")
+      .select("id, partner_type, first_name, last_name, company_name, registration_number, address, phone, email")
+      .eq("id", persistentLink.partner_id)
+      .single();
+    if (!partner) {
+      return NextResponse.json({ error: "Partneris vairs nav pieejams." }, { status: 400 });
+    }
+    safePayload.partner_id = partner.id;
+    safePayload.sender_type = partner.partner_type;
+    safePayload.sender_first_name = partner.partner_type === "private" ? partner.first_name || "" : "";
+    safePayload.sender_last_name = partner.partner_type === "private" ? partner.last_name || "" : "";
+    safePayload.sender_company_name = partner.partner_type === "company" ? partner.company_name || "" : "";
+    safePayload.sender_registration_number = partner.partner_type === "company" ? partner.registration_number || "" : "";
+    safePayload.sender_phone = partner.phone;
+    safePayload.sender_address = partner.address;
+    safePayload.sender_email = partner.email || "";
+
+    submissionTokenHash = tokenHash(randomBytes(32).toString("base64url"));
+    const { error: linkError } = await adminClient.from("transport_request_links").insert({
+      token_hash: submissionTokenHash,
+      created_by: persistentLink.created_by,
+      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    });
+    if (linkError) {
+      return NextResponse.json({ error: "Braucienu neizdevās sagatavot." }, { status: 500 });
     }
   }
 

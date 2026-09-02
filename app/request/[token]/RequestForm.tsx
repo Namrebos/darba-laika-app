@@ -58,6 +58,12 @@ type Partner = {
   }>;
 };
 
+export type PartnerPreset = {
+  valid: boolean;
+  partner: Omit<Partner, "partner_contacts">;
+  contacts: Partner["partner_contacts"];
+};
+
 const partnerSelect =
   "id, display_name, partner_type, first_name, last_name, company_name, registration_number, address, latitude, longitude, contact_name, phone, email, partner_contacts(name, phone, sort_order)";
 
@@ -588,11 +594,13 @@ export default function RequestForm({
   initiallyValid,
   internal = false,
   sourceRequestId,
+  partnerPreset = null,
 }: {
   token: string;
   initiallyValid: boolean;
   internal?: boolean;
   sourceRequestId?: number;
+  partnerPreset?: PartnerPreset | null;
 }) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [pickupPoint, setPickupPoint] = useState<Point | null>(null);
@@ -619,10 +627,51 @@ export default function RequestForm({
   const [internalIsAdmin, setInternalIsAdmin] = useState(false);
   const [recipientOpen, setRecipientOpen] = useState(false);
   const [recipientSameAsSender, setRecipientSameAsSender] = useState(true);
+  const isPartnerRequest = Boolean(partnerPreset?.valid && partnerPreset.partner);
   const pickupReverseRequest = useRef(0);
   const dropoffReverseRequest = useRef(0);
   const formTopRef = useRef<HTMLDivElement>(null);
   const successTopRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!partnerPreset?.valid || !partnerPreset.partner) return;
+    const partner: Partner = {
+      ...partnerPreset.partner,
+      partner_contacts: partnerPreset.contacts || [],
+    };
+    const primaryContact = [...partner.partner_contacts].sort(
+      (a, b) => a.sort_order - b.sort_order,
+    )[0];
+    const contactPhone = primaryContact?.phone || partner.phone;
+    const compactPhone = contactPhone.replace(/\D/g, "");
+    const matchedCode = countryCodes.find(([code]) =>
+      compactPhone.startsWith(code.slice(1)),
+    )?.[0] || "+371";
+    const phoneNumber = compactPhone.slice(matchedCode.length - 1);
+    setSelectedPartnerId(String(partner.id));
+    setNewCustomerOpen(true);
+    setForm((current) => ({
+      ...current,
+      sender_type: partner.partner_type,
+      sender_first_name: partner.partner_type === "private" ? partner.first_name || "" : "",
+      sender_last_name: partner.partner_type === "private" ? partner.last_name || "" : "",
+      sender_company_name: partner.partner_type === "company" ? partner.company_name || "" : "",
+      sender_registration_number: partner.partner_type === "company" ? partner.registration_number || "" : "",
+      sender_phone_code: matchedCode,
+      sender_phone: phoneNumber,
+      sender_address: partner.address,
+      sender_email: partner.email || "",
+      pickup_address: partner.address,
+      pickup_contact_name: primaryContact?.name || partner.contact_name || partner.display_name,
+      pickup_contact_phone_code: matchedCode,
+      pickup_contact_phone: phoneNumber,
+    }));
+    if (typeof partner.latitude === "number" && typeof partner.longitude === "number") {
+      const point = { lat: partner.latitude, lng: partner.longitude };
+      setPickupPoint(point);
+      setPickupFocus(point);
+    }
+  }, [partnerPreset]);
 
   useEffect(() => {
     if (!submitted) return;
@@ -1202,6 +1251,8 @@ export default function RequestForm({
     const body = new FormData();
     if (internal) {
       body.set("mode", "internal");
+    } else if (isPartnerRequest) {
+      body.set("partner_token", token);
     } else {
       body.set("token", token);
     }
