@@ -18,6 +18,7 @@ import {
   Repeat2,
   Trash2,
   Truck,
+  UserPlus,
   X,
 } from "lucide-react";
 import AddressField from "@/app/components/AddressField";
@@ -582,6 +583,8 @@ export default function RequestForm({
   >(internal ? "checking" : "allowed");
   const [partners, setPartners] = useState<Partner[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const [partnerSaving, setPartnerSaving] = useState(false);
+  const [partnerMessage, setPartnerMessage] = useState("");
   const [internalIsAdmin, setInternalIsAdmin] = useState(false);
   const [recipientOpen, setRecipientOpen] = useState(false);
   const [recipientSameAsSender, setRecipientSameAsSender] = useState(true);
@@ -687,6 +690,29 @@ export default function RequestForm({
     [images],
   );
 
+  const matchingPartner = useMemo(() => {
+    const normalize = (value: string | null | undefined) =>
+      String(value || "").trim().toLocaleLowerCase("lv");
+    if (form.sender_type === "company") {
+      const registrationNumber = normalize(form.sender_registration_number);
+      const companyName = normalize(form.sender_company_name);
+      return partners.find((partner) =>
+        partner.partner_type === "company" &&
+        (registrationNumber
+          ? normalize(partner.registration_number) === registrationNumber
+          : Boolean(companyName) && normalize(partner.company_name) === companyName),
+      );
+    }
+    const firstName = normalize(form.sender_first_name);
+    const lastName = normalize(form.sender_last_name);
+    return partners.find((partner) =>
+      partner.partner_type === "private" &&
+      Boolean(firstName) &&
+      normalize(partner.first_name) === firstName &&
+      normalize(partner.last_name) === lastName,
+    );
+  }, [form.sender_company_name, form.sender_first_name, form.sender_last_name, form.sender_registration_number, form.sender_type, partners]);
+
   useEffect(
     () => () => previews.forEach((preview) => URL.revokeObjectURL(preview.url)),
     [previews],
@@ -697,6 +723,7 @@ export default function RequestForm({
 
   const selectPartner = (partnerId: string) => {
     setSelectedPartnerId(partnerId);
+    setPartnerMessage("");
     const partner = partners.find((item) => String(item.id) === partnerId);
     if (!partner) return;
     const compactPhone = partner.phone.replace(/\D/g, "");
@@ -716,6 +743,140 @@ export default function RequestForm({
       sender_address: partner.address,
       sender_email: partner.email || "",
     }));
+  };
+
+  const addSenderToPartners = async () => {
+    const displayName = form.sender_type === "company"
+      ? form.sender_company_name.trim()
+      : [form.sender_first_name, form.sender_last_name]
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .join(" ");
+    const registrationNumber = form.sender_registration_number.trim();
+    const phone = `${form.sender_phone_code}${phoneDigits(form.sender_phone)}`;
+    if (
+      !displayName ||
+      (form.sender_type === "company" && !registrationNumber) ||
+      !isValidPhone(form.sender_phone_code, form.sender_phone) ||
+      !form.sender_address.trim()
+    ) {
+      setPartnerMessage(
+        "Aizpildi partnera nosaukumu, rekvizītus, korektu tālruni un adresi.",
+      );
+      return;
+    }
+
+    setPartnerSaving(true);
+    setPartnerMessage("");
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      setPartnerSaving(false);
+      setPartnerMessage("Sesija nav derīga.");
+      return;
+    }
+
+    const normalizeAddress = (value: string) =>
+      value.trim().toLocaleLowerCase("lv").replace(/\s+/g, " ");
+    const senderAddress = normalizeAddress(form.sender_address);
+    let partnerPoint = senderAddress === normalizeAddress(form.pickup_address)
+      ? pickupPoint
+      : senderAddress === normalizeAddress(form.dropoff_address)
+        ? dropoffPoint
+        : null;
+    if (!partnerPoint) {
+      try {
+        const response = await fetch(
+          `/api/geocode?q=${encodeURIComponent(form.sender_address.trim())}`,
+        );
+        const result = (await response.json()) as {
+          results?: Array<{ lat: number; lng: number }>;
+        };
+        partnerPoint = response.ok ? result.results?.[0] || null : null;
+      } catch {
+        partnerPoint = null;
+      }
+    }
+    if (!partnerPoint) {
+      setPartnerSaving(false);
+      setPartnerMessage(
+        "Partnera adresei neizdevās noteikt kartes punktu. Pārbaudi adresi un mēģini vēlreiz.",
+      );
+      return;
+    }
+
+    let duplicateQuery = supabase.from("partners").select(
+      "id, display_name, partner_type, first_name, last_name, company_name, registration_number, address, phone, email",
+    );
+    duplicateQuery = form.sender_type === "company"
+      ? duplicateQuery.eq("registration_number", registrationNumber)
+      : duplicateQuery
+          .eq("partner_type", "private")
+          .ilike("first_name", form.sender_first_name.trim())
+          .ilike("last_name", form.sender_last_name.trim());
+    const { data: existingPartner } = await duplicateQuery.maybeSingle();
+    if (existingPartner) {
+      const partner = existingPartner as Partner;
+      setPartners((current) =>
+        current.some((item) => item.id === partner.id)
+          ? current
+          : [...current, partner].sort((a, b) =>
+              a.display_name.localeCompare(b.display_name, "lv"),
+            ),
+      );
+      setSelectedPartnerId(String(partner.id));
+      setPartnerSaving(false);
+      setPartnerMessage("Šis partneris jau bija sarakstā un tagad ir izvēlēts.");
+      return;
+    }
+
+    const { data: savedPartner, error: saveError } = await supabase
+      .from("partners")
+      .insert({
+        display_name: displayName,
+        partner_type: form.sender_type,
+        first_name:
+          form.sender_type === "private" ? form.sender_first_name.trim() : null,
+        last_name:
+          form.sender_type === "private"
+            ? form.sender_last_name.trim() || null
+            : null,
+        company_name: form.sender_type === "company" ? displayName : null,
+        registration_number:
+          form.sender_type === "company" ? registrationNumber : null,
+        contact_name: displayName,
+        address: form.sender_address.trim(),
+        latitude: partnerPoint.lat,
+        longitude: partnerPoint.lng,
+        phone,
+        email: form.sender_email.trim() || null,
+        created_by: authData.user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .select(
+        "id, display_name, partner_type, first_name, last_name, company_name, registration_number, address, phone, email",
+      )
+      .single();
+    if (saveError || !savedPartner) {
+      setPartnerSaving(false);
+      setPartnerMessage("Partneri neizdevās saglabāt.");
+      return;
+    }
+
+    await supabase.from("partner_contacts").insert({
+      partner_id: savedPartner.id,
+      name: displayName,
+      phone,
+      sort_order: 0,
+    });
+    const partner = savedPartner as Partner;
+    setPartners((current) =>
+      [...current, partner].sort((a, b) =>
+        a.display_name.localeCompare(b.display_name, "lv"),
+      ),
+    );
+    setSelectedPartnerId(String(partner.id));
+    setPartnerSaving(false);
+    setPartnerMessage("Partneris pievienots partneru sarakstam.");
   };
 
   const useSenderAsRecipient = () => {
@@ -1199,6 +1360,30 @@ export default function RequestForm({
               </label>
             )}
             <PartyFields prefix="sender" form={form} update={update} />
+            {internalIsAdmin && !selectedPartnerId && !matchingPartner && (
+              <div className="mt-4 border-t border-slate-200 pt-4">
+                <button
+                  type="button"
+                  onClick={() => void addSenderToPartners()}
+                  disabled={partnerSaving}
+                  className="inline-flex items-center gap-2 rounded-xl border border-green-600 px-4 py-2.5 text-sm font-semibold text-green-700 disabled:opacity-50"
+                >
+                  <UserPlus size={18} />
+                  {partnerSaving ? "Pievieno..." : "Pievienot partneriem"}
+                </button>
+                {partnerMessage && (
+                  <p className="mt-2 text-sm text-slate-600">{partnerMessage}</p>
+                )}
+              </div>
+            )}
+            {internalIsAdmin && !selectedPartnerId && matchingPartner && (
+              <p className="mt-3 text-sm text-slate-600">
+                Šis klients jau ir partneru sarakstā.
+              </p>
+            )}
+            {internalIsAdmin && selectedPartnerId && partnerMessage && (
+              <p className="mt-3 text-sm text-green-700">{partnerMessage}</p>
+            )}
           </FormCard>
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <button
