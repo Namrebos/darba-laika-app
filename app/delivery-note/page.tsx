@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Eraser, PenLine, Printer, RotateCcw, X } from "lucide-react";
+import { Check, Eraser, PenLine, Printer, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -225,9 +225,6 @@ function SignaturePad({ label }: SignaturePadProps) {
   );
 }
 
-const fieldClass =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
-
 export default function DeliveryNotePage() {
   const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -350,28 +347,26 @@ export default function DeliveryNotePage() {
     void load();
   }, [router]);
 
-  function clearForm() {
-    if (!window.confirm("Vai notīrīt visus pavadzīmes laukus?")) return;
-    setDate(new Date().toISOString().slice(0, 10));
-    setVehicleId("");
-    setCustomer("");
-    setRecipient("");
-    setOrigin("");
-    setDestination("");
-    setCargo("");
-  }
-
   if (loading) return <p className="p-6">Ielādē...</p>;
+
+  const selectedVehicle = vehicles.find(
+    (vehicle) => String(vehicle.id) === vehicleId,
+  );
+  const displayDate = date
+    ? new Intl.DateTimeFormat("lv-LV").format(new Date(`${date}T00:00:00`))
+    : "Nav norādīts";
 
   return (
     <div className="delivery-note-page min-h-full bg-slate-100 p-3 text-slate-950 sm:p-6 dark:bg-zinc-950">
-      <div className="delivery-note-no-print mx-auto mb-4 flex max-w-4xl items-center justify-end gap-2">
+      <div className="delivery-note-no-print mx-auto mb-4 flex max-w-4xl items-center justify-between gap-2">
         <button
           type="button"
-          onClick={clearForm}
-          className="flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 font-semibold text-zinc-800 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+          onClick={() => router.back()}
+          className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
+          aria-label="Aizvērt pavadzīmi"
+          title="Aizvērt"
         >
-          <RotateCcw size={18} /> Notīrīt
+          <X size={22} />
         </button>
         <button
           type="button"
@@ -388,14 +383,10 @@ export default function DeliveryNotePage() {
             <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
               Transporta pavadzīme
             </h1>
-            <label className="space-y-1 text-sm font-semibold">
-              <span>Pavadzīmes Nr.</span>
-              <input
-                value={noteNumber}
-                readOnly
-                className={`${fieldClass} bg-slate-100 text-slate-500`}
-              />
-            </label>
+            <div className="text-sm">
+              <p className="font-semibold">Pavadzīmes Nr.</p>
+              <p className="mt-1 text-base text-slate-800">{noteNumber}</p>
+            </div>
           </div>
           <div className="text-sm">
             <p className="mb-1 font-semibold">Pārvadātāja dati</p>
@@ -404,92 +395,58 @@ export default function DeliveryNotePage() {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <label className="space-y-1 text-sm font-semibold">
-              <span>Datums</span>
-              <input
-                type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-                className={fieldClass}
-              />
-            </label>
-            <label className="space-y-1 text-sm font-semibold">
-              <span>Transportlīdzekļa VNZ</span>
-              <select
-                value={vehicleId}
-                onChange={(event) => setVehicleId(event.target.value)}
-                className={fieldClass}
-              >
-                <option value="">Izvēlies auto</option>
-                {vehicles.map((vehicle) => (
-                  <option key={vehicle.id} value={vehicle.id}>
-                    {vehicle.registration_number} — {vehicle.display_name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="text-sm">
+              <p className="font-semibold">Datums</p>
+              <p className="mt-1 text-base text-slate-800">{displayDate}</p>
+            </div>
+            <div className="text-sm">
+              <p className="font-semibold">Transportlīdzekļa VNZ</p>
+              <p className="mt-1 text-base text-slate-800">
+                {selectedVehicle?.registration_number || "Nav norādīts"}
+              </p>
+            </div>
           </div>
         </header>
 
         <section className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-4 rounded-xl border border-slate-300 p-4">
-            <label className="block space-y-1 text-sm font-semibold">
-              <span>Nosūtītājs / pasūtītājs</span>
-              <textarea
-                value={customer}
-                onChange={(event) => setCustomer(event.target.value)}
-                placeholder="Nosaukums, reģistrācijas numurs un adrese"
-                rows={3}
-                className={fieldClass}
-              />
-            </label>
-            <label className="block space-y-1 text-sm font-semibold">
-              <span>Uzkraušanas vieta</span>
-              <textarea
-                value={origin}
-                onChange={(event) => setOrigin(event.target.value)}
-                placeholder="Uzkraušanas adrese"
-                rows={3}
-                className={fieldClass}
-              />
-            </label>
+          <div className="space-y-5 pr-0 sm:border-r sm:border-slate-300 sm:pr-5">
+            <div className="text-sm">
+              <p className="font-semibold">Nosūtītājs / pasūtītājs</p>
+              <p className="mt-1 whitespace-pre-line leading-relaxed text-slate-800">
+                {customer || "Nav norādīts"}
+              </p>
+            </div>
+            <div className="text-sm">
+              <p className="font-semibold">Uzkraušanas vieta</p>
+              <p className="mt-1 whitespace-pre-line leading-relaxed text-slate-800">
+                {origin || "Nav norādīta"}
+              </p>
+            </div>
             <SignaturePad label="Nosūtītāja paraksts" />
           </div>
-          <div className="space-y-4 rounded-xl border border-slate-300 p-4">
-            <label className="block space-y-1 text-sm font-semibold">
-              <span>Saņēmējs</span>
-              <textarea
-                value={recipient}
-                onChange={(event) => setRecipient(event.target.value)}
-                placeholder="Nosaukums un reģistrācijas numurs"
-                rows={3}
-                className={fieldClass}
-              />
-            </label>
-            <label className="block space-y-1 text-sm font-semibold">
-              <span>Izkraušanas vieta</span>
-              <textarea
-                value={destination}
-                onChange={(event) => setDestination(event.target.value)}
-                placeholder="Izkraušanas adrese"
-                rows={3}
-                className={fieldClass}
-              />
-            </label>
+          <div className="space-y-5 sm:pl-1">
+            <div className="text-sm">
+              <p className="font-semibold">Saņēmējs</p>
+              <p className="mt-1 whitespace-pre-line leading-relaxed text-slate-800">
+                {recipient || "Nav norādīts"}
+              </p>
+            </div>
+            <div className="text-sm">
+              <p className="font-semibold">Izkraušanas vieta</p>
+              <p className="mt-1 whitespace-pre-line leading-relaxed text-slate-800">
+                {destination || "Nav norādīta"}
+              </p>
+            </div>
             <SignaturePad label="Saņēmēja paraksts" />
           </div>
         </section>
 
-        <label className="block space-y-1 text-sm font-semibold">
-          <span>Kravas veids</span>
-          <textarea
-            value={cargo}
-            onChange={(event) => setCargo(event.target.value)}
-            placeholder="Kas tiek vests"
-            rows={3}
-            className={fieldClass}
-          />
-        </label>
+        <div className="text-sm">
+          <p className="font-semibold">Kravas veids</p>
+          <p className="mt-1 whitespace-pre-line leading-relaxed text-slate-800">
+            {cargo || "Nav norādīts"}
+          </p>
+        </div>
 
         <section className="space-y-2 border-t border-slate-300 pt-4 text-xs leading-relaxed text-slate-700">
           <p>
