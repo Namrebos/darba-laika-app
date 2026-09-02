@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Check, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
@@ -22,6 +22,10 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formOpen, setFormOpen] = useState(true);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [removeLogo, setRemoveLogo] = useState(false);
   const selectedName = useRef("");
   const reverseRequest = useRef(0);
 
@@ -34,6 +38,7 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
         first_name: data.first_name || "", last_name: data.last_name || "", company_name: data.company_name || "",
         registration_number: data.registration_number || "", address: data.address || "", email: data.email || "",
       });
+      setLogoUrl(data.logo_url || null);
       const savedContacts = Array.isArray(data.contacts) ? data.contacts as Contact[] : [];
       setContacts(savedContacts.length ? savedContacts : [{ name: "", phone: "+371" }]);
       if (data.latitude !== null && data.longitude !== null) {
@@ -43,6 +48,10 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
       if (data.display_name || data.company_name) setFormOpen(false);
     })();
   }, []);
+
+  useEffect(() => () => {
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+  }, [logoPreview]);
 
   useEffect(() => {
     const query = (searchField === "registration" ? form.registration_number : form.company_name).trim();
@@ -85,7 +94,26 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
       onMessage("Aizpildi pārvadātāja rekvizītus, kontaktpersonas, korektus tālruņus un lokāciju."); return;
     }
     const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      onMessage("Sesija nav derīga.");
+      return;
+    }
     setSaving(true);
+    let nextLogoUrl = removeLogo ? null : logoUrl;
+    let uploadedPath = "";
+    if (logoFile) {
+      const extension = logoFile.name.split(".").pop()?.toLowerCase() || "png";
+      uploadedPath = `default/logo-${Date.now()}.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from("carrier-logos")
+        .upload(uploadedPath, logoFile, { contentType: logoFile.type });
+      if (uploadError) {
+        setSaving(false);
+        onMessage("Pārvadātāja logo neizdevās augšupielādēt.");
+        return;
+      }
+      nextLogoUrl = supabase.storage.from("carrier-logos").getPublicUrl(uploadedPath).data.publicUrl;
+    }
     const { error } = await supabase.from("carrier_settings").upsert({
       id: "default", display_name: displayName, partner_type: form.partner_type,
       first_name: form.partner_type === "private" ? form.first_name.trim() : null,
@@ -94,25 +122,44 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
       registration_number: form.partner_type === "company" ? form.registration_number.trim() : null,
       address: form.address.trim(), latitude: point.lat, longitude: point.lng,
       email: form.email.trim() || null, contacts: normalizedContacts,
+      logo_url: nextLogoUrl,
       updated_at: new Date().toISOString(), updated_by: authData.user?.id || null,
     });
     setSaving(false);
     if (error) {
+      if (uploadedPath) await supabase.storage.from("carrier-logos").remove([uploadedPath]);
       onMessage("Pārvadātāju neizdevās saglabāt.");
       return;
     }
+    const { data: oldLogos } = await supabase.storage.from("carrier-logos").list("default");
+    const obsoleteLogoPaths = (oldLogos || [])
+      .map((file) => `default/${file.name}`)
+      .filter((path) => path !== uploadedPath && (removeLogo || Boolean(uploadedPath)));
+    if (obsoleteLogoPaths.length) await supabase.storage.from("carrier-logos").remove(obsoleteLogoPaths);
     setForm((current) => ({ ...current, display_name: displayName }));
+    setLogoUrl(nextLogoUrl);
+    setLogoFile(null);
+    setLogoPreview(null);
+    setRemoveLogo(false);
     setFormOpen(false);
     onMessage("Pārvadātājs saglabāts.");
   }
 
   if (!formOpen) return <section className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-    <div><h2 className="font-semibold">Pārvadātājs</h2><p className="text-sm text-zinc-500">{form.display_name || form.company_name}</p></div>
+    <div className="flex min-w-0 items-center gap-3">{logoUrl && <img src={logoUrl} alt={`${form.display_name || form.company_name} logo`} className="h-12 w-12 shrink-0 rounded-lg border border-zinc-200 bg-white object-contain p-1" />}<div><h2 className="font-semibold">Pārvadātājs</h2><p className="truncate text-sm text-zinc-500">{form.display_name || form.company_name}</p></div></div>
     <button type="button" onClick={() => setFormOpen(true)} className="rounded-lg border border-zinc-300 p-2 dark:border-zinc-600" aria-label="Rediģēt pārvadātāju"><Pencil size={18} /></button>
   </section>;
 
   return <section className="space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
     <h2 className="font-semibold">Pārvadātājs</h2>
+    <div className="space-y-2 border-b border-zinc-200 pb-4 dark:border-zinc-700">
+      <span className="block text-sm font-medium">Pārvadātāja logo</span>
+      <div className="flex flex-wrap items-center gap-3">
+        {(logoPreview || (!removeLogo && logoUrl)) && <div className="relative"><img src={logoPreview || logoUrl || ""} alt="Pārvadātāja logo priekšskatījums" className="h-24 w-24 rounded-xl border border-zinc-200 bg-white object-contain p-2" /><button type="button" onClick={() => { setLogoFile(null); setLogoPreview(null); setRemoveLogo(true); }} className="absolute -right-2 -top-2 rounded-full bg-red-600 p-1 text-white" aria-label="Dzēst pārvadātāja logo"><X size={16} /></button></div>}
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600"><ImagePlus size={18} />{logoUrl && !removeLogo ? "Mainīt logo" : "Pievienot logo"}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 5 * 1024 * 1024) { onMessage("Logo faila izmērs nedrīkst pārsniegt 5 MB."); event.target.value = ""; return; } if (logoPreview) URL.revokeObjectURL(logoPreview); setLogoFile(file); setLogoPreview(URL.createObjectURL(file)); setRemoveLogo(false); event.target.value = ""; }} /></label>
+      </div>
+      <p className="text-xs text-zinc-500">Atļauts JPG, PNG vai WEBP fails līdz 5 MB.</p>
+    </div>
     <label className="block space-y-1 text-sm"><span className="font-medium">Pārvadātāja nosaukums</span><input value={form.display_name} onChange={(event) => setForm((current) => ({ ...current, display_name: event.target.value }))} className={inputClass} /></label>
     <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
       <h3 className="mb-3 font-semibold">Pārvadātāja rekvizīti</h3>
