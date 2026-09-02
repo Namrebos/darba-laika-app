@@ -631,6 +631,7 @@ export default function TransportRequestModal({
             <>
               <div className="grid gap-4 md:grid-cols-2">
                 <EditablePartySection title="Pasūtītājs" prefix="sender" request={transportRequest} update={updateRequest} />
+                <EditablePartySection title="Saņēmējs" prefix="recipient" request={transportRequest} update={updateRequest} />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <EditableLocationSection title="Uzkraušana" prefix="pickup" request={transportRequest} update={updateRequest} markerColor="blue" />
