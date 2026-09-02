@@ -72,6 +72,15 @@ export async function GET(
     );
   }
 
+  const { data: partnerContacts } = transportRequest.partner_id
+    ? await adminClient
+        .from("partner_contacts")
+        .select("id, name, phone, sort_order")
+        .eq("partner_id", transportRequest.partner_id)
+        .order("sort_order")
+        .order("id")
+    : { data: [] };
+
   const imageRows = (images || []) as {
     id: number;
     storage_path: string;
@@ -93,6 +102,7 @@ export async function GET(
   return NextResponse.json({
     request: transportRequest,
     vehicleId: task?.vehicle_id || null,
+    partnerContacts: partnerContacts || [],
     images: signedImages.filter((image) => image.url),
   });
 }

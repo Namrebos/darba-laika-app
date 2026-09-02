@@ -23,6 +23,7 @@ const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), 
 
 type TransportRequest = {
   id: number;
+  partner_id: number | null;
   sender_type: "private" | "company";
   sender_first_name: string | null;
   sender_last_name: string | null;
@@ -61,6 +62,12 @@ type RequestImage = {
   id: number;
   fileName: string;
   url: string;
+};
+
+type PartnerContact = {
+  id: number;
+  name: string;
+  phone: string;
 };
 
 type PartnerSummary = {
@@ -159,29 +166,41 @@ function PartySection({
   firstName,
   lastName,
   companyName,
-  registrationNumber,
   phone,
+  contacts,
 }: {
   title: string;
   type: "private" | "company";
   firstName: string | null;
   lastName: string | null;
   companyName: string | null;
-  registrationNumber: string | null;
   phone: string;
+  contacts: PartnerContact[];
 }) {
+  const contactOptions = useMemo(() => {
+    const rows = contacts
+      .filter((contact) => contact.phone?.trim())
+      .filter(
+        (contact, index, all) =>
+          all.findIndex(
+            (item) =>
+              item.phone.replace(/\D/g, "") === contact.phone.replace(/\D/g, ""),
+          ) === index,
+      );
+    return rows.length > 0 ? rows : [{ id: 0, name: "Pasūtītājs", phone }];
+  }, [contacts, phone]);
+  const [selectedPhone, setSelectedPhone] = useState(phone);
+
+  useEffect(() => {
+    setSelectedPhone(contactOptions[0]?.phone || phone);
+  }, [contactOptions, phone]);
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h3 className="mb-4 text-xl font-bold text-slate-900">{title}</h3>
       <div className="space-y-4">
         {type === "company" ? (
-          <>
-            <ReadonlyField label="Uzņēmuma nosaukums" value={companyName} />
-            <ReadonlyField
-              label="Reģistrācijas/PVN numurs"
-              value={registrationNumber}
-            />
-          </>
+          <ReadonlyField label="Uzņēmuma nosaukums" value={companyName} />
         ) : (
           <div
             className={`grid gap-3 ${lastName?.trim() ? "sm:grid-cols-2" : ""}`}
@@ -192,18 +211,32 @@ function PartySection({
         )}
         <div>
           <span className="mb-1 block text-sm font-semibold text-slate-800">
-            Tālrunis
+            {contactOptions.length > 1 ? "Izvēlies kontaktpersonu" : "Tālrunis"}
           </span>
           <div className="flex gap-2">
-            <input
-              readOnly
-              value={phone}
-              className="form-input min-w-0 flex-1 bg-slate-50"
-            />
+            {contactOptions.length > 1 ? (
+              <select
+                value={selectedPhone}
+                onChange={(event) => setSelectedPhone(event.target.value)}
+                className="form-input min-w-0 flex-1 bg-slate-50"
+              >
+                {contactOptions.map((contact) => (
+                  <option key={contact.id} value={contact.phone}>
+                    {contact.name} · {contact.phone}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                readOnly
+                value={selectedPhone}
+                className="form-input min-w-0 flex-1 bg-slate-50"
+              />
+            )}
             <a
-              href={`tel:${phone.replace(/\s/g, "")}`}
+              href={`tel:${selectedPhone.replace(/\s/g, "")}`}
               className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 font-semibold text-white"
-              aria-label={`Zvanīt ${phone}`}
+              aria-label={`Zvanīt ${selectedPhone}`}
             >
               <Phone size={18} />
               Zvanīt
@@ -257,7 +290,22 @@ function LocationSection({
             readOnly
           />
         </div>
-        <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2"><ReadonlyField label="Kontaktpersona" value={contactName} /><ReadonlyField label="Kontakttālrunis" value={contactPhone} /></div>
+        {(contactName?.trim() || contactPhone?.trim()) && (
+          <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
+            <ReadonlyField label="Kontaktpersona" value={contactName} />
+            {contactPhone?.trim() && (
+              <div>
+                <span className="mb-1 block text-sm font-semibold text-slate-800">Kontakttālrunis</span>
+                <div className="flex gap-2">
+                  <input readOnly value={contactPhone} className="form-input min-w-0 flex-1 bg-slate-50" />
+                  <a href={`tel:${contactPhone.replace(/\s/g, "")}`} className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 font-semibold text-white" aria-label={`Zvanīt ${contactPhone}`}>
+                    <Phone size={18} /> Zvanīt
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div className={`grid gap-3 ${time?.trim() ? "sm:grid-cols-2" : ""}`}>
           <ReadonlyField label="Datums" value={date} />
           <ReadonlyField label="Laiks" value={time?.slice(0, 5) || ""} />
@@ -514,6 +562,7 @@ export default function TransportRequestModal({
   const [transportRequest, setTransportRequest] =
     useState<TransportRequest | null>(null);
   const [images, setImages] = useState<RequestImage[]>([]);
+  const [partnerContacts, setPartnerContacts] = useState<PartnerContact[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -543,6 +592,7 @@ export default function TransportRequestModal({
       }
       setTransportRequest(result.request as TransportRequest);
       setImages((result.images || []) as RequestImage[]);
+      setPartnerContacts((result.partnerContacts || []) as PartnerContact[]);
     }
 
     void load();
@@ -831,10 +881,8 @@ export default function TransportRequestModal({
                   firstName={transportRequest.sender_first_name}
                   lastName={transportRequest.sender_last_name}
                   companyName={transportRequest.sender_company_name}
-                  registrationNumber={
-                    transportRequest.sender_registration_number
-                  }
                   phone={transportRequest.sender_phone}
+                  contacts={partnerContacts}
                 />
               </div>
 
