@@ -1,6 +1,16 @@
 "use client";
 
-import { Check, Eraser, PenLine, Printer, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Eraser,
+  Mail,
+  MessageCircle,
+  MoreVertical,
+  PenLine,
+  Printer,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -227,8 +237,11 @@ function SignaturePad({ label }: SignaturePadProps) {
 
 export default function DeliveryNotePage() {
   const router = useRouter();
+  const shareMenuRef = useRef<HTMLDivElement>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [notice, setNotice] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [noteNumber, setNoteNumber] = useState("Tiks piešķirts no kartītes ID");
   const [vehicleId, setVehicleId] = useState("");
@@ -347,6 +360,34 @@ export default function DeliveryNotePage() {
     void load();
   }, [router]);
 
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+    function closeMenu(event: MouseEvent | TouchEvent) {
+      if (!shareMenuRef.current?.contains(event.target as Node)) {
+        setShareMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeMenu);
+    document.addEventListener("touchstart", closeMenu);
+    return () => {
+      document.removeEventListener("mousedown", closeMenu);
+      document.removeEventListener("touchstart", closeMenu);
+    };
+  }, [shareMenuOpen]);
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(window.location.href);
+    setShareMenuOpen(false);
+    setNotice("Pavadzīmes saite nokopēta.");
+    window.setTimeout(() => setNotice(""), 2500);
+  }
+
+  function shareUrl() {
+    return encodeURIComponent(
+      `Transporta pavadzīme Nr. ${noteNumber}: ${window.location.href}`,
+    );
+  }
+
   if (loading) return <p className="p-6">Ielādē...</p>;
 
   const selectedVehicle = vehicles.find(
@@ -368,14 +409,62 @@ export default function DeliveryNotePage() {
         >
           <X size={22} />
         </button>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800"
-        >
-          <Printer size={18} /> Drukāt / PDF
-        </button>
+        <div ref={shareMenuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setShareMenuOpen((open) => !open)}
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-700 text-white hover:bg-blue-800"
+            aria-label="Pavadzīmes darbības"
+            aria-expanded={shareMenuOpen}
+            title="Darbības"
+          >
+            <MoreVertical size={22} />
+          </button>
+          {shareMenuOpen && (
+            <div className="absolute right-0 top-12 z-50 min-w-60 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-900 shadow-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setShareMenuOpen(false);
+                  window.print();
+                }}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-100"
+              >
+                <Printer size={18} /> Drukāt / PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyLink()}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-100"
+              >
+                <Copy size={18} /> Kopēt saiti
+              </button>
+              <a
+                href={`https://wa.me/?text=${shareUrl()}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => setShareMenuOpen(false)}
+                className="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-100"
+              >
+                <MessageCircle size={18} /> Nosūtīt WhatsApp
+              </a>
+              <a
+                href={`mailto:?subject=${encodeURIComponent(`Transporta pavadzīme Nr. ${noteNumber}`)}&body=${shareUrl()}`}
+                onClick={() => setShareMenuOpen(false)}
+                className="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-100"
+              >
+                <Mail size={18} /> Nosūtīt e-pastā
+              </a>
+            </div>
+          )}
+        </div>
       </div>
+
+      {notice && (
+        <div className="delivery-note-no-print fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-xl">
+          {notice}
+        </div>
+      )}
 
       <main className="delivery-note-sheet mx-auto min-h-[297mm] w-full max-w-[210mm] space-y-6 bg-white p-5 shadow-xl sm:p-[15mm]">
         <header className="space-y-5 border-b-2 border-slate-900 pb-5">
