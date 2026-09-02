@@ -860,6 +860,16 @@ export default function PlannedTasksPage() {
       setMessage("Kartītes izmaiņas neizdevās saglabāt.");
       return false;
     }
+    if (task.task_log_id) {
+      const { error: activeTaskError } = await supabase
+        .from("task_logs")
+        .update({ title: changes.title, notes: changes.note })
+        .eq("id", task.task_log_id);
+      if (activeTaskError) {
+        setMessage("Plāns saglabāts, bet aktīvo darba kartīti neizdevās atjaunināt.");
+        return false;
+      }
+    }
     changeLocalTask(task.id, changes);
     return true;
   }

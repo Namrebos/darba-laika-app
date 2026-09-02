@@ -225,7 +225,7 @@ export async function PUT(
     if (partnerDisplayName) taskTitle = partnerDisplayName;
   }
   const taskNote = [text("cargo_type"), text("additional_notes")].filter(Boolean).join("\n");
-  await adminClient
+  const { data: linkedTask } = await adminClient
     .from("planned_tasks")
     .update({
       title: taskTitle,
@@ -234,7 +234,16 @@ export async function PUT(
       scheduled_time: nullableText("pickup_time"),
       updated_at: new Date().toISOString(),
     })
-    .eq("transport_request_id", numericId);
+    .eq("transport_request_id", numericId)
+    .select("task_log_id")
+    .maybeSingle();
+
+  if (linkedTask?.task_log_id) {
+    await adminClient
+      .from("task_logs")
+      .update({ title: taskTitle, notes: taskNote })
+      .eq("id", linkedTask.task_log_id);
+  }
 
   return NextResponse.json({ request: updatedRequest });
 }
