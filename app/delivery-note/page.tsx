@@ -2,13 +2,12 @@
 
 import {
   Check,
-  Copy,
+  Download,
   Eraser,
-  Mail,
-  MessageCircle,
   MoreVertical,
   PenLine,
   Printer,
+  Share2,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -238,9 +237,11 @@ function SignaturePad({ label }: SignaturePadProps) {
 export default function DeliveryNotePage() {
   const router = useRouter();
   const shareMenuRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [creatingPdf, setCreatingPdf] = useState(false);
   const [notice, setNotice] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [noteNumber, setNoteNumber] = useState("Tiks piešķirts no kartītes ID");
@@ -375,17 +376,84 @@ export default function DeliveryNotePage() {
     };
   }, [shareMenuOpen]);
 
-  async function copyLink() {
-    await navigator.clipboard.writeText(window.location.href);
-    setShareMenuOpen(false);
-    setNotice("Pavadzīmes saite nokopēta.");
-    window.setTimeout(() => setNotice(""), 2500);
+  async function createPdf() {
+    if (!sheetRef.current) throw new Error("Pavadzīme nav pieejama");
+    setCreatingPdf(true);
+    try {
+      await document.fonts.ready;
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+      const canvas = await html2canvas(sheetRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        windowWidth: 1200,
+      });
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+      const width = canvas.width * ratio;
+      const height = canvas.height * ratio;
+      pdf.addImage(
+        canvas.toDataURL("image/jpeg", 0.95),
+        "JPEG",
+        (pageWidth - width) / 2,
+        0,
+        width,
+        height,
+      );
+      return pdf.output("blob");
+    } finally {
+      setCreatingPdf(false);
+    }
   }
 
-  function shareUrl() {
-    return encodeURIComponent(
-      `Transporta pavadzīme Nr. ${noteNumber}: ${window.location.href}`,
-    );
+  async function downloadPdf() {
+    setShareMenuOpen(false);
+    try {
+      const blob = await createPdf();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `pavadzime-${noteNumber}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setNotice("PDF neizdevās saglabāt. Mēģini vēlreiz.");
+      window.setTimeout(() => setNotice(""), 3000);
+    }
+  }
+
+  async function sharePdf() {
+    setShareMenuOpen(false);
+    try {
+      const blob = await createPdf();
+      const file = new File([blob], `pavadzime-${noteNumber}.pdf`, {
+        type: "application/pdf",
+      });
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Transporta pavadzīme Nr. ${noteNumber}`,
+        });
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.name;
+      link.click();
+      URL.revokeObjectURL(url);
+      setNotice("PDF saglabāts. To vari pievienot ziņai.");
+      window.setTimeout(() => setNotice(""), 3000);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setNotice("PDF neizdevās nosūtīt. Mēģini vēlreiz.");
+      window.setTimeout(() => setNotice(""), 3000);
+    }
   }
 
   if (loading) return <p className="p-6">Ielādē...</p>;
@@ -414,8 +482,9 @@ export default function DeliveryNotePage() {
             type="button"
             onClick={() => setShareMenuOpen((open) => !open)}
             className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-700 text-white hover:bg-blue-800"
-            aria-label="Pavadzīmes darbības"
+            aria-label={creatingPdf ? "Veido PDF" : "Pavadzīmes darbības"}
             aria-expanded={shareMenuOpen}
+            disabled={creatingPdf}
             title="Darbības"
           >
             <MoreVertical size={22} />
@@ -434,27 +503,18 @@ export default function DeliveryNotePage() {
               </button>
               <button
                 type="button"
-                onClick={() => void copyLink()}
+                onClick={() => void sharePdf()}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-100"
               >
-                <Copy size={18} /> Kopēt saiti
+                <Share2 size={18} /> Nosūtīt PDF
               </button>
-              <a
-                href={`https://wa.me/?text=${shareUrl()}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => setShareMenuOpen(false)}
+              <button
+                type="button"
+                onClick={() => void downloadPdf()}
                 className="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-100"
               >
-                <MessageCircle size={18} /> Nosūtīt WhatsApp
-              </a>
-              <a
-                href={`mailto:?subject=${encodeURIComponent(`Transporta pavadzīme Nr. ${noteNumber}`)}&body=${shareUrl()}`}
-                onClick={() => setShareMenuOpen(false)}
-                className="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-100"
-              >
-                <Mail size={18} /> Nosūtīt e-pastā
-              </a>
+                <Download size={18} /> Saglabāt ierīcē
+              </button>
             </div>
           )}
         </div>
@@ -466,7 +526,7 @@ export default function DeliveryNotePage() {
         </div>
       )}
 
-      <main className="delivery-note-sheet mx-auto min-h-[297mm] w-full max-w-[210mm] space-y-6 bg-white p-5 shadow-xl sm:p-[15mm]">
+      <main ref={sheetRef} className="delivery-note-sheet mx-auto min-h-[297mm] w-full max-w-[210mm] space-y-6 bg-white p-5 shadow-xl sm:p-[15mm]">
         <header className="space-y-5 border-b-2 border-slate-900 pb-5">
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(9rem,0.8fr)] items-end gap-4">
             <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
