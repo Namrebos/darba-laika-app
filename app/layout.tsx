@@ -53,13 +53,15 @@ export default function RootLayout({
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  const isPublicSigningPage = pathname.startsWith("/sign/");
 
   const isAuthPage =
     pathname === "/login" ||
     pathname === "/signup" ||
     pathname === "/register" ||
     pathname === "/reset-password" ||
-    pathname.startsWith("/request/");
+    pathname.startsWith("/request/") ||
+    isPublicSigningPage;
 
   useEffect(() => {
     const saved = localStorage.getItem("theme") as
@@ -245,6 +247,14 @@ export default function RootLayout({
       : []),
     { href: "/profile", label: "Profils" },
   ];
+
+  if (isPublicSigningPage) {
+    return (
+      <html lang="lv">
+        <body className="bg-slate-100 text-slate-950">{children}</body>
+      </html>
+    );
+  }
 
   if (isAuthPage) {
     return (

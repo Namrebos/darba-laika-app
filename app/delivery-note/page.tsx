@@ -41,14 +41,19 @@ type TransportRequest = {
 
 type SignaturePadProps = {
   label: string;
+  initialSignature?: string | null;
+  onSave: (signature: string) => Promise<void>;
 };
 
-function SignaturePad({ label }: SignaturePadProps) {
+function SignaturePad({ label, initialSignature, onSave }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const hasInkRef = useRef(false);
   const [open, setOpen] = useState(false);
-  const [signature, setSignature] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(initialSignature || null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => setSignature(initialSignature || null), [initialSignature]);
 
   useEffect(() => {
     if (!open) return;
@@ -110,7 +115,7 @@ function SignaturePad({ label }: SignaturePadProps) {
     hasInkRef.current = false;
   }
 
-  function save() {
+  async function save() {
     const canvas = canvasRef.current;
     if (!canvas || !hasInkRef.current) {
       setSignature(null);
@@ -160,8 +165,15 @@ function SignaturePad({ label }: SignaturePadProps) {
       targetWidth,
       targetHeight,
     );
-    setSignature(normalized.toDataURL("image/png"));
-    setOpen(false);
+    const value = normalized.toDataURL("image/png");
+    setSaving(true);
+    try {
+      await onSave(value);
+      setSignature(value);
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -221,10 +233,11 @@ function SignaturePad({ label }: SignaturePadProps) {
               </button>
               <button
                 type="button"
-                onClick={save}
+                onClick={() => void save()}
+                disabled={saving}
                 className="flex items-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 font-semibold text-white hover:bg-green-700"
               >
-                <Check size={18} /> Saglabāt
+                <Check size={18} /> {saving ? "Saglabā..." : "Saglabāt"}
               </button>
             </div>
           </div>
@@ -252,6 +265,10 @@ export default function DeliveryNotePage() {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [cargo, setCargo] = useState("");
+  const [requestId, setRequestId] = useState<number | null>(null);
+  const [accessToken, setAccessToken] = useState("");
+  const [senderSignature, setSenderSignature] = useState<string | null>(null);
+  const [recipientSignature, setRecipientSignature] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -277,6 +294,8 @@ export default function DeliveryNotePage() {
       const requestId = Number(
         new URLSearchParams(window.location.search).get("requestId"),
       );
+      setRequestId(Number.isSafeInteger(requestId) && requestId > 0 ? requestId : null);
+      setAccessToken(session.access_token);
       const requestPromise = Number.isSafeInteger(requestId) && requestId > 0
         ? fetch(`/api/transport-requests/${requestId}`, {
             headers: { Authorization: `Bearer ${session.access_token}` },
@@ -355,6 +374,15 @@ export default function DeliveryNotePage() {
         setOrigin(transportRequest.pickup_address || "");
         setDestination(transportRequest.dropoff_address || "");
         setCargo(transportRequest.cargo_type || "");
+        const noteResponse = await fetch(`/api/delivery-notes/${requestId}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: "no-store",
+        });
+        if (noteResponse.ok) {
+          const noteBody = await noteResponse.json();
+          setSenderSignature(noteBody.signatures?.sender_signature_data || null);
+          setRecipientSignature(noteBody.signatures?.recipient_signature_data || null);
+        }
       }
       setLoading(false);
     }
@@ -456,6 +484,43 @@ export default function DeliveryNotePage() {
     }
   }
 
+  async function saveSignature(role: "sender" | "recipient", signatureData: string) {
+    if (!requestId || !accessToken) throw new Error("Pavadzīme nav pieejama.");
+    const response = await fetch(`/api/delivery-notes/${requestId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ action: "save-signature", signerRole: role, signatureData }),
+    });
+    if (!response.ok) throw new Error("Parakstu neizdevās saglabāt.");
+    if (role === "sender") setSenderSignature(signatureData);
+    else setRecipientSignature(signatureData);
+  }
+
+  async function shareSigningLink(role: "sender" | "recipient") {
+    setShareMenuOpen(false);
+    if (!requestId || !accessToken) return;
+    try {
+      const response = await fetch(`/api/delivery-notes/${requestId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ action: "create-link", signerRole: role }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.url) throw new Error(body.error || "Saiti neizdevās izveidot.");
+      const title = role === "sender" ? "Nosūtītāja paraksts" : "Saņēmēja paraksts";
+      if (navigator.share) await navigator.share({ title, text: "Lūdzu, parakstiet transporta pavadzīmi.", url: body.url });
+      else {
+        await navigator.clipboard.writeText(body.url);
+        setNotice("Parakstīšanas saite nokopēta.");
+        window.setTimeout(() => setNotice(""), 3000);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setNotice("Parakstīšanas saiti neizdevās nosūtīt.");
+      window.setTimeout(() => setNotice(""), 3000);
+    }
+  }
+
   if (loading) return <p className="p-6">Ielādē...</p>;
 
   const selectedVehicle = vehicles.find(
@@ -507,6 +572,12 @@ export default function DeliveryNotePage() {
                 className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-100"
               >
                 <Share2 size={18} /> Nosūtīt PDF
+              </button>
+              <button type="button" onClick={() => void shareSigningLink("sender")} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-100">
+                <PenLine size={18} /> Nosūtīt nosūtītājam parakstīšanai
+              </button>
+              <button type="button" onClick={() => void shareSigningLink("recipient")} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-100">
+                <PenLine size={18} /> Nosūtīt saņēmējam parakstīšanai
               </button>
               <button
                 type="button"
@@ -571,7 +642,7 @@ export default function DeliveryNotePage() {
                 {origin || "Nav norādīta"}
               </p>
             </div>
-            <SignaturePad label="Nosūtītāja paraksts" />
+            <SignaturePad label="Nosūtītāja paraksts" initialSignature={senderSignature} onSave={(value) => saveSignature("sender", value)} />
           </div>
           <div className="space-y-5 sm:pl-1">
             <div className="text-sm">
@@ -586,7 +657,7 @@ export default function DeliveryNotePage() {
                 {destination || "Nav norādīta"}
               </p>
             </div>
-            <SignaturePad label="Saņēmēja paraksts" />
+            <SignaturePad label="Saņēmēja paraksts" initialSignature={recipientSignature} onSave={(value) => saveSignature("recipient", value)} />
           </div>
         </section>
 
