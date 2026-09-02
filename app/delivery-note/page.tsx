@@ -467,17 +467,17 @@ export default function DeliveryNotePage() {
 
   return (
     <div className="delivery-note-page min-h-full bg-slate-100 p-3 text-slate-950 sm:p-6 dark:bg-zinc-950">
-      <div className="delivery-note-no-print mx-auto mb-4 flex max-w-4xl items-center justify-between gap-2">
+      <div className="delivery-note-no-print mx-auto mb-4 flex max-w-4xl items-center justify-end gap-2">
         <button
           type="button"
           onClick={() => router.back()}
-          className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
+          className="order-2 flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
           aria-label="Aizvērt pavadzīmi"
           title="Aizvērt"
         >
           <X size={22} />
         </button>
-        <div ref={shareMenuRef} className="relative">
+        <div ref={shareMenuRef} className="order-1 relative">
           <button
             type="button"
             onClick={() => setShareMenuOpen((open) => !open)}
