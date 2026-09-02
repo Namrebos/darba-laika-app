@@ -190,6 +190,23 @@ function dateTimeLabel(date: string, time: string, placeholder: string) {
   return time ? `${formattedDate} ${time.slice(0, 5)}` : formattedDate;
 }
 
+function localDateTimeParts() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return {
+    date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+    time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
+  };
+}
+
+function dateTimeNotInPast(date: string, time: string) {
+  if (!date) return false;
+  const now = localDateTimeParts();
+  if (date > now.date) return true;
+  if (date < now.date) return false;
+  return !time || time >= now.time;
+}
+
 function DateTimeField({
   label,
   date,
@@ -978,6 +995,18 @@ export default function RequestForm({
     return form.dropoff_time >= form.pickup_time;
   };
 
+  const currentMinimum = () => {
+    const now = localDateTimeParts();
+    return `${now.date}T${now.time}`;
+  };
+
+  const dropoffMinimum = () => {
+    const now = currentMinimum();
+    if (!form.pickup_date) return now;
+    const pickup = `${form.pickup_date}T${form.pickup_time || "00:00"}`;
+    return pickup > now ? pickup : now;
+  };
+
   const stepValid = (targetStep: number): boolean => {
     if (targetStep === 1) {
       return Boolean(
@@ -1000,7 +1029,8 @@ export default function RequestForm({
           isValidPhone(form.pickup_contact_phone_code, form.pickup_contact_phone) &&
           form.pickup_address.trim() &&
           pickupPoint &&
-          form.pickup_date,
+          form.pickup_date &&
+          dateTimeNotInPast(form.pickup_date, form.pickup_time),
       );
     }
     return Boolean(
@@ -1009,6 +1039,7 @@ export default function RequestForm({
           form.dropoff_address.trim() &&
           dropoffPoint &&
           form.dropoff_date &&
+          dateTimeNotInPast(form.dropoff_date, form.dropoff_time) &&
           dropoffNotBeforePickup() &&
           stepValid(1) &&
           stepValid(2),
@@ -1310,7 +1341,13 @@ export default function RequestForm({
                 label="Uzkraušanas datums un laiks"
                 date={form.pickup_date}
                 time={form.pickup_time}
+                min={currentMinimum()}
                 onChange={(pickupDate, pickupTime) => {
+                  if (!dateTimeNotInPast(pickupDate, pickupTime)) {
+                    setError("Datums un laiks nevar būt senāks par pašreizējo laiku.");
+                    return;
+                  }
+                  setError("");
                   setForm((current) => ({
                     ...current,
                     pickup_date: pickupDate,
@@ -1365,16 +1402,30 @@ export default function RequestForm({
                 date={form.dropoff_date}
                 time={form.dropoff_time}
                 min={
-                  form.pickup_date
-                    ? `${form.pickup_date}T${form.pickup_time || "00:00"}`
-                    : undefined
+                  dropoffMinimum()
                 }
-                onChange={(dropoffDate, dropoffTime) =>
+                onChange={(dropoffDate, dropoffTime) => {
+                  if (!dateTimeNotInPast(dropoffDate, dropoffTime)) {
+                    setError("Datums un laiks nevar būt senāks par pašreizējo laiku.");
+                    return;
+                  }
+                  if (
+                    form.pickup_date &&
+                    (dropoffDate < form.pickup_date ||
+                      (dropoffDate === form.pickup_date &&
+                        form.pickup_time &&
+                        dropoffTime &&
+                        dropoffTime < form.pickup_time))
+                  ) {
+                    setError("Izkraušanas datums un laiks nevar būt agrāks par uzkraušanu.");
+                    return;
+                  }
+                  setError("");
                   update({
                     dropoff_date: dropoffDate,
                     dropoff_time: dropoffTime,
-                  })
-                }
+                  });
+                }}
               />
               <label>
                 <FieldLabel>Piezīmes par izkraušanu</FieldLabel>
