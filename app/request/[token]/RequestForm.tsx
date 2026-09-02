@@ -948,21 +948,30 @@ export default function RequestForm({
   };
 
   const useSenderAsRecipient = () => {
-    setRecipientSameAsSender(true);
-    setRecipientOpen(false);
+    setForm((current) => ({
+      ...current,
+      recipient_type: current.sender_type,
+      recipient_first_name: current.sender_first_name,
+      recipient_last_name: current.sender_last_name,
+      recipient_company_name: current.sender_company_name,
+      recipient_registration_number: current.sender_registration_number,
+      recipient_phone_code: current.sender_phone_code,
+      recipient_phone: current.sender_phone,
+    }));
+    setRecipientSameAsSender(false);
   };
 
   const editRecipient = () => {
     if (recipientSameAsSender) {
       setForm((current) => ({
         ...current,
-        recipient_type: current.sender_type,
-        recipient_first_name: current.sender_first_name,
-        recipient_last_name: current.sender_last_name,
-        recipient_company_name: current.sender_company_name,
-        recipient_registration_number: current.sender_registration_number,
-        recipient_phone_code: current.sender_phone_code,
-        recipient_phone: current.sender_phone,
+        recipient_type: "private",
+        recipient_first_name: "",
+        recipient_last_name: "",
+        recipient_company_name: "",
+        recipient_registration_number: "",
+        recipient_phone_code: "+371",
+        recipient_phone: "",
       }));
     }
     setRecipientSameAsSender(false);
