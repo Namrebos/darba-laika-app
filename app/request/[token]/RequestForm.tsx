@@ -46,9 +46,20 @@ type Partner = {
   company_name: string | null;
   registration_number: string | null;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
+  contact_name: string | null;
   phone: string;
   email: string | null;
+  partner_contacts: Array<{
+    name: string;
+    phone: string;
+    sort_order: number;
+  }>;
 };
+
+const partnerSelect =
+  "id, display_name, partner_type, first_name, last_name, company_name, registration_number, address, latitude, longitude, contact_name, phone, email, partner_contacts(name, phone, sort_order)";
 
 type FormState = {
   sender_type: PartyType;
@@ -676,7 +687,7 @@ export default function RequestForm({
       if (isAdmin) {
         const { data: partnerRows } = await supabase
           .from("partners")
-          .select("id, display_name, partner_type, first_name, last_name, company_name, registration_number, address, phone, email")
+          .select(partnerSelect)
           .order("display_name");
         setPartners((partnerRows || []) as Partner[]);
       }
@@ -726,7 +737,11 @@ export default function RequestForm({
     setPartnerMessage("");
     const partner = partners.find((item) => String(item.id) === partnerId);
     if (!partner) return;
-    const compactPhone = partner.phone.replace(/\D/g, "");
+    const primaryContact = [...(partner.partner_contacts || [])].sort(
+      (a, b) => a.sort_order - b.sort_order,
+    )[0];
+    const contactPhone = primaryContact?.phone || partner.phone;
+    const compactPhone = contactPhone.replace(/\D/g, "");
     const matchedCode = countryCodes.find(([code]) =>
       compactPhone.startsWith(code.slice(1)),
     )?.[0] || "+371";
@@ -742,7 +757,23 @@ export default function RequestForm({
       sender_phone: phoneNumber,
       sender_address: partner.address,
       sender_email: partner.email || "",
+      pickup_address: partner.address,
+      pickup_contact_name:
+        primaryContact?.name || partner.contact_name || partner.display_name,
+      pickup_contact_phone_code: matchedCode,
+      pickup_contact_phone: phoneNumber,
     }));
+    if (
+      typeof partner.latitude === "number" &&
+      typeof partner.longitude === "number"
+    ) {
+      const point = { lat: partner.latitude, lng: partner.longitude };
+      setPickupPoint(point);
+      setPickupFocus(point);
+    } else {
+      setPickupPoint(null);
+      setPickupFocus(null);
+    }
   };
 
   const addSenderToPartners = async () => {
@@ -804,9 +835,7 @@ export default function RequestForm({
       return;
     }
 
-    let duplicateQuery = supabase.from("partners").select(
-      "id, display_name, partner_type, first_name, last_name, company_name, registration_number, address, phone, email",
-    );
+    let duplicateQuery = supabase.from("partners").select(partnerSelect);
     duplicateQuery = form.sender_type === "company"
       ? duplicateQuery.eq("registration_number", registrationNumber)
       : duplicateQuery
@@ -853,7 +882,7 @@ export default function RequestForm({
         updated_at: new Date().toISOString(),
       })
       .select(
-        "id, display_name, partner_type, first_name, last_name, company_name, registration_number, address, phone, email",
+        partnerSelect,
       )
       .single();
     if (saveError || !savedPartner) {
@@ -1203,7 +1232,7 @@ export default function RequestForm({
         </div>
         {internal && (
           <div className="absolute right-0 top-0 flex gap-2">
-          {sourceRequestId && <button type="button" onClick={reverseRoute} aria-label="Apgriezt maršrutu" title="Apgriezt maršrutu" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm"><Repeat2 size={23}/></button>}
+          <button type="button" onClick={reverseRoute} aria-label="Apgriezt maršrutu" title="Apgriezt maršrutu" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm"><Repeat2 size={23}/></button>
           <Link
             href="/planned-tasks"
             aria-label="Aizvērt formu bez saglabāšanas"
