@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarClock,
   ExternalLink,
@@ -11,6 +11,7 @@ import {
   Phone,
   Save,
   Repeat2,
+  UserPlus,
   X,
 } from "lucide-react";
 import AddressField from "@/app/components/AddressField";
@@ -27,6 +28,8 @@ type TransportRequest = {
   sender_last_name: string | null;
   sender_company_name: string | null;
   sender_registration_number: string | null;
+  sender_address: string | null;
+  sender_email: string | null;
   sender_phone: string;
   recipient_type: "private" | "company";
   recipient_first_name: string | null;
@@ -58,6 +61,15 @@ type RequestImage = {
   id: number;
   fileName: string;
   url: string;
+};
+
+type PartnerSummary = {
+  id: number;
+  partner_type: "private" | "company";
+  first_name: string | null;
+  last_name: string | null;
+  company_name: string | null;
+  registration_number: string | null;
 };
 
 function NavigationMenu({ lat, lng }: { lat: number; lng: number }) {
@@ -507,6 +519,9 @@ export default function TransportRequestModal({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [cargoTypes, setCargoTypes] = useState<string[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [partners, setPartners] = useState<PartnerSummary[]>([]);
+  const [partnerSaving, setPartnerSaving] = useState(false);
 
   useEffect(() => {
     if (!requestId) return;
@@ -536,6 +551,50 @@ export default function TransportRequestModal({
   useEffect(() => {
     supabase.from("cargo_types").select("name").order("name").then(({ data }) => setCargoTypes((data || []).map((item) => item.name)));
   }, []);
+
+  useEffect(() => {
+    if (!editable) return;
+    async function loadPartnerAccess() {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user.id)
+        .single();
+      if (profile?.role !== "admin") return;
+      setIsAdmin(true);
+      const { data } = await supabase
+        .from("partners")
+        .select("id, partner_type, first_name, last_name, company_name, registration_number");
+      setPartners((data || []) as PartnerSummary[]);
+    }
+    void loadPartnerAccess();
+  }, [editable, requestId]);
+
+  const senderIsPartner = useMemo(() => {
+    if (!transportRequest) return false;
+    const normalize = (value: string | null | undefined) =>
+      String(value || "").trim().toLocaleLowerCase("lv");
+    if (transportRequest.sender_type === "company") {
+      const registration = normalize(transportRequest.sender_registration_number);
+      const name = normalize(transportRequest.sender_company_name);
+      return partners.some((partner) =>
+        partner.partner_type === "company" &&
+        (registration
+          ? normalize(partner.registration_number) === registration
+          : Boolean(name) && normalize(partner.company_name) === name),
+      );
+    }
+    const firstName = normalize(transportRequest.sender_first_name);
+    const lastName = normalize(transportRequest.sender_last_name);
+    return partners.some((partner) =>
+      partner.partner_type === "private" &&
+      Boolean(firstName) &&
+      normalize(partner.first_name) === firstName &&
+      normalize(partner.last_name) === lastName,
+    );
+  }, [partners, transportRequest]);
 
   const updateRequest = useCallback((changes: Partial<TransportRequest>) => {
     setTransportRequest((current) => current ? { ...current, ...changes } : current);
@@ -573,6 +632,98 @@ export default function TransportRequestModal({
     setTransportRequest(result.request as TransportRequest);
     setMessage("Pieteikuma izmaiņas saglabātas.");
     onSaved?.();
+  }
+
+  async function addSenderToPartners() {
+    if (!transportRequest || senderIsPartner) return;
+    const displayName = transportRequest.sender_type === "company"
+      ? String(transportRequest.sender_company_name || "").trim()
+      : [transportRequest.sender_first_name, transportRequest.sender_last_name]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+    const address = String(transportRequest.sender_address || "").trim();
+    const registrationNumber = String(
+      transportRequest.sender_registration_number || "",
+    ).trim();
+    const validPhone = /^\+[1-9]\d{7,14}$/.test(
+      transportRequest.sender_phone.replace(/[\s()-]/g, ""),
+    );
+    if (
+      !displayName ||
+      !address ||
+      !validPhone ||
+      (transportRequest.sender_type === "company" && !registrationNumber)
+    ) {
+      setError("Lai pievienotu partneriem, aizpildi nosaukumu, rekvizītus, adresi un korektu tālruni.");
+      return;
+    }
+
+    setPartnerSaving(true);
+    setError("");
+    setMessage("");
+    const normalizeAddress = (value: string) =>
+      value.trim().toLocaleLowerCase("lv").replace(/\s+/g, " ");
+    let point = normalizeAddress(address) === normalizeAddress(transportRequest.pickup_address || "")
+      ? { lat: transportRequest.pickup_lat, lng: transportRequest.pickup_lng }
+      : normalizeAddress(address) === normalizeAddress(transportRequest.dropoff_address || "")
+        ? { lat: transportRequest.dropoff_lat, lng: transportRequest.dropoff_lng }
+        : null;
+    if (!point) {
+      try {
+        const response = await fetch(`/api/geocode?q=${encodeURIComponent(address)}`);
+        const result = (await response.json()) as { results?: Array<{ lat: number; lng: number }> };
+        point = response.ok ? result.results?.[0] || null : null;
+      } catch {
+        point = null;
+      }
+    }
+    if (!point) {
+      setPartnerSaving(false);
+      setError("Partnera adresei neizdevās noteikt kartes punktu.");
+      return;
+    }
+
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      setPartnerSaving(false);
+      setError("Sesija nav derīga.");
+      return;
+    }
+    const { data: partner, error: partnerError } = await supabase
+      .from("partners")
+      .insert({
+        display_name: displayName,
+        partner_type: transportRequest.sender_type,
+        first_name: transportRequest.sender_type === "private" ? transportRequest.sender_first_name : null,
+        last_name: transportRequest.sender_type === "private" ? transportRequest.sender_last_name : null,
+        company_name: transportRequest.sender_type === "company" ? transportRequest.sender_company_name : null,
+        registration_number: transportRequest.sender_type === "company" ? registrationNumber : null,
+        contact_name: displayName,
+        address,
+        latitude: point.lat,
+        longitude: point.lng,
+        phone: transportRequest.sender_phone.replace(/[\s()-]/g, ""),
+        email: transportRequest.sender_email || null,
+        created_by: authData.user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .select("id, partner_type, first_name, last_name, company_name, registration_number")
+      .single();
+    if (partnerError || !partner) {
+      setPartnerSaving(false);
+      setError("Partneri neizdevās saglabāt.");
+      return;
+    }
+    await supabase.from("partner_contacts").insert({
+      partner_id: partner.id,
+      name: displayName,
+      phone: transportRequest.sender_phone.replace(/[\s()-]/g, ""),
+      sort_order: 0,
+    });
+    setPartners((current) => [...current, partner as PartnerSummary]);
+    setPartnerSaving(false);
+    setMessage("Pasūtītājs pievienots partneriem.");
   }
 
   function reverseRoute() {
@@ -630,7 +781,20 @@ export default function TransportRequestModal({
           {transportRequest && editable && (
             <>
               <div className="grid gap-4 md:grid-cols-2">
-                <EditablePartySection title="Pasūtītājs" prefix="sender" request={transportRequest} update={updateRequest} />
+                <div className="space-y-3">
+                  <EditablePartySection title="Pasūtītājs" prefix="sender" request={transportRequest} update={updateRequest} />
+                  {isAdmin && !senderIsPartner && (
+                    <button
+                      type="button"
+                      onClick={() => void addSenderToPartners()}
+                      disabled={partnerSaving}
+                      className="inline-flex items-center gap-2 rounded-xl border border-green-600 px-4 py-2.5 text-sm font-semibold text-green-700 disabled:opacity-50"
+                    >
+                      <UserPlus size={18} />
+                      {partnerSaving ? "Pievieno..." : "Pievienot partneriem"}
+                    </button>
+                  )}
+                </div>
                 <EditablePartySection title="Saņēmējs" prefix="recipient" request={transportRequest} update={updateRequest} />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
