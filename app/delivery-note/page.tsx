@@ -344,7 +344,6 @@ export default function DeliveryNotePage() {
               .filter(Boolean)
               .join(" ");
         setNoteNumber(String(transportRequest.id));
-        setDate(transportRequest.pickup_date);
         setVehicleId(
           requestResult.body.vehicleId
             ? String(requestResult.body.vehicleId)
@@ -380,6 +379,9 @@ export default function DeliveryNotePage() {
         });
         if (noteResponse.ok) {
           const noteBody = await noteResponse.json();
+          if (typeof noteBody.snapshot?.date === "string") {
+            setDate(noteBody.snapshot.date);
+          }
           setSenderSignature(noteBody.signatures?.sender_signature_data || null);
           setRecipientSignature(noteBody.signatures?.recipient_signature_data || null);
         }

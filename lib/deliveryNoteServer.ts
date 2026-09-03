@@ -11,6 +11,18 @@ export function createSigningToken() {
   return randomBytes(32).toString("base64url");
 }
 
+export function dateInRiga(value: Date | string = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Riga",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 export async function getAuthenticatedDeliveryNoteContext(
   accessToken: string,
   requestId: number,
@@ -46,7 +58,7 @@ export async function getAuthenticatedDeliveryNoteContext(
     : [carrier?.first_name, carrier?.last_name].filter(Boolean).join(" ");
   const snapshot = {
     noteNumber: String(request.id),
-    date: request.pickup_date,
+    date: dateInRiga(),
     vehicleNumber,
     carrier: [carrierName, carrier?.registration_number ? `Reģ. Nr. ${carrier.registration_number}` : "", carrier?.address, carrier?.email].filter(Boolean).join("\n"),
     sender: [senderName, request.sender_registration_number ? `Reģ. Nr. ${request.sender_registration_number}` : "", request.sender_address].filter(Boolean).join("\n"),
@@ -57,4 +69,3 @@ export async function getAuthenticatedDeliveryNoteContext(
   };
   return { admin, user: authData.user, snapshot } as const;
 }
-

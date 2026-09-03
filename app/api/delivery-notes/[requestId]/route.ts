@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSigningToken, getAuthenticatedDeliveryNoteContext, hashSigningToken, type SignerRole } from "@/lib/deliveryNoteServer";
+import { createSigningToken, dateInRiga, getAuthenticatedDeliveryNoteContext, hashSigningToken, type SignerRole } from "@/lib/deliveryNoteServer";
 
 function bearer(request: NextRequest) {
   const value = request.headers.get("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : "";
+}
+
+function snapshotDate(value: unknown) {
+  if (!value || typeof value !== "object" || !("date" in value)) return null;
+  const date = (value as { date?: unknown }).date;
+  return typeof date === "string" ? date : null;
+}
+
+function createdDate(value: unknown) {
+  return typeof value === "string" ? dateInRiga(value) : null;
 }
 
 async function contextFor(request: NextRequest, params: Promise<{ requestId: string }>) {
@@ -16,8 +26,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const context = await contextFor(request, params);
   if ("error" in context) return NextResponse.json({ error: context.error }, { status: context.status });
   const requestId = Number((await params).requestId);
-  const { data: note } = await context.admin.from("delivery_notes").select("sender_signature_data, sender_signer_name, sender_signed_at, recipient_signature_data, recipient_signer_name, recipient_signed_at").eq("transport_request_id", requestId).maybeSingle();
-  return NextResponse.json({ snapshot: context.snapshot, signatures: note || null });
+  const { data: existing } = await context.admin.from("delivery_notes").select("id, document_snapshot, created_at, sender_signature_data, sender_signer_name, sender_signed_at, recipient_signature_data, recipient_signer_name, recipient_signed_at").eq("transport_request_id", requestId).maybeSingle();
+  const existingDate = snapshotDate(existing?.document_snapshot);
+  const originalCreatedDate = createdDate(existing?.created_at);
+  const savedDate = existingDate
+    ? existingDate
+    : originalCreatedDate
+      ? originalCreatedDate
+      : context.snapshot.date;
+  const snapshot = { ...context.snapshot, date: savedDate };
+  const { data: note, error } = await context.admin.from("delivery_notes").upsert({
+    transport_request_id: requestId,
+    created_by: context.user.id,
+    document_snapshot: snapshot,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "transport_request_id" }).select("sender_signature_data, sender_signer_name, sender_signed_at, recipient_signature_data, recipient_signer_name, recipient_signed_at").single();
+  if (error) return NextResponse.json({ error: "Pavadzīmi neizdevās sagatavot." }, { status: 400 });
+  return NextResponse.json({ snapshot, signatures: note || null });
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ requestId: string }> }) {
@@ -26,10 +51,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const requestId = Number((await params).requestId);
   const body = (await request.json()) as { action?: string; signerRole?: SignerRole; signatureData?: string; signerName?: string };
 
+  const { data: existing } = await context.admin.from("delivery_notes").select("document_snapshot, created_at").eq("transport_request_id", requestId).maybeSingle();
+  const existingDate = snapshotDate(existing?.document_snapshot);
+  const originalCreatedDate = createdDate(existing?.created_at);
+  const savedDate = existingDate
+    ? existingDate
+    : originalCreatedDate
+      ? originalCreatedDate
+      : context.snapshot.date;
+  const snapshot = { ...context.snapshot, date: savedDate };
+
   const { data: note, error: noteError } = await context.admin.from("delivery_notes").upsert({
     transport_request_id: requestId,
     created_by: context.user.id,
-    document_snapshot: context.snapshot,
+    document_snapshot: snapshot,
     updated_at: new Date().toISOString(),
   }, { onConflict: "transport_request_id" }).select("id").single();
   if (noteError || !note || typeof note.id !== "string") return NextResponse.json({ error: "Pavadzīmi neizdevās sagatavot." }, { status: 400 });
