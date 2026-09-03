@@ -29,6 +29,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { data: existing } = await context.admin.from("delivery_notes").select("id, document_snapshot, created_at, sender_signature_data, sender_signer_name, sender_signed_at, recipient_signature_data, recipient_signer_name, recipient_signed_at").eq("transport_request_id", requestId).maybeSingle();
   const existingDate = snapshotDate(existing?.document_snapshot);
   const originalCreatedDate = createdDate(existing?.created_at);
+  if (context.taskStatus === "completed" && existing?.document_snapshot) {
+    return NextResponse.json({
+      snapshot: existing.document_snapshot,
+      signatures: existing,
+    });
+  }
   const savedDate = existingDate
     ? existingDate
     : originalCreatedDate
@@ -59,7 +65,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     : originalCreatedDate
       ? originalCreatedDate
       : context.snapshot.date;
-  const snapshot = { ...context.snapshot, date: savedDate };
+  const snapshot = context.taskStatus === "completed" && existing?.document_snapshot
+    ? existing.document_snapshot
+    : { ...context.snapshot, date: savedDate };
 
   const { data: note, error: noteError } = await context.admin.from("delivery_notes").upsert({
     transport_request_id: requestId,

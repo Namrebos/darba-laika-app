@@ -34,7 +34,7 @@ export async function getAuthenticatedDeliveryNoteContext(
 
   const [{ data: profile }, { data: task }, { data: request }, { data: carrier }] = await Promise.all([
     admin.from("profiles").select("role, can_access_planned_tasks, can_access_workday").eq("id", authData.user.id).single(),
-    admin.from("planned_tasks").select("assignee_id, created_by, vehicle_id").eq("transport_request_id", requestId).maybeSingle(),
+    admin.from("planned_tasks").select("assignee_id, created_by, vehicle_id, status").eq("transport_request_id", requestId).maybeSingle(),
     admin.from("transport_requests").select("*").eq("id", requestId).maybeSingle(),
     admin.from("carrier_settings").select("partner_type, first_name, last_name, company_name, registration_number, address, email").eq("id", "default").maybeSingle(),
   ]);
@@ -67,5 +67,5 @@ export async function getAuthenticatedDeliveryNoteContext(
     destination: request.dropoff_address || "",
     cargo: request.cargo_type || "",
   };
-  return { admin, user: authData.user, snapshot } as const;
+  return { admin, user: authData.user, snapshot, taskStatus: task?.status || null } as const;
 }

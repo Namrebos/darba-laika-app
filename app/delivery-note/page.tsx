@@ -14,12 +14,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-type Vehicle = {
-  id: number;
-  registration_number: string;
-  display_name: string;
-};
-
 type TransportRequest = {
   id: number;
   sender_type: "private" | "company";
@@ -251,14 +245,13 @@ export default function DeliveryNotePage() {
   const router = useRouter();
   const shareMenuRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLElement>(null);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [creatingPdf, setCreatingPdf] = useState(false);
   const [notice, setNotice] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [noteNumber, setNoteNumber] = useState("Tiks piešķirts no kartītes ID");
-  const [vehicleId, setVehicleId] = useState("");
+  const [vehicleNumber, setVehicleNumber] = useState("");
   const [carrier, setCarrier] = useState("");
   const [customer, setCustomer] = useState("");
   const [recipient, setRecipient] = useState("");
@@ -317,7 +310,6 @@ export default function DeliveryNotePage() {
         supabase.from("carrier_settings").select("partner_type, first_name, last_name, company_name, registration_number, address, email").eq("id", "default").maybeSingle(),
         requestPromise,
       ]);
-      setVehicles((data || []) as Vehicle[]);
       if (carrierSettings) {
         const identity = carrierSettings.partner_type === "company"
           ? [carrierSettings.company_name, carrierSettings.registration_number ? `Reģ. Nr. ${carrierSettings.registration_number}` : ""]
@@ -344,10 +336,9 @@ export default function DeliveryNotePage() {
               .filter(Boolean)
               .join(" ");
         setNoteNumber(String(transportRequest.id));
-        setVehicleId(
-          requestResult.body.vehicleId
-            ? String(requestResult.body.vehicleId)
-            : "",
+        setVehicleNumber(
+          (data || []).find((vehicle) => vehicle.id === requestResult.body.vehicleId)
+            ?.registration_number || "",
         );
         setCustomer(
           [
@@ -379,8 +370,17 @@ export default function DeliveryNotePage() {
         });
         if (noteResponse.ok) {
           const noteBody = await noteResponse.json();
-          if (typeof noteBody.snapshot?.date === "string") {
-            setDate(noteBody.snapshot.date);
+          const snapshot = noteBody.snapshot;
+          if (typeof snapshot?.date === "string") setDate(snapshot.date);
+          if (typeof snapshot?.noteNumber === "string") setNoteNumber(snapshot.noteNumber);
+          if (typeof snapshot?.carrier === "string") setCarrier(snapshot.carrier);
+          if (typeof snapshot?.sender === "string") setCustomer(snapshot.sender);
+          if (typeof snapshot?.recipient === "string") setRecipient(snapshot.recipient);
+          if (typeof snapshot?.origin === "string") setOrigin(snapshot.origin);
+          if (typeof snapshot?.destination === "string") setDestination(snapshot.destination);
+          if (typeof snapshot?.cargo === "string") setCargo(snapshot.cargo);
+          if (typeof snapshot?.vehicleNumber === "string") {
+            setVehicleNumber(snapshot.vehicleNumber);
           }
           setSenderSignature(noteBody.signatures?.sender_signature_data || null);
           setRecipientSignature(noteBody.signatures?.recipient_signature_data || null);
@@ -525,9 +525,6 @@ export default function DeliveryNotePage() {
 
   if (loading) return <p className="p-6">Ielādē...</p>;
 
-  const selectedVehicle = vehicles.find(
-    (vehicle) => String(vehicle.id) === vehicleId,
-  );
   const displayDate = date
     ? new Intl.DateTimeFormat("lv-LV").format(new Date(`${date}T00:00:00`))
     : "Nav norādīts";
@@ -624,7 +621,7 @@ export default function DeliveryNotePage() {
             <div className="text-sm">
               <p className="font-semibold">Transportlīdzekļa VNZ</p>
               <p className="mt-1 text-base text-slate-800">
-                {selectedVehicle?.registration_number || "Nav norādīts"}
+                {vehicleNumber || "Nav norādīts"}
               </p>
             </div>
           </div>

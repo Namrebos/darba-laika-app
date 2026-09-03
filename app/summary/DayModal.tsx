@@ -512,10 +512,8 @@ export default function DayModal({
       badgeText: undefined,
       transportRequestId: null,
     });
-    if (isAdmin) {
-      const { data } = await supabase.from("planned_tasks").select("transport_request_id").eq("task_log_id", task.id).not("transport_request_id", "is", null).maybeSingle();
-      if (data?.transport_request_id) setSelectedTask((current) => current?.id === task.id ? { ...current, transportRequestId: data.transport_request_id } : current);
-    }
+    const { data } = await supabase.from("planned_tasks").select("transport_request_id").eq("task_log_id", task.id).not("transport_request_id", "is", null).maybeSingle();
+    if (data?.transport_request_id) setSelectedTask((current) => current?.id === task.id ? { ...current, transportRequestId: data.transport_request_id } : current);
   };
 
   async function repeatTrip(requestId: number) {
@@ -829,6 +827,7 @@ export default function DayModal({
                 else setSelectedTask(null);
               }}
               badgeText={selectedTask.badgeText}
+              onOpenDeliveryNote={selectedTask.transportRequestId ? () => window.open(`/delivery-note?requestId=${selectedTask.transportRequestId}`, "_blank", "noopener,noreferrer") : undefined}
               onRepeatTrip={selectedTask.transportRequestId ? () => void repeatTrip(selectedTask.transportRequestId!) : undefined}
             />
           </div>

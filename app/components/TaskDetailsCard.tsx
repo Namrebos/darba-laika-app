@@ -1,6 +1,6 @@
 'use client'
 
-import { AlarmClockCheck, Circle } from 'lucide-react'
+import { AlarmClockCheck, Circle, FileText } from 'lucide-react'
 import ImageThumbnailGrid from '@/app/components/ImageThumbnailGrid'
 
 type TimerItem = {
@@ -27,6 +27,7 @@ type Props = {
   onClose: () => void
   badgeText?: string
   onRepeatTrip?: () => void
+  onOpenDeliveryNote?: () => void
 }
 
 export default function TaskDetailsCard({
@@ -40,6 +41,7 @@ export default function TaskDetailsCard({
   onClose,
   badgeText,
   onRepeatTrip,
+  onOpenDeliveryNote,
 }: Props) {
   return (
     <div className="border p-4 rounded bg-gray-100 dark:bg-zinc-800 space-y-4">
@@ -118,7 +120,10 @@ export default function TaskDetailsCard({
 
       <div className="flex flex-wrap justify-between gap-2">
         <button className="text-sm text-gray-600 underline" onClick={onClose}>Aizvērt</button>
-        {onRepeatTrip && <button type="button" onClick={onRepeatTrip} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">Atkārtot braucienu</button>}
+        <div className="flex flex-wrap gap-2">
+          {onOpenDeliveryNote && <button type="button" onClick={onOpenDeliveryNote} className="inline-flex items-center gap-2 rounded-lg border border-blue-500 px-3 py-2 text-sm font-semibold text-blue-600 dark:text-blue-300"><FileText size={16} />Pavadzīme</button>}
+          {onRepeatTrip && <button type="button" onClick={onRepeatTrip} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">Atkārtot braucienu</button>}
+        </div>
       </div>
     </div>
   )
