@@ -1067,6 +1067,13 @@ export default function RequestForm({
 
   const stepValid = (targetStep: number): boolean => {
     if (targetStep === 1) {
+      if (isPartnerRequest) {
+        return Boolean(
+          form.cargo_type === "Cits"
+            ? customCargo.trim()
+            : form.cargo_type.trim(),
+        );
+      }
       return Boolean(
         identityComplete("sender") &&
           isValidPhone(form.sender_phone_code, form.sender_phone) &&
@@ -1503,6 +1510,8 @@ export default function RequestForm({
         </div>
 
         <div className={`order-1 space-y-4 md:col-span-2 ${sectionClass(1)}`}>
+          {!isPartnerRequest && (
+            <>
           <FormCard title="Pasūtītājs">
             {internalIsAdmin && (
               <div className={newCustomerOpen ? "mb-4 grid gap-3 sm:grid-cols-2" : "grid gap-3 sm:grid-cols-2"}>
@@ -1604,7 +1613,9 @@ export default function RequestForm({
               </div>
             )}
           </section>
-          <FormCard title="Kas jāved">
+            </>
+          )}
+          <FormCard title={isPartnerRequest ? "Krava" : "Kas jāved"}>
             <label>
               <FieldLabel required>Kravas veids</FieldLabel>
               {form.cargo_type === "Cits" ? (
@@ -1645,9 +1656,23 @@ export default function RequestForm({
                 </select>
               )}
             </label>
+            {isPartnerRequest && (
+              <label className="mt-4 block">
+                <FieldLabel>Papildu piezīmes</FieldLabel>
+                <textarea
+                  value={form.additional_notes}
+                  onChange={(event) =>
+                    update({ additional_notes: event.target.value })
+                  }
+                  className="form-input min-h-36 resize-y"
+                  maxLength={500}
+                />
+              </label>
+            )}
           </FormCard>
 
           <div className="grid gap-4 md:grid-cols-2">
+            {!isPartnerRequest && (
             <FormCard title="Papildinformācija">
               <label>
                 <FieldLabel>Papildu piezīmes</FieldLabel>
@@ -1661,6 +1686,7 @@ export default function RequestForm({
                 />
               </label>
             </FormCard>
+            )}
 
             <FormCard title="Attēli">
               <div className="grid grid-cols-2 gap-2">
