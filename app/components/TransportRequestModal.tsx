@@ -12,7 +12,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { SiGooglemaps, SiWaze } from "react-icons/si";
+import { SiWaze } from "react-icons/si";
 import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -78,6 +78,26 @@ type PartnerSummary = {
   registration_number: string | null;
 };
 
+function GoogleMapsIcon({ size = 25 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <defs>
+        <clipPath id="google-maps-pin">
+          <path d="M12 1.5a7.25 7.25 0 0 0-7.25 7.25C4.75 14.2 12 22.5 12 22.5s7.25-8.3 7.25-13.75A7.25 7.25 0 0 0 12 1.5Z" />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#google-maps-pin)">
+        <path fill="#34A853" d="M2 0h10v24H2z" />
+        <path fill="#FBBC04" d="m12 7 10-7v24H12z" />
+        <path fill="#EA4335" d="M12 0h10v10H12z" />
+        <path fill="#4285F4" d="m12 10 10 2v12H12z" />
+      </g>
+      <circle cx="12" cy="8.8" r="3.15" fill="white" />
+      <circle cx="12" cy="8.8" r="1.75" fill="#4285F4" />
+    </svg>
+  );
+}
+
 function NavigationButtons({ lat, lng }: { lat: number; lng: number }) {
   const encodedPoint = encodeURIComponent(`${lat},${lng}`);
 
@@ -91,7 +111,7 @@ function NavigationButtons({ lat, lng }: { lat: number; lng: number }) {
         title="Google Maps"
         className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-[#4285F4] shadow-sm hover:bg-slate-50"
       >
-        <SiGooglemaps size={23} aria-hidden="true" />
+        <GoogleMapsIcon />
       </a>
       <a
         href={`https://waze.com/ul?ll=${encodedPoint}&navigate=yes`}
