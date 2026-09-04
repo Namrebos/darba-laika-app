@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  if (payload.recipient_same_as_sender === true) {
+  if (Boolean(partnerToken) || payload.recipient_same_as_sender === true) {
     safePayload.recipient_type = safePayload.sender_type;
     safePayload.recipient_first_name = safePayload.sender_first_name;
     safePayload.recipient_last_name = safePayload.sender_last_name;
