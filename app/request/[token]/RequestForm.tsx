@@ -1260,6 +1260,7 @@ export default function RequestForm({
     const payload = {
       ...form,
       partner_id: selectedPartnerId || null,
+      recipient_same_as_sender: recipientSameAsSender,
       sender_phone: `${form.sender_phone_code}${phoneDigits(form.sender_phone)}`,
       recipient_type: recipientSameAsSender
         ? form.sender_type

@@ -281,6 +281,15 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (payload.recipient_same_as_sender === true) {
+    safePayload.recipient_type = safePayload.sender_type;
+    safePayload.recipient_first_name = safePayload.sender_first_name;
+    safePayload.recipient_last_name = safePayload.sender_last_name;
+    safePayload.recipient_company_name = safePayload.sender_company_name;
+    safePayload.recipient_registration_number = safePayload.sender_registration_number;
+    safePayload.recipient_phone = safePayload.sender_phone;
+  }
+
   const { data, error } = await adminClient.rpc("submit_transport_request", {
     target_token_hash: submissionTokenHash,
     payload: safePayload,
