@@ -5,15 +5,14 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarClock,
-  ExternalLink,
   MapPin,
-  Navigation,
   Phone,
   Save,
   Repeat2,
   UserPlus,
   X,
 } from "lucide-react";
+import { SiGooglemaps, SiWaze } from "react-icons/si";
 import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -79,50 +78,31 @@ type PartnerSummary = {
   registration_number: string | null;
 };
 
-function NavigationMenu({ lat, lng }: { lat: number; lng: number }) {
-  const [open, setOpen] = useState(false);
+function NavigationButtons({ lat, lng }: { lat: number; lng: number }) {
   const encodedPoint = encodeURIComponent(`${lat},${lng}`);
-  const options = [
-    {
-      label: "Google Maps",
-      href: `https://www.google.com/maps/dir/?api=1&destination=${encodedPoint}`,
-    },
-    {
-      label: "Waze",
-      href: `https://waze.com/ul?ll=${encodedPoint}&navigate=yes`,
-    },
-    {
-      label: "Apple Maps",
-      href: `https://maps.apple.com/?daddr=${encodedPoint}`,
-    },
-  ];
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+    <div className="flex gap-2">
+      <a
+        href={`https://www.google.com/maps/dir/?api=1&destination=${encodedPoint}`}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Atvērt Google Maps"
+        title="Google Maps"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-[#4285F4] shadow-sm hover:bg-slate-50"
       >
-        <Navigation size={16} />
-        Atvērt navigācijā
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 min-w-44 overflow-hidden rounded-lg border border-zinc-200 bg-white text-slate-950 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
-          {options.map((option) => (
-            <a
-              key={option.label}
-              href={option.href}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            >
-              {option.label}
-              <ExternalLink size={14} />
-            </a>
-          ))}
-        </div>
-      )}
+        <SiGooglemaps size={23} aria-hidden="true" />
+      </a>
+      <a
+        href={`https://waze.com/ul?ll=${encodedPoint}&navigate=yes`}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Atvērt Waze"
+        title="Waze"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-[#33CCFF] shadow-sm hover:bg-slate-50"
+      >
+        <SiWaze size={25} aria-hidden="true" />
+      </a>
     </div>
   );
 }
@@ -290,6 +270,7 @@ function LocationSection({
             readOnly
           />
         </div>
+        <NavigationButtons lat={lat} lng={lng} />
         {(contactName?.trim() || contactPhone?.trim()) && (
           <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
             <ReadonlyField label="Kontaktpersona" value={contactName} />
@@ -311,7 +292,6 @@ function LocationSection({
           <ReadonlyField label="Laiks" value={time?.slice(0, 5) || ""} />
         </div>
         <ReadonlyField label="Piezīmes" value={notes} multiline />
-        <NavigationMenu lat={lat} lng={lng} />
       </div>
     </section>
   );
@@ -538,6 +518,7 @@ function EditableLocationSection({
             markerColor={markerColor}
           />
         </div>
+        <NavigationButtons lat={request[latKey]} lng={request[lngKey]} />
         <EditableDateTime
           label="Datums un laiks"
           date={request[dateKey]}
