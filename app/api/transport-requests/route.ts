@@ -309,6 +309,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Older database versions derived the recipient from the drop-off contact.
+  // Persist the actual recipient sent by the form so delivery notes never use
+  // the contact person in place of the customer/recipient.
+  const { error: recipientUpdateError } = await adminClient
+    .from("transport_requests")
+    .update({
+      recipient_type: safePayload.recipient_type,
+      recipient_first_name: safePayload.recipient_first_name,
+      recipient_last_name: safePayload.recipient_last_name,
+      recipient_company_name: safePayload.recipient_company_name,
+      recipient_registration_number: safePayload.recipient_registration_number,
+      recipient_phone: safePayload.recipient_phone,
+    })
+    .eq("id", submission.request_id);
+  if (recipientUpdateError) {
+    return NextResponse.json(
+      { error: "Brauciens izveidots, bet saņēmēja datus neizdevās saglabāt." },
+      { status: 500 },
+    );
+  }
+
   let skippedImages = 0;
   for (const file of files) {
     const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
