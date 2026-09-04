@@ -1,6 +1,7 @@
 'use client'
 
-import { AlarmClockCheck, Circle, FileText } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { AlarmClockCheck, Circle, FileText, Pencil } from 'lucide-react'
 import ImageThumbnailGrid from '@/app/components/ImageThumbnailGrid'
 
 type TimerItem = {
@@ -28,6 +29,7 @@ type Props = {
   badgeText?: string
   onRepeatTrip?: () => void
   onOpenDeliveryNote?: () => void
+  onSaveNotes?: (notes: string) => Promise<void>
 }
 
 export default function TaskDetailsCard({
@@ -42,7 +44,31 @@ export default function TaskDetailsCard({
   badgeText,
   onRepeatTrip,
   onOpenDeliveryNote,
+  onSaveNotes,
 }: Props) {
+  const [editingNotes, setEditingNotes] = useState(false)
+  const [draftNotes, setDraftNotes] = useState(notes || '')
+  const [savingNotes, setSavingNotes] = useState(false)
+  const [notesError, setNotesError] = useState('')
+
+  useEffect(() => {
+    if (!editingNotes) setDraftNotes(notes || '')
+  }, [editingNotes, notes])
+
+  async function saveNotes() {
+    if (!onSaveNotes || savingNotes) return
+    setSavingNotes(true)
+    setNotesError('')
+    try {
+      await onSaveNotes(draftNotes)
+      setEditingNotes(false)
+    } catch (error) {
+      setNotesError(error instanceof Error ? error.message : 'Piezīmes neizdevās saglabāt.')
+    } finally {
+      setSavingNotes(false)
+    }
+  }
+
   return (
     <div className="border p-4 rounded bg-gray-100 dark:bg-zinc-800 space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -55,10 +81,61 @@ export default function TaskDetailsCard({
         )}
       </div>
 
-      {notes && (
-        <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-          {notes}
-        </p>
+      {editingNotes ? (
+        <div className="space-y-2">
+          <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200">
+            Piezīmes
+          </label>
+          <textarea
+            value={draftNotes}
+            onChange={(event) => setDraftNotes(event.target.value)}
+            maxLength={5000}
+            rows={5}
+            autoFocus
+            className="w-full rounded-lg border border-zinc-300 bg-white p-3 text-sm text-black outline-none focus:border-blue-500 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+          />
+          {notesError && <p className="text-sm text-red-600 dark:text-red-400">{notesError}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDraftNotes(notes || '')
+                setNotesError('')
+                setEditingNotes(false)
+              }}
+              disabled={savingNotes}
+              className="rounded-lg border border-zinc-400 px-3 py-2 text-sm font-semibold text-zinc-700 disabled:opacity-60 dark:border-zinc-600 dark:text-zinc-200"
+            >
+              Atcelt
+            </button>
+            <button
+              type="button"
+              onClick={() => void saveNotes()}
+              disabled={savingNotes}
+              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {savingNotes ? 'Saglabā...' : 'Saglabāt'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {notes ? (
+            <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">{notes}</p>
+          ) : onSaveNotes ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">Nav piezīmju</p>
+          ) : null}
+          {onSaveNotes && (
+            <button
+              type="button"
+              onClick={() => setEditingNotes(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-400 px-3 py-2 text-sm font-semibold text-zinc-700 dark:border-zinc-600 dark:text-zinc-200"
+            >
+              <Pencil size={15} />
+              Labot piezīmes
+            </button>
+          )}
+        </div>
       )}
 
       <p className="text-sm text-gray-600 dark:text-gray-300">{timeRangeText}</p>

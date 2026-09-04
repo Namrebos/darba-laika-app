@@ -89,6 +89,7 @@ type SelectedTask = {
   imageUrls: string[];
   badgeText?: string;
   transportRequestId?: number | null;
+  isClosed: boolean;
 };
 
 function formatHours(hours: number) {
@@ -511,6 +512,7 @@ export default function DayModal({
       imageUrls: imagesByTask[task.id] || [],
       badgeText: undefined,
       transportRequestId: null,
+      isClosed: Boolean(task.end_time),
     });
     const { data } = await supabase.from("planned_tasks").select("transport_request_id").eq("task_log_id", task.id).not("transport_request_id", "is", null).maybeSingle();
     if (data?.transport_request_id) setSelectedTask((current) => current?.id === task.id ? { ...current, transportRequestId: data.transport_request_id } : current);
@@ -518,6 +520,31 @@ export default function DayModal({
 
   async function repeatTrip(requestId: number) {
     window.location.href = `/planned-tasks/new-trip?repeat=${requestId}`;
+  }
+
+  async function saveClosedTaskNotes(taskId: number, notes: string) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) throw new Error("Nederīga sesija.");
+
+    const response = await fetch(`/api/admin/task-logs/${taskId}/notes`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ notes }),
+    });
+    const payload = (await response.json()) as { error?: string; notes?: string };
+    if (!response.ok) throw new Error(payload.error || "Piezīmes neizdevās saglabāt.");
+
+    const savedNotes = payload.notes || "";
+    setTasks((current) =>
+      current.map((task) => (task.id === taskId ? { ...task, note: savedNotes || null } : task)),
+    );
+    setSelectedTask((current) =>
+      current?.id === taskId ? { ...current, notes: savedNotes || null } : current,
+    );
   }
 
   useEffect(() => {
@@ -829,6 +856,7 @@ export default function DayModal({
               badgeText={selectedTask.badgeText}
               onOpenDeliveryNote={selectedTask.transportRequestId ? () => window.open(`/delivery-note?requestId=${selectedTask.transportRequestId}`, "_blank", "noopener,noreferrer") : undefined}
               onRepeatTrip={selectedTask.transportRequestId ? () => void repeatTrip(selectedTask.transportRequestId!) : undefined}
+              onSaveNotes={isAdmin && selectedTask.isClosed ? (notes) => saveClosedTaskNotes(selectedTask.id, notes) : undefined}
             />
           </div>
         </div>
