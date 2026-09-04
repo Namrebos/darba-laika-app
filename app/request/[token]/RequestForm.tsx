@@ -1111,6 +1111,37 @@ export default function RequestForm({
     );
   };
 
+  const validationIssues = (targetStep: number) => {
+    const issues: string[] = [];
+    if (targetStep >= 1) {
+      if (!isPartnerRequest) {
+        if (!identityComplete("sender")) issues.push("pasūtītājs");
+        if (!isValidPhone(form.sender_phone_code, form.sender_phone)) issues.push("pasūtītāja tālrunis");
+        if (!recipientSameAsSender && !identityComplete("recipient")) issues.push("saņēmējs");
+        if (!recipientSameAsSender && !isValidPhone(form.recipient_phone_code, form.recipient_phone)) issues.push("saņēmēja tālrunis");
+      }
+      if (!(form.cargo_type === "Cits" ? customCargo.trim() : form.cargo_type.trim())) issues.push("kravas veids");
+    }
+    if (targetStep >= 2) {
+      if (!form.pickup_contact_name.trim()) issues.push("uzkraušanas kontaktpersona");
+      if (!isValidPhone(form.pickup_contact_phone_code, form.pickup_contact_phone)) issues.push("uzkraušanas kontakttālrunis");
+      if (!form.pickup_address.trim()) issues.push("uzkraušanas adrese");
+      if (!pickupPoint) issues.push("precīzs uzkraušanas punkts kartē");
+      if (!form.pickup_date) issues.push("uzkraušanas datums");
+      else if (!dateTimeNotInPast(form.pickup_date, form.pickup_time)) issues.push("uzkraušanas datums nav nākotnē");
+    }
+    if (targetStep >= 3) {
+      if (!form.dropoff_contact_name.trim()) issues.push("izkraušanas kontaktpersona");
+      if (!isValidPhone(form.dropoff_contact_phone_code, form.dropoff_contact_phone)) issues.push("izkraušanas kontakttālrunis");
+      if (!form.dropoff_address.trim()) issues.push("izkraušanas adrese");
+      if (!dropoffPoint) issues.push("precīzs izkraušanas punkts kartē");
+      if (!form.dropoff_date) issues.push("izkraušanas datums");
+      else if (!dateTimeNotInPast(form.dropoff_date, form.dropoff_time)) issues.push("izkraušanas datums nav nākotnē");
+      if (!dropoffNotBeforePickup()) issues.push("izkraušana nevar būt agrāka par uzkraušanu");
+    }
+    return [...new Set(issues)];
+  };
+
   const moveToStep = (nextStep: number) => {
     setStep(nextStep);
     window.requestAnimationFrame(() => {
@@ -1125,7 +1156,8 @@ export default function RequestForm({
 
   const nextStep = () => {
     if (!stepValid(step)) {
-      setError("Aizpildi obligātos laukus un atzīmē vietu kartē.");
+      const issues = validationIssues(step);
+      setError(issues.length ? `Pārbaudi: ${issues.join(", ")}.` : "Pārbaudi obligātos laukus.");
       return;
     }
     setError("");
@@ -1218,7 +1250,8 @@ export default function RequestForm({
       return;
     }
     if (!pickupPoint || !dropoffPoint || !stepValid(3)) {
-      setError("Aizpildi visus obligātos laukus.");
+      const issues = validationIssues(3);
+      setError(issues.length ? `Pārbaudi: ${issues.join(", ")}.` : "Pārbaudi obligātos laukus.");
       return;
     }
 

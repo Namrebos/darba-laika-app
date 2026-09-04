@@ -38,7 +38,10 @@ function validDropoffOrder(input: Record<string, unknown>) {
   return !pickupTime || !dropoffTime || dropoffTime >= pickupTime;
 }
 
-function validatePayload(input: Record<string, unknown>) {
+function validatePayload(
+  input: Record<string, unknown>,
+  trustedPartnerRequest = false,
+) {
   const senderType = input.sender_type;
   if (!["private", "company"].includes(String(senderType))) return false;
   const recipientType = input.recipient_type;
@@ -55,8 +58,8 @@ function validatePayload(input: Record<string, unknown>) {
   return Boolean(
     senderIdentity &&
       recipientIdentity &&
-      validInternationalPhone(input.sender_phone) &&
-      validInternationalPhone(input.recipient_phone) &&
+      (trustedPartnerRequest || validInternationalPhone(input.sender_phone)) &&
+      (trustedPartnerRequest || validInternationalPhone(input.recipient_phone)) &&
       cleanText(input.pickup_contact_name, 120) &&
       validInternationalPhone(input.pickup_contact_phone) &&
       cleanText(input.dropoff_contact_name, 120) &&
@@ -126,7 +129,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!validatePayload(payload)) {
+  if (!validatePayload(payload, Boolean(partnerToken))) {
     return NextResponse.json(
       { error: "Aizpildi visus obligātos laukus un atzīmē abas vietas kartē." },
       { status: 400 },
@@ -263,7 +266,7 @@ export async function POST(request: NextRequest) {
     safePayload.sender_last_name = partner.partner_type === "private" ? partner.last_name || "" : "";
     safePayload.sender_company_name = partner.partner_type === "company" ? partner.company_name || "" : "";
     safePayload.sender_registration_number = partner.partner_type === "company" ? partner.registration_number || "" : "";
-    safePayload.sender_phone = partner.phone;
+    safePayload.sender_phone = partner.phone || safePayload.sender_phone;
     safePayload.sender_address = partner.address;
     safePayload.sender_email = partner.email || "";
 
