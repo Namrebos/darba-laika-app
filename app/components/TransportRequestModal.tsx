@@ -82,7 +82,7 @@ function NavigationButtons({ lat, lng }: { lat: number; lng: number }) {
   const encodedPoint = encodeURIComponent(`${lat},${lng}`);
 
   return (
-    <div className="flex gap-2">
+    <div className="flex justify-end gap-2">
       <a
         href={`https://www.google.com/maps/dir/?api=1&destination=${encodedPoint}`}
         target="_blank"
