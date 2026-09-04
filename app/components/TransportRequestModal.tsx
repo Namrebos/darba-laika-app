@@ -442,25 +442,31 @@ function EditableDateTime({
   time: string | null;
   onChange: (date: string, time: string) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const value = `${date}T${time?.slice(0, 5) || "09:00"}`;
   return (
     <label className="block">
       <span className="mb-1 block text-sm font-semibold text-slate-800">{label} *</span>
       <div className="relative">
-        <button type="button" onClick={() => { const input = inputRef.current; if (!input) return; if (typeof input.showPicker === "function") input.showPicker(); else { input.focus(); input.click(); } }} className="form-input flex min-h-12 w-full items-center gap-3 bg-white text-left">
+        <div className="form-input flex min-h-12 w-full items-center gap-3 bg-white text-left">
           <CalendarClock size={20} className="text-blue-600" />
           <span>{date}{time ? ` ${time.slice(0, 5)}` : ""}</span>
-        </button>
+        </div>
         <input
-          ref={inputRef}
           type="datetime-local"
           value={value}
+          onClick={(event) => {
+            try {
+              event.currentTarget.showPicker();
+            } catch {
+              // iOS atver sistēmas izvēlni ar pašu lietotāja pieskārienu.
+            }
+          }}
           onChange={(event) => {
             const [nextDate = "", nextTime = ""] = event.currentTarget.value.split("T");
             onChange(nextDate, nextTime);
           }}
-          className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
+          aria-label={label}
+          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
         />
       </div>
     </label>
