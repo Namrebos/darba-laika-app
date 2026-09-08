@@ -177,10 +177,7 @@ export default function RootLayout({
       ) {
         router.replace("/summary");
       }
-      if (
-        (pathname === "/users" || pathname === "/cargo-types" || pathname === "/partners") &&
-        currentRole !== "admin"
-      ) {
+      if (pathname === "/users" && currentRole !== "admin") {
         router.replace("/summary");
       }
     }
