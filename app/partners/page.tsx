@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Building2, Check, Copy, Eye, EyeOff, Link2, Link2Off, Pencil, Plus, RefreshCw, Share2, Trash2, UserRound, X } from "lucide-react";
+import { Building2, Check, Copy, Eye, Link2, Link2Off, Mail, MessageCircle, Pencil, Plus, RefreshCw, Share2, Trash2, UserRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
@@ -49,6 +49,7 @@ export default function PartnersPage() {
   const [message, setMessage] = useState("");
   const [requestLinks, setRequestLinks] = useState<Record<number, PartnerRequestLink>>({});
   const [linkMenuPartnerId, setLinkMenuPartnerId] = useState<number | null>(null);
+  const [shareMenuPartnerId, setShareMenuPartnerId] = useState<number | null>(null);
   const [visibleLinkPartnerId, setVisibleLinkPartnerId] = useState<number | null>(null);
   const [linkBusyPartnerId, setLinkBusyPartnerId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -100,6 +101,18 @@ export default function PartnersPage() {
     }
     void load();
   }, [router]);
+
+  useEffect(() => {
+    if (linkMenuPartnerId === null) return;
+    function closeLinkMenu(event: PointerEvent) {
+      if (!(event.target instanceof Element) || !event.target.closest("[data-partner-link-menu]")) {
+        setLinkMenuPartnerId(null);
+        setShareMenuPartnerId(null);
+      }
+    }
+    document.addEventListener("pointerdown", closeLinkMenu);
+    return () => document.removeEventListener("pointerdown", closeLinkMenu);
+  }, [linkMenuPartnerId]);
 
   useEffect(() => {
     const query = (companySearchField === "registration" ? form.registration_number : form.company_name).trim();
@@ -230,22 +243,18 @@ export default function PartnersPage() {
     setLinkMenuPartnerId(null);
   }
 
-  async function sharePartnerLink(partner: Partner, url: string) {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${partner.display_name} pieteikuma saite`,
-          text: "Aizpildi brauciena pieteikumu:",
-          url,
-        });
-        setLinkMenuPartnerId(null);
-        return;
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-      }
-    }
-    await copyPartnerLink(url);
-    setMessage("Kopīgošana šajā ierīcē nav pieejama — saite nokopēta.");
+  function sharePartnerLinkByEmail(partner: Partner, url: string) {
+    const subject = encodeURIComponent(`${partner.display_name} pieteikuma saite`);
+    const body = encodeURIComponent(`Aizpildi brauciena pieteikumu:\n${url}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    setLinkMenuPartnerId(null);
+    setShareMenuPartnerId(null);
+  }
+
+  function sharePartnerLinkByWhatsApp(url: string) {
+    window.open(`https://wa.me/?text=${encodeURIComponent(`Aizpildi brauciena pieteikumu:\n${url}`)}`, "_blank", "noopener,noreferrer");
+    setLinkMenuPartnerId(null);
+    setShareMenuPartnerId(null);
   }
 
   async function updatePartnerLink(partnerId: number, action: "create" | "rotate" | "deactivate") {
@@ -349,15 +358,19 @@ export default function PartnersPage() {
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><h2 className="font-semibold">Partneri ({partners.length})</h2><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Meklēt partneri" className={`${inputClass} sm:max-w-xs`} /></div>
         {filteredPartners.length === 0 ? <p className="rounded-xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-500 dark:border-zinc-700">Partneri nav atrasti.</p> : filteredPartners.map((partner) => (
           <article key={partner.id} className="flex items-start justify-between gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-            <div className="flex min-w-0 gap-3"><div className="mt-0.5 rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">{partner.partner_type === "company" ? <Building2 size={20} /> : <UserRound size={20} />}</div><div className="min-w-0"><h3 className="font-semibold">{partner.display_name}</h3>{partner.company_name && partner.company_name !== partner.display_name && <p className="text-sm text-zinc-500">{partner.company_name}</p>}{partner.registration_number && <p className="text-sm text-zinc-500">Reģ./PVN: {partner.registration_number}</p>}{partner.contacts.map((contact) => <p key={contact.id ?? `${contact.name}-${contact.phone}`} className="text-sm text-zinc-500">{contact.name}: {contact.phone}</p>)}<p className="text-sm text-zinc-500">{partner.address}</p>{partner.email && <p className="text-sm text-zinc-500">{partner.email}</p>}{requestLinks[partner.id]?.active && visibleLinkPartnerId === partner.id && <div className="mt-3 max-w-xl rounded-lg bg-zinc-100 px-3 py-2 text-sm dark:bg-zinc-800"><span className="block font-medium">Pieteikuma saite</span><a href={requestLinks[partner.id].url} target="_blank" rel="noreferrer" className="block break-all text-blue-600 underline">{requestLinks[partner.id].url}</a></div>}</div></div>
-            <div className="relative flex shrink-0 gap-2">
-              <button type="button" onClick={() => setLinkMenuPartnerId((current) => current === partner.id ? null : partner.id)} className="rounded-lg border border-zinc-300 p-2 text-blue-600 dark:border-zinc-600" aria-label="Pieteikuma saite"><Link2 size={18} /></button>
+            <div className="flex min-w-0 gap-3"><div className="mt-0.5 rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">{partner.partner_type === "company" ? <Building2 size={20} /> : <UserRound size={20} />}</div><div className="min-w-0"><h3 className="font-semibold">{partner.display_name}</h3>{partner.company_name && partner.company_name !== partner.display_name && <p className="text-sm text-zinc-500">{partner.company_name}</p>}{partner.registration_number && <p className="text-sm text-zinc-500">Reģ./PVN: {partner.registration_number}</p>}{partner.contacts.map((contact) => <p key={contact.id ?? `${contact.name}-${contact.phone}`} className="text-sm text-zinc-500">{contact.name}: {contact.phone}</p>)}<p className="text-sm text-zinc-500">{partner.address}</p>{partner.email && <p className="text-sm text-zinc-500">{partner.email}</p>}</div></div>
+            <div className="relative flex shrink-0 gap-2" data-partner-link-menu>
+              <button type="button" onClick={() => { setLinkMenuPartnerId((current) => current === partner.id ? null : partner.id); setShareMenuPartnerId(null); }} className="rounded-lg border border-zinc-300 p-2 text-blue-600 dark:border-zinc-600" aria-label="Pieteikuma saite"><Link2 size={18} /></button>
               <button type="button" onClick={() => editPartner(partner)} className="rounded-lg border border-zinc-300 p-2 dark:border-zinc-600" aria-label="Rediģēt partneri"><Pencil size={18} /></button><button type="button" onClick={() => void deletePartner(partner)} className="rounded-lg border border-red-300 p-2 text-red-600 dark:border-red-800" aria-label="Dzēst partneri"><Trash2 size={18} /></button>
               {linkMenuPartnerId === partner.id && <div className="absolute right-0 top-11 z-30 w-64 space-y-1 rounded-xl border border-zinc-200 bg-white p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
                 {!requestLinks[partner.id]?.active ? <button type="button" disabled={linkBusyPartnerId === partner.id} onClick={() => void updatePartnerLink(partner.id, "create")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"><Link2 size={17} /> Izveidot pieteikuma saiti</button> : <>
-                  <button type="button" onClick={() => void copyPartnerLink(requestLinks[partner.id].url)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Copy size={17} /> Kopēt saiti</button>
-                  <button type="button" onClick={() => void sharePartnerLink(partner, requestLinks[partner.id].url)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Share2 size={17} /> Nosūtīt saiti</button>
-                  <button type="button" onClick={() => { setVisibleLinkPartnerId((current) => current === partner.id ? null : partner.id); setLinkMenuPartnerId(null); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">{visibleLinkPartnerId === partner.id ? <EyeOff size={17} /> : <Eye size={17} />} {visibleLinkPartnerId === partner.id ? "Paslēpt saiti" : "Parādīt pilno saiti"}</button>
+                  <button type="button" onClick={() => setShareMenuPartnerId((current) => current === partner.id ? null : partner.id)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Share2 size={17} /> Dalīties</button>
+                  {shareMenuPartnerId === partner.id && <div className="ml-3 space-y-1 border-l border-zinc-200 pl-2 dark:border-zinc-700">
+                    <button type="button" onClick={() => sharePartnerLinkByWhatsApp(requestLinks[partner.id].url)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><MessageCircle size={17} /> WhatsApp</button>
+                    <button type="button" onClick={() => sharePartnerLinkByEmail(partner, requestLinks[partner.id].url)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Mail size={17} /> E-pasts</button>
+                    <button type="button" onClick={() => void copyPartnerLink(requestLinks[partner.id].url)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Copy size={17} /> Kopēt saiti</button>
+                  </div>}
+                  <button type="button" onClick={() => { setVisibleLinkPartnerId(partner.id); setLinkMenuPartnerId(null); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Eye size={17} /> Parādīt pilno saiti</button>
                   <button type="button" disabled={linkBusyPartnerId === partner.id} onClick={() => void updatePartnerLink(partner.id, "deactivate")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"><Link2Off size={17} /> Deaktivizēt saiti</button>
                   <button type="button" disabled={linkBusyPartnerId === partner.id} onClick={() => void updatePartnerLink(partner.id, "rotate")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"><RefreshCw size={17} /> Izveidot jaunu saiti</button>
                 </>}
@@ -366,6 +379,19 @@ export default function PartnersPage() {
           </article>
         ))}
       </section>
+
+      {visibleLinkPartnerId !== null && requestLinks[visibleLinkPartnerId]?.active && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onPointerDown={(event) => { if (event.target === event.currentTarget) setVisibleLinkPartnerId(null); }}>
+        <div role="dialog" aria-modal="true" aria-labelledby="partner-link-title" className="w-full max-w-lg rounded-xl bg-white p-4 shadow-2xl dark:bg-zinc-900">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 id="partner-link-title" className="font-semibold">Pieteikuma saite</h2>
+            <button type="button" onClick={() => setVisibleLinkPartnerId(null)} className="rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Aizvērt"><X size={20} /></button>
+          </div>
+          <div className="flex items-start gap-2 rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
+            <a href={requestLinks[visibleLinkPartnerId].url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 break-all text-sm text-blue-600 underline">{requestLinks[visibleLinkPartnerId].url}</a>
+            <button type="button" onClick={() => void copyPartnerLink(requestLinks[visibleLinkPartnerId].url)} className="shrink-0 rounded-lg border border-zinc-300 p-2 text-blue-600 dark:border-zinc-600" aria-label="Kopēt saiti" title="Kopēt saiti"><Copy size={18} /></button>
+          </div>
+        </div>
+      </div>}
     </div>
   );
 }
