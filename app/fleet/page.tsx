@@ -46,12 +46,12 @@ export default function FleetPage() {
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role, can_access_planned_tasks")
+        .select("role, can_access_fleet")
         .eq("id", authData.user.id)
         .single();
       if (
         profile?.role !== "admin" &&
-        profile?.can_access_planned_tasks !== true
+        profile?.can_access_fleet !== true
       ) {
         router.replace("/summary");
         return;

@@ -49,6 +49,9 @@ export async function POST(request: NextRequest) {
     can_access_finance: body.can_access_finance === true,
     can_access_calculators: body.can_access_calculators === true,
     can_access_planned_tasks: body.can_access_planned_tasks === true,
+    can_access_fleet: body.can_access_fleet === true,
+    can_access_cargo_types: body.can_access_cargo_types === true,
+    can_access_partners: body.can_access_partners === true,
   };
   const hasAdditionalSection = Object.values(permissions).some(Boolean);
   const role = hasAdditionalSection ? "member" : "viewer";

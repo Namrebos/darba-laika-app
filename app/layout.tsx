@@ -47,6 +47,9 @@ export default function RootLayout({
     can_access_finance: false,
     can_access_calculators: false,
     can_access_planned_tasks: false,
+    can_access_fleet: false,
+    can_access_cargo_types: false,
+    can_access_partners: false,
   });
   const [summaryUsers, setSummaryUsers] = useState<SummaryUser[]>([]);
   const [selectedSummaryUser, setSelectedSummaryUser] = useState("");
@@ -113,7 +116,10 @@ export default function RootLayout({
           can_access_workday,
           can_access_finance,
           can_access_calculators,
-          can_access_planned_tasks
+          can_access_planned_tasks,
+          can_access_fleet,
+          can_access_cargo_types,
+          can_access_partners
         `)
         .eq("id", authData.user.id)
         .single();
@@ -126,6 +132,9 @@ export default function RootLayout({
         can_access_finance: profile ? profile.can_access_finance === true : cached?.permissions.can_access_finance === true,
         can_access_calculators: profile ? profile.can_access_calculators === true : cached?.permissions.can_access_calculators === true,
         can_access_planned_tasks: profile ? profile.can_access_planned_tasks === true : cached?.permissions.can_access_planned_tasks === true,
+        can_access_fleet: profile ? profile.can_access_fleet === true : cached?.permissions.can_access_fleet === true,
+        can_access_cargo_types: profile ? profile.can_access_cargo_types === true : cached?.permissions.can_access_cargo_types === true,
+        can_access_partners: profile ? profile.can_access_partners === true : cached?.permissions.can_access_partners === true,
       };
       if (profile) void saveCachedAccess(authData.user.id, { role: currentRole, permissions: currentPermissions });
       setRole(currentRole);
@@ -157,7 +166,9 @@ export default function RootLayout({
         "/finance": "can_access_finance",
         "/calculators": "can_access_calculators",
         "/planned-tasks": "can_access_planned_tasks",
-        "/fleet": "can_access_planned_tasks",
+        "/fleet": "can_access_fleet",
+        "/cargo-types": "can_access_cargo_types",
+        "/partners": "can_access_partners",
       };
       const requiredSection = protectedRoutes[pathname];
       if (
@@ -234,15 +245,19 @@ export default function RootLayout({
       : []),
     ...(currentAccess &&
     hasSectionAccess(currentAccess, "can_access_planned_tasks")
-      ? [
-          { href: "/planned-tasks", label: "Plānotie uzdevumi" },
-          { href: "/fleet", label: "Autoparks" },
-        ]
+      ? [{ href: "/planned-tasks", label: "Plānotie uzdevumi" }]
+      : []),
+    ...(currentAccess && hasSectionAccess(currentAccess, "can_access_fleet")
+      ? [{ href: "/fleet", label: "Autoparks" }]
+      : []),
+    ...(currentAccess && hasSectionAccess(currentAccess, "can_access_cargo_types")
+      ? [{ href: "/cargo-types", label: "Kravas veidi" }]
+      : []),
+    ...(currentAccess && hasSectionAccess(currentAccess, "can_access_partners")
+      ? [{ href: "/partners", label: "Partneri" }]
       : []),
     ...(role === "admin"
       ? [
-          { href: "/cargo-types", label: "Kravas veidi" },
-          { href: "/partners", label: "Partneri" },
           { href: "/users", label: "Lietotāji" },
         ]
       : []),

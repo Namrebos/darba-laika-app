@@ -40,10 +40,10 @@ export default function CargoTypesPage() {
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, can_access_cargo_types")
         .eq("id", authData.user.id)
         .single();
-      if (profile?.role !== "admin") {
+      if (profile?.role !== "admin" && profile?.can_access_cargo_types !== true) {
         router.replace("/summary");
         return;
       }

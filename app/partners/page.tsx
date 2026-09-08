@@ -95,8 +95,8 @@ export default function PartnersPage() {
     async function load() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace("/login"); return; }
-      const { data: profile } = await supabase.from("profiles").select("role").eq("id", authData.user.id).single();
-      if (profile?.role !== "admin") { router.replace("/summary"); return; }
+      const { data: profile } = await supabase.from("profiles").select("role, can_access_partners").eq("id", authData.user.id).single();
+      if (profile?.role !== "admin" && profile?.can_access_partners !== true) { router.replace("/summary"); return; }
       await Promise.all([loadPartners(), loadPartnerLinks()]);
       setLoading(false);
     }

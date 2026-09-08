@@ -2,19 +2,19 @@ import { createHash, randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
 
-async function requireAdmin(request: NextRequest) {
+async function requirePartnerAccess(request: NextRequest) {
   const client = getSupabaseAdmin();
   const bearer = request.headers.get("authorization");
   const token = bearer?.startsWith("Bearer ") ? bearer.slice(7) : "";
   if (!client || !token) return null;
   const { data: auth } = await client.auth.getUser(token);
   if (!auth.user) return null;
-  const { data: profile } = await client.from("profiles").select("role").eq("id", auth.user.id).single();
-  return profile?.role === "admin" ? { client, userId: auth.user.id } : null;
+  const { data: profile } = await client.from("profiles").select("role, can_access_partners").eq("id", auth.user.id).single();
+  return profile?.role === "admin" || profile?.can_access_partners === true ? { client, userId: auth.user.id } : null;
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAdmin(request);
+  const auth = await requirePartnerAccess(request);
   if (!auth) return NextResponse.json({ error: "Nav pieejas." }, { status: 403 });
   const { data } = await auth.client.from("partner_request_links").select("partner_id, token_value, active");
   const origin = request.nextUrl.origin.replace(/\/$/, "");
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin(request);
+  const auth = await requirePartnerAccess(request);
   if (!auth) return NextResponse.json({ error: "Nav pieejas." }, { status: 403 });
   const body = await request.json() as { partnerId?: number; action?: string };
   const partnerId = Number(body.partnerId);

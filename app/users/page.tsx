@@ -16,6 +16,9 @@ const sectionOptions: { key: SectionAccessKey; label: string }[] = [
   { key: "can_access_finance", label: "Finanses" },
   { key: "can_access_calculators", label: "Kalkulatori" },
   { key: "can_access_planned_tasks", label: "Plānotie uzdevumi" },
+  { key: "can_access_fleet", label: "Autoparks" },
+  { key: "can_access_cargo_types", label: "Kravas veidi" },
+  { key: "can_access_partners", label: "Partneri" },
 ];
 
 const emptyPermissions: SectionPermissions = {
@@ -23,6 +26,9 @@ const emptyPermissions: SectionPermissions = {
   can_access_finance: false,
   can_access_calculators: false,
   can_access_planned_tasks: false,
+  can_access_fleet: false,
+  can_access_cargo_types: false,
+  can_access_partners: false,
 };
 
 export default function UsersPage() {
@@ -72,7 +78,10 @@ export default function UsersPage() {
             can_access_workday,
             can_access_finance,
             can_access_calculators,
-            can_access_planned_tasks
+            can_access_planned_tasks,
+            can_access_fleet,
+            can_access_cargo_types,
+            can_access_partners
           `)
           .order("created_at", { ascending: true }),
         supabase.from("summary_access").select("viewer_id, owner_id"),

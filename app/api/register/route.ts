@@ -51,7 +51,10 @@ export async function POST(request: NextRequest) {
       can_access_workday,
       can_access_finance,
       can_access_calculators,
-      can_access_planned_tasks
+      can_access_planned_tasks,
+      can_access_fleet,
+      can_access_cargo_types,
+      can_access_partners
     `)
     .maybeSingle();
 
@@ -97,6 +100,9 @@ export async function POST(request: NextRequest) {
       can_access_finance: invitation.can_access_finance === true,
       can_access_calculators: invitation.can_access_calculators === true,
       can_access_planned_tasks: invitation.can_access_planned_tasks === true,
+      can_access_fleet: invitation.can_access_fleet === true,
+      can_access_cargo_types: invitation.can_access_cargo_types === true,
+      can_access_partners: invitation.can_access_partners === true,
     })
     .eq("id", created.user.id);
 

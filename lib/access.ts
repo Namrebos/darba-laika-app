@@ -6,7 +6,10 @@ export type SectionAccessKey =
   | "can_access_workday"
   | "can_access_finance"
   | "can_access_calculators"
-  | "can_access_planned_tasks";
+  | "can_access_planned_tasks"
+  | "can_access_fleet"
+  | "can_access_cargo_types"
+  | "can_access_partners";
 
 export type SectionPermissions = Record<SectionAccessKey, boolean>;
 
@@ -31,6 +34,9 @@ export function defaultProfile(user: User): AccessProfile {
     can_access_finance: false,
     can_access_calculators: false,
     can_access_planned_tasks: false,
+    can_access_fleet: false,
+    can_access_cargo_types: false,
+    can_access_partners: false,
   };
 }
 
@@ -42,7 +48,7 @@ export function hasSectionAccess(
 }
 
 export function homeForProfile(
-  profile: Pick<AccessProfile, "role" | SectionAccessKey>,
+  profile: Pick<AccessProfile, "role" | "can_access_workday">,
 ) {
   return hasSectionAccess(profile, "can_access_workday")
     ? "/workday"
