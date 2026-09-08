@@ -61,6 +61,7 @@ export default function RootLayout({
     pathname === "/register" ||
     pathname === "/reset-password" ||
     pathname.startsWith("/request/") ||
+    pathname.startsWith("/partner-request/") ||
     isPublicSigningPage;
 
   useEffect(() => {
