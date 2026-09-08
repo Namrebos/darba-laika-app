@@ -1030,6 +1030,7 @@ export default function RequestForm({
   const reverseRoute = () => {
     setForm((current) => ({
       ...current,
+      // Pasūtītāja un saņēmēja rekvizīti paliek nemainīgi — mainās tikai maršruta punkti.
       pickup_address: current.dropoff_address, pickup_notes: current.dropoff_notes,
       dropoff_address: current.pickup_address, dropoff_notes: current.pickup_notes,
       pickup_contact_name: current.dropoff_contact_name, pickup_contact_phone_code: current.dropoff_contact_phone_code, pickup_contact_phone: current.dropoff_contact_phone,
@@ -1386,7 +1387,7 @@ export default function RequestForm({
         </div>
         {(internal || isPartnerRequest) && (
           <div className="absolute right-0 top-0 flex gap-2">
-          <button type="button" onClick={reverseRoute} aria-label="Apgriezt maršrutu" title="Apgriezt maršrutu" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm"><Repeat2 size={23}/></button>
+          <button type="button" onClick={reverseRoute} aria-label="Samainīt uzkraušanas un izkraušanas vietas" title="Samainīt uzkraušanas un izkraušanas vietas" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm"><Repeat2 size={23}/></button>
           {internal && <Link
             href="/planned-tasks"
             aria-label="Aizvērt formu bez saglabāšanas"
