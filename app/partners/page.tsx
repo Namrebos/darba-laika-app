@@ -51,6 +51,7 @@ export default function PartnersPage() {
   const [linkMenuPartnerId, setLinkMenuPartnerId] = useState<number | null>(null);
   const [shareMenuPartnerId, setShareMenuPartnerId] = useState<number | null>(null);
   const [visibleLinkPartnerId, setVisibleLinkPartnerId] = useState<number | null>(null);
+  const [copiedLinkPartnerId, setCopiedLinkPartnerId] = useState<number | null>(null);
   const [linkBusyPartnerId, setLinkBusyPartnerId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [companySuggestions, setCompanySuggestions] = useState<CompanySuggestion[]>([]);
@@ -243,6 +244,12 @@ export default function PartnersPage() {
     setLinkMenuPartnerId(null);
   }
 
+  async function copyVisiblePartnerLink(partnerId: number, url: string) {
+    await navigator.clipboard.writeText(url);
+    setCopiedLinkPartnerId(partnerId);
+    window.setTimeout(() => setCopiedLinkPartnerId((current) => current === partnerId ? null : current), 2200);
+  }
+
   function sharePartnerLinkByEmail(partner: Partner, url: string) {
     const subject = encodeURIComponent(`${partner.display_name} pieteikuma saite`);
     const body = encodeURIComponent(`Aizpildi brauciena pieteikumu:\n${url}`);
@@ -370,7 +377,7 @@ export default function PartnersPage() {
                     <button type="button" onClick={() => sharePartnerLinkByEmail(partner, requestLinks[partner.id].url)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Mail size={17} /> E-pasts</button>
                     <button type="button" onClick={() => void copyPartnerLink(requestLinks[partner.id].url)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Copy size={17} /> Kopēt saiti</button>
                   </div>}
-                  <button type="button" onClick={() => { setVisibleLinkPartnerId(partner.id); setLinkMenuPartnerId(null); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Eye size={17} /> Parādīt pilno saiti</button>
+                  <button type="button" onClick={() => { setCopiedLinkPartnerId(null); setVisibleLinkPartnerId(partner.id); setLinkMenuPartnerId(null); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Eye size={17} /> Parādīt pilno saiti</button>
                   <button type="button" disabled={linkBusyPartnerId === partner.id} onClick={() => void updatePartnerLink(partner.id, "deactivate")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"><Link2Off size={17} /> Deaktivizēt saiti</button>
                   <button type="button" disabled={linkBusyPartnerId === partner.id} onClick={() => void updatePartnerLink(partner.id, "rotate")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"><RefreshCw size={17} /> Izveidot jaunu saiti</button>
                 </>}
@@ -388,8 +395,9 @@ export default function PartnersPage() {
           </div>
           <div className="flex items-start gap-2 rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
             <a href={requestLinks[visibleLinkPartnerId].url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 break-all text-sm text-blue-600 underline">{requestLinks[visibleLinkPartnerId].url}</a>
-            <button type="button" onClick={() => void copyPartnerLink(requestLinks[visibleLinkPartnerId].url)} className="shrink-0 rounded-lg border border-zinc-300 p-2 text-blue-600 dark:border-zinc-600" aria-label="Kopēt saiti" title="Kopēt saiti"><Copy size={18} /></button>
+            <button type="button" onClick={() => void copyVisiblePartnerLink(visibleLinkPartnerId, requestLinks[visibleLinkPartnerId].url)} className="shrink-0 rounded-lg border border-zinc-300 p-2 text-blue-600 dark:border-zinc-600" aria-label="Kopēt saiti" title="Kopēt saiti"><Copy size={18} /></button>
           </div>
+          {copiedLinkPartnerId === visibleLinkPartnerId && <p role="status" className="mt-3 text-sm font-medium text-green-600">Saite nokopēta.</p>}
         </div>
       </div>}
     </div>
