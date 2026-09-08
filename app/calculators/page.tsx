@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { calculateWorkHours } from "@/app/summary/utils";
+import {
+  applyWeekdayLunchDeduction,
+  calculateWorkHours,
+} from "@/app/summary/utils";
 import { hasSectionAccess } from "@/lib/access";
 
 type SummaryUser = {
@@ -142,7 +145,11 @@ export default function CalculatorsPage() {
 
     async function loadHours() {
       setLoading(true);
-      const [{ data, error }, { data: workSchedule }] = await Promise.all([
+      const [
+        { data, error },
+        { data: workSchedule },
+        { data: financeSettings },
+      ] = await Promise.all([
         supabase
           .from("work_logs")
           .select("start_time, end_time")
@@ -152,6 +159,11 @@ export default function CalculatorsPage() {
         supabase
           .from("user_work_schedule_settings")
           .select("regular_start, regular_end")
+          .eq("user_id", selectedUserId)
+          .maybeSingle(),
+        supabase
+          .from("user_finance_settings")
+          .select("eight_hour_workday")
           .eq("user_id", selectedUserId)
           .maybeSingle(),
       ]);
@@ -165,11 +177,9 @@ export default function CalculatorsPage() {
       }
 
       const totals = MONTHS.map(() => ({
-        regular: 0,
-        overtime: 0,
         workedDays: new Map<
           string,
-          { dayOfWeek: number; hours: number }
+          { date: Date; baseHours: number; overtimeHours: number }
         >(),
       }));
       const regularStart = workSchedule?.regular_start?.slice(0, 5) || "09:00";
@@ -180,8 +190,9 @@ export default function CalculatorsPage() {
         const month = start.getMonth();
         const dateKey = localDateKey(start);
         const workedDay = totals[month].workedDays.get(dateKey) || {
-          dayOfWeek: start.getDay(),
-          hours: 0,
+          date: start,
+          baseHours: 0,
+          overtimeHours: 0,
         };
         totals[month].workedDays.set(dateKey, workedDay);
 
@@ -194,19 +205,39 @@ export default function CalculatorsPage() {
           regularStart,
           regularEnd,
         );
-        totals[month].regular += calculated.baseHours;
-        totals[month].overtime += calculated.overtimeHours;
-        workedDay.hours += calculated.baseHours + calculated.overtimeHours;
+        workedDay.baseHours += calculated.baseHours;
+        workedDay.overtimeHours += calculated.overtimeHours;
       });
+      const deductLunch = financeSettings?.eight_hour_workday ?? true;
       setHoursByMonth(
-        totals.map((hours) => ({
-          regular: Math.round(hours.regular),
-          overtime: Math.round(hours.overtime),
-          workdays: Array.from(hours.workedDays.values()).filter((day) => {
-            const isWeekday = day.dayOfWeek >= 1 && day.dayOfWeek <= 5;
-            return isWeekday || day.hours >= 4;
-          }).length,
-        })),
+        totals.map((hours) => {
+          const days = Array.from(hours.workedDays.values());
+          const regular = days.reduce(
+            (sum, day) =>
+              sum +
+              applyWeekdayLunchDeduction(
+                day.baseHours,
+                day.date,
+                deductLunch,
+              ),
+            0,
+          );
+          const overtime = days.reduce(
+            (sum, day) => sum + day.overtimeHours,
+            0,
+          );
+
+          return {
+            regular,
+            overtime,
+            workdays: days.filter((day) => {
+              const dayOfWeek = day.date.getDay();
+              const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+              const totalHours = day.baseHours + day.overtimeHours;
+              return isWeekday || totalHours >= 4;
+            }).length,
+          };
+        }),
       );
       setLoading(false);
     }

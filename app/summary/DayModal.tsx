@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
-import { calculateWorkHours } from "./utils";
+import { applyWeekdayLunchDeduction, calculateWorkHours } from "./utils";
 import ImageGalleryModal from "@/app/components/ImageGalleryModal";
 import TaskPreviewCard from "@/app/components/TaskPreviewCard";
 import TaskDetailsCard from "@/app/components/TaskDetailsCard";
@@ -17,6 +17,7 @@ type DayModalProps = {
   isAdmin: boolean;
   regularWorkStart: string;
   regularWorkEnd: string;
+  deductWeekdayLunch: boolean;
   initialTaskId?: number | null;
   initialPlannedTaskId?: number | null;
   onWorkTimeChanged: () => void | Promise<void>;
@@ -136,6 +137,7 @@ export default function DayModal({
   isAdmin,
   regularWorkStart,
   regularWorkEnd,
+  deductWeekdayLunch,
   initialTaskId = null,
   initialPlannedTaskId = null,
   onWorkTimeChanged,
@@ -370,7 +372,14 @@ export default function DayModal({
         )
       : { baseHours: 0, overtimeHours: 0 };
 
-    setHours({ baseHours, overtimeHours });
+    setHours({
+      baseHours: applyWeekdayLunchDeduction(
+        baseHours,
+        new Date(`${date}T12:00:00`),
+        deductWeekdayLunch,
+      ),
+      overtimeHours,
+    });
     if (isAdmin) await loadCorrections();
     setLoading(false);
   }

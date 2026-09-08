@@ -521,6 +521,8 @@ export default function SummaryPage() {
             year={selectedYear}
             month={selectedMonth}
             data={entries}
+            regularWorkStart={regularWorkStart}
+            regularWorkEnd={regularWorkEnd}
             onDayClick={(date) => {
               setSelectedTaskId(null);
               setSelectedDate(date);
@@ -536,6 +538,7 @@ export default function SummaryPage() {
             isAdmin={isAdmin}
             regularWorkStart={regularWorkStart}
             regularWorkEnd={regularWorkEnd}
+            deductWeekdayLunch={eightHourWorkday}
             initialTaskId={selectedTaskId}
             initialPlannedTaskId={selectedPlannedTaskId}
             onWorkTimeChanged={() => loadData(ownerId)}

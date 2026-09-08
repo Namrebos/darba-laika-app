@@ -88,6 +88,13 @@ export default function FinancePage() {
   }, [router]);
 
   async function toggleEightHourWorkday(checked: boolean) {
+    const confirmed = window.confirm(
+      checked
+        ? "Vai ieslēgt 8 stundu darbadienu? Visām darba dienām visā laika periodā tiks atņemta 1 stunda pusdienlaikam."
+        : "Vai izslēgt 8 stundu darbadienu? Visām darba dienām visā laika periodā pusdienlaika stunda turpmāk tiks ieskaitīta pamatstundās.",
+    );
+    if (!confirmed) return;
+
     const previousValue = eightHourWorkday;
     setEightHourWorkday(checked);
     setError("");

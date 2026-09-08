@@ -27,33 +27,61 @@ export function calculateWorkHours(
 
   let baseMinutes = 0;
   let overtimeMinutes = 0;
-  const cur = new Date(start);
+  const cursor = new Date(start);
 
-  while (cur < end) {
-    const minuteOfDay = cur.getHours() * 60 + cur.getMinutes();
-    const day = cur.getDay();
-    const isWeekend = day === 0 || day === 6;
-    const next = new Date(cur.getTime() + 15 * 60 * 1000);
+  while (cursor < end) {
+    const dayStart = new Date(
+      cursor.getFullYear(),
+      cursor.getMonth(),
+      cursor.getDate(),
+    );
+    const nextDay = new Date(dayStart);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const segmentEnd = end < nextDay ? end : nextDay;
+    const segmentMinutes = Math.max(
+      0,
+      (segmentEnd.getTime() - cursor.getTime()) / 60_000,
+    );
+    const isWeekend = cursor.getDay() === 0 || cursor.getDay() === 6;
 
-    if (next > end) break;
-
-    if (
-      !isWeekend &&
-      minuteOfDay >= baseStartMinutes &&
-      minuteOfDay < baseEndMinutes
-    ) {
-      baseMinutes += 15;
+    if (isWeekend) {
+      overtimeMinutes += segmentMinutes;
     } else {
-      overtimeMinutes += 15;
+      const regularStartAt = new Date(dayStart);
+      regularStartAt.setMinutes(baseStartMinutes);
+      const regularEndAt = new Date(dayStart);
+      regularEndAt.setMinutes(baseEndMinutes);
+      const overlapStart = cursor > regularStartAt ? cursor : regularStartAt;
+      const overlapEnd = segmentEnd < regularEndAt ? segmentEnd : regularEndAt;
+      const regularMinutes = Math.max(
+        0,
+        (overlapEnd.getTime() - overlapStart.getTime()) / 60_000,
+      );
+
+      baseMinutes += regularMinutes;
+      overtimeMinutes += segmentMinutes - regularMinutes;
     }
 
-    cur.setMinutes(cur.getMinutes() + 15);
+    cursor.setTime(segmentEnd.getTime());
   }
 
   return {
     baseHours: roundToQuarterHour(baseMinutes),
     overtimeHours: roundToQuarterHour(overtimeMinutes),
   };
+}
+
+export function applyWeekdayLunchDeduction(
+  baseHours: number,
+  date: Date,
+  deductLunch: boolean,
+): number {
+  const day = date.getDay();
+  const isWeekday = day >= 1 && day <= 5;
+
+  return deductLunch && isWeekday && baseHours > 0
+    ? Math.max(0, baseHours - 1)
+    : baseHours;
 }
 
 export function calculateTaskHoursByDate(

@@ -1,5 +1,7 @@
 'use client'
 
+import { applyWeekdayLunchDeduction } from "./utils"
+
 type DayData = {
   baseHours: number
   overtimeHours: number
@@ -76,11 +78,11 @@ export default function MonthlySummary({
       const overtimeHours = day.overtimeHours ?? 0
       const hasWorkday = recordedBaseHours > 0 || overtimeHours > 0
       const date = new Date(`${dateKey}T12:00:00`)
-      const dayOfWeek = date.getDay()
-      const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5
-      const lunchHours =
-        deductWeekdayLunch && isWeekday && recordedBaseHours > 0 ? 1 : 0
-      const baseHours = Math.max(0, recordedBaseHours - lunchHours)
+      const baseHours = applyWeekdayLunchDeduction(
+        recordedBaseHours,
+        date,
+        deductWeekdayLunch,
+      )
 
       return {
         baseHours: acc.baseHours + baseHours,

@@ -37,6 +37,8 @@ type CalendarProps = {
   month: number; // 0-based
   data: { [date: string]: DayData };
   onDayClick: (date: string) => void;
+  regularWorkStart: string;
+  regularWorkEnd: string;
 };
 
 type ColoredPart = {
@@ -48,9 +50,10 @@ type ColoredPart = {
 type FlaskProps = {
   workSegments: WorkSegment[];
   isWeekendDay: boolean;
-  isHoliday: boolean;
   isCurrentMonth: boolean;
   isToday: boolean;
+  regularStartHour: number;
+  regularEndHour: number;
 };
 
 const VISUAL_9 = 6;
@@ -88,7 +91,11 @@ function getSegmentStyle(startHour: number, endHour: number) {
   };
 }
 
-function splitSegmentByWorkHours(segment: WorkSegment): ColoredPart[] {
+function splitSegmentByWorkHours(
+  segment: WorkSegment,
+  regularStartHour: number,
+  regularEndHour: number,
+): ColoredPart[] {
   const start = clampHour(segment.startHour);
   const end = clampHour(segment.endHour);
 
@@ -97,16 +104,16 @@ function splitSegmentByWorkHours(segment: WorkSegment): ColoredPart[] {
   return [
     {
       startHour: start,
-      endHour: Math.min(end, 9),
+      endHour: Math.min(end, regularStartHour),
       color: "red" as const,
     },
     {
-      startHour: Math.max(start, 9),
-      endHour: Math.min(end, 18),
+      startHour: Math.max(start, regularStartHour),
+      endHour: Math.min(end, regularEndHour),
       color: "blue" as const,
     },
     {
-      startHour: Math.max(start, 18),
+      startHour: Math.max(start, regularEndHour),
       endHour: end,
       color: "red" as const,
     },
@@ -116,9 +123,10 @@ function splitSegmentByWorkHours(segment: WorkSegment): ColoredPart[] {
 function resolveColoredParts(
   segment: WorkSegment,
   isWeekendDay: boolean,
-  isHoliday: boolean,
+  regularStartHour: number,
+  regularEndHour: number,
 ): ColoredPart[] {
-  if (isWeekendDay || isHoliday) {
+  if (isWeekendDay) {
     return [
       {
         startHour: segment.startHour,
@@ -128,7 +136,7 @@ function resolveColoredParts(
     ];
   }
 
-  return splitSegmentByWorkHours(segment);
+  return splitSegmentByWorkHours(segment, regularStartHour, regularEndHour);
 }
 
 function getColorClass(color: "blue" | "red") {
@@ -239,15 +247,29 @@ function formatSegmentRange(segment: WorkSegment) {
   return `${formatHourLabel(segment.startHour)}–${formatHourLabel(segment.endHour)}`;
 }
 
+function timeToHour(value: string, fallback: number) {
+  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
+
+  return Number.isInteger(hours) && Number.isInteger(minutes)
+    ? hours + minutes / 60
+    : fallback;
+}
+
 function Flask({
   workSegments,
   isWeekendDay,
-  isHoliday,
   isCurrentMonth,
   isToday,
+  regularStartHour,
+  regularEndHour,
 }: FlaskProps) {
   const coloredParts = workSegments.flatMap((segment) =>
-    resolveColoredParts(segment, isWeekendDay, isHoliday),
+    resolveColoredParts(
+      segment,
+      isWeekendDay,
+      regularStartHour,
+      regularEndHour,
+    ),
   );
 
   const borderClass = isToday ? "border-black" : "border-zinc-500";
@@ -271,12 +293,16 @@ function Flask({
 
         <div
           className={`absolute left-0 right-0 z-20 border-t ${lineClass} sm:border-t-2`}
-          style={{ bottom: `${hourToBottomPercent(VISUAL_9)}%` }}
+          style={{
+            bottom: `${hourToBottomPercent(toVisualHour(regularStartHour))}%`,
+          }}
         />
 
         <div
           className={`absolute left-0 right-0 z-20 border-t ${lineClass} sm:border-t-2`}
-          style={{ bottom: `${hourToBottomPercent(VISUAL_18)}%` }}
+          style={{
+            bottom: `${hourToBottomPercent(toVisualHour(regularEndHour))}%`,
+          }}
         />
 
         <div className="pointer-events-none absolute bottom-[1px] left-[1px] top-[1px] z-30 w-[2px] rounded-full bg-white/35 sm:bottom-[2px] sm:left-[2px] sm:top-[2px] sm:w-[5px] sm:blur-[0.5px]" />
@@ -292,6 +318,8 @@ type CalendarDayCellProps = {
   isCurrentMonth: boolean;
   isToday: boolean;
   onClick: () => void;
+  regularStartHour: number;
+  regularEndHour: number;
 };
 
 function CalendarDayCell({
@@ -300,6 +328,8 @@ function CalendarDayCell({
   isCurrentMonth,
   isToday,
   onClick,
+  regularStartHour,
+  regularEndHour,
 }: CalendarDayCellProps) {
   const weekendDay = isWeekend(day);
   const holiday = isLatviaHoliday(day);
@@ -347,9 +377,10 @@ function CalendarDayCell({
           <Flask
             workSegments={workSegments}
             isWeekendDay={weekendDay}
-            isHoliday={holiday}
             isCurrentMonth={isCurrentMonth}
             isToday={isToday}
+            regularStartHour={regularStartHour}
+            regularEndHour={regularEndHour}
           />
         </div>
 
@@ -373,7 +404,11 @@ export default function Calendar({
   month,
   data,
   onDayClick,
+  regularWorkStart,
+  regularWorkEnd,
 }: CalendarProps) {
+  const regularStartHour = timeToHour(regularWorkStart, 9);
+  const regularEndHour = timeToHour(regularWorkEnd, 18);
   const monthStart = startOfMonth(new Date(year, month));
   const monthEnd = endOfMonth(monthStart);
   const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -398,6 +433,8 @@ export default function Calendar({
           data={entry}
           isCurrentMonth={isCurrentMonth}
           isToday={isToday}
+          regularStartHour={regularStartHour}
+          regularEndHour={regularEndHour}
           onClick={() => onDayClick(dateStr)}
         />,
       );
