@@ -307,7 +307,7 @@ export default function PartnersPage() {
       {formOpen && <section className="space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-semibold">{editingId ? "Rediģēt partneri" : "Pievienot partneri"}</h2>
-          {editingId && <button type="button" onClick={() => clearForm()} className="flex items-center gap-1 text-sm text-zinc-500"><X size={17} /> Atcelt</button>}
+          <button type="button" onClick={() => clearForm()} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Aizvērt formu" title="Aizvērt"><X size={20} /></button>
         </div>
         <label className="block space-y-1 text-sm"><span className="font-medium">Partnera nosaukums</span><input value={form.display_name} onChange={(event) => setForm((current) => ({ ...current, display_name: event.target.value }))} placeholder="Ja atstāj tukšu, izmantos uzņēmuma nosaukumu vai vārdu" className={inputClass} /></label>
 
