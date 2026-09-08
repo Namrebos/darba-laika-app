@@ -208,9 +208,18 @@ function localDateTimeParts() {
 function dateTimeNotInPast(date: string, time: string) {
   if (!date) return false;
   const now = localDateTimeParts();
-  if (date > now.date) return true;
-  if (date < now.date) return false;
-  return !time || time >= now.time;
+  return dateTimeNotBefore(date, time, now);
+}
+
+function dateTimeNotBefore(
+  date: string,
+  time: string,
+  minimum: { date: string; time: string },
+) {
+  if (!date) return false;
+  if (date > minimum.date) return true;
+  if (date < minimum.date) return false;
+  return !time || time >= minimum.time;
 }
 
 function DateTimeField({
@@ -630,6 +639,7 @@ export default function RequestForm({
   const isPartnerRequest = Boolean(partnerPreset?.valid && partnerPreset.partner);
   const pickupReverseRequest = useRef(0);
   const dropoffReverseRequest = useRef(0);
+  const formOpenedAtRef = useRef(localDateTimeParts());
   const formTopRef = useRef<HTMLDivElement>(null);
   const successTopRef = useRef<HTMLDivElement>(null);
 
@@ -1096,7 +1106,7 @@ export default function RequestForm({
           form.pickup_address.trim() &&
           pickupPoint &&
           form.pickup_date &&
-          dateTimeNotInPast(form.pickup_date, form.pickup_time),
+          dateTimeNotBefore(form.pickup_date, form.pickup_time, formOpenedAtRef.current),
       );
     }
     return Boolean(
@@ -1105,7 +1115,7 @@ export default function RequestForm({
           form.dropoff_address.trim() &&
           dropoffPoint &&
           form.dropoff_date &&
-          dateTimeNotInPast(form.dropoff_date, form.dropoff_time) &&
+          dateTimeNotBefore(form.dropoff_date, form.dropoff_time, formOpenedAtRef.current) &&
           dropoffNotBeforePickup() &&
           stepValid(1) &&
           stepValid(2),
@@ -1129,7 +1139,7 @@ export default function RequestForm({
       if (!form.pickup_address.trim()) issues.push("uzkraušanas adrese");
       if (!pickupPoint) issues.push("precīzs uzkraušanas punkts kartē");
       if (!form.pickup_date) issues.push("uzkraušanas datums");
-      else if (!dateTimeNotInPast(form.pickup_date, form.pickup_time)) issues.push("uzkraušanas datums nav nākotnē");
+      else if (!dateTimeNotBefore(form.pickup_date, form.pickup_time, formOpenedAtRef.current)) issues.push("uzkraušanas datums nav nākotnē");
     }
     if (targetStep >= 3) {
       if (!form.dropoff_contact_name.trim()) issues.push("izkraušanas kontaktpersona");
@@ -1137,7 +1147,7 @@ export default function RequestForm({
       if (!form.dropoff_address.trim()) issues.push("izkraušanas adrese");
       if (!dropoffPoint) issues.push("precīzs izkraušanas punkts kartē");
       if (!form.dropoff_date) issues.push("izkraušanas datums");
-      else if (!dateTimeNotInPast(form.dropoff_date, form.dropoff_time)) issues.push("izkraušanas datums nav nākotnē");
+      else if (!dateTimeNotBefore(form.dropoff_date, form.dropoff_time, formOpenedAtRef.current)) issues.push("izkraušanas datums nav nākotnē");
       if (!dropoffNotBeforePickup()) issues.push("izkraušana nevar būt agrāka par uzkraušanu");
     }
     return [...new Set(issues)];
