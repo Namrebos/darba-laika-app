@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 import {
+  ChevronDown,
   Laptop,
   Menu,
   Moon,
@@ -39,6 +40,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [secondaryNavOpen, setSecondaryNavOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
@@ -226,23 +228,20 @@ export default function RootLayout({
   };
 
   const currentAccess = role ? { role, ...permissions } : null;
-  const navLinks = [
+  const primaryNavLinks = [
     ...(currentAccess &&
     hasSectionAccess(currentAccess, "can_access_workday")
       ? [{ href: "/workday", label: "Darbadiena" }]
       : []),
     { href: "/summary", label: "Kopsavilkums" },
     ...(currentAccess &&
-    hasSectionAccess(currentAccess, "can_access_finance")
-      ? [{ href: "/finance", label: "Finanses" }]
-      : []),
-    ...(currentAccess &&
-    hasSectionAccess(currentAccess, "can_access_calculators")
-      ? [{ href: "/calculators", label: "Kalkulatori" }]
-      : []),
-    ...(currentAccess &&
     hasSectionAccess(currentAccess, "can_access_planned_tasks")
       ? [{ href: "/planned-tasks", label: "Plānotie uzdevumi" }]
+      : []),
+  ];
+  const secondaryNavLinks = [
+    ...(currentAccess && hasSectionAccess(currentAccess, "can_access_partners")
+      ? [{ href: "/partners", label: "Partneri" }]
       : []),
     ...(currentAccess && hasSectionAccess(currentAccess, "can_access_fleet")
       ? [{ href: "/fleet", label: "Autoparks" }]
@@ -250,8 +249,11 @@ export default function RootLayout({
     ...(currentAccess && hasSectionAccess(currentAccess, "can_access_cargo_types")
       ? [{ href: "/cargo-types", label: "Kravas veidi" }]
       : []),
-    ...(currentAccess && hasSectionAccess(currentAccess, "can_access_partners")
-      ? [{ href: "/partners", label: "Partneri" }]
+    ...(currentAccess && hasSectionAccess(currentAccess, "can_access_finance")
+      ? [{ href: "/finance", label: "Finanses" }]
+      : []),
+    ...(currentAccess && hasSectionAccess(currentAccess, "can_access_calculators")
+      ? [{ href: "/calculators", label: "Kalkulatori" }]
       : []),
     ...(role === "admin"
       ? [
@@ -309,7 +311,7 @@ export default function RootLayout({
             </div>
 
             <nav className="flex h-full flex-col space-y-4 p-4">
-              {navLinks.map(({ href, label }) => (
+              {primaryNavLinks.map(({ href, label }) => (
                 <div key={href} className="space-y-2">
                   <Link
                     href={href}
@@ -362,6 +364,34 @@ export default function RootLayout({
                       </div>
                     )}
                 </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setSecondaryNavOpen((current) => !current)}
+                className="flex w-full items-center justify-end border-t border-zinc-300 pt-3 text-zinc-500 dark:border-zinc-700"
+                aria-expanded={secondaryNavOpen}
+                aria-label={secondaryNavOpen ? "Paslēpt pārējās sadaļas" : "Parādīt pārējās sadaļas"}
+              >
+                <ChevronDown
+                  size={22}
+                  className={`transition-transform ${secondaryNavOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {secondaryNavOpen && secondaryNavLinks.map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`block text-base font-medium hover:underline ${
+                    pathname === href
+                      ? "font-bold text-blue-600 dark:text-blue-400"
+                      : ""
+                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  {label}
+                </Link>
               ))}
 
               <hr className="my-4 border-zinc-300 dark:border-zinc-700" />
@@ -446,7 +476,10 @@ export default function RootLayout({
           <div className="flex flex-1 flex-col">
             <header className="flex items-center justify-between border-b border-zinc-300 bg-white px-4 py-2 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
               <button
-                onClick={() => setSidebarOpen(true)}
+                onClick={() => {
+                  setSecondaryNavOpen(false);
+                  setSidebarOpen(true);
+                }}
                 className="text-zinc-800 dark:text-white"
               >
                 <Menu size={28} />
