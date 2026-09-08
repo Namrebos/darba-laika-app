@@ -1384,17 +1384,17 @@ export default function RequestForm({
             Pieteikums
           </h1>
         </div>
-        {internal && (
+        {(internal || isPartnerRequest) && (
           <div className="absolute right-0 top-0 flex gap-2">
           <button type="button" onClick={reverseRoute} aria-label="Apgriezt maršrutu" title="Apgriezt maršrutu" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm"><Repeat2 size={23}/></button>
-          <Link
+          {internal && <Link
             href="/planned-tasks"
             aria-label="Aizvērt formu bez saglabāšanas"
             title="Aizvērt"
             className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
           >
             <X size={24} />
-          </Link>
+          </Link>}
           </div>
         )}
       </header>
