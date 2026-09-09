@@ -163,8 +163,41 @@ const countryCodes = [
   ["+39", "Itālija"],
 ] as const;
 
+const countryCodesByLength = [...countryCodes].sort(
+  ([first], [second]) => second.length - first.length,
+);
+
 function phoneDigits(value: string) {
   return value.replace(/\D/g, "");
+}
+
+function maxSubscriberDigits(code: string) {
+  return code === "+371" ? 8 : 15 - phoneDigits(code).length;
+}
+
+function normalizePhoneInput(value: string, currentCode: string) {
+  let digits = phoneDigits(value);
+  if (digits.startsWith("00")) digits = digits.slice(2);
+
+  const currentMax = maxSubscriberDigits(currentCode);
+  const looksInternational =
+    value.trim().startsWith("+") ||
+    value.trim().startsWith("00") ||
+    digits.length > currentMax;
+  const matchedCode = looksInternational
+    ? countryCodesByLength.find(([code]) =>
+        digits.startsWith(phoneDigits(code)),
+      )?.[0]
+    : undefined;
+  const code = matchedCode || currentCode;
+  const subscriber = matchedCode
+    ? digits.slice(phoneDigits(matchedCode).length)
+    : digits;
+
+  return {
+    code,
+    subscriber: subscriber.slice(0, maxSubscriberDigits(code)),
+  };
 }
 
 function isValidPhone(code: string, value: string) {
@@ -522,13 +555,18 @@ function PartyFields({
             inputMode="numeric"
             value={phone}
             onChange={(event) => {
-              const digits = phoneDigits(event.target.value);
-              const maxDigits = phoneCode === "+371" ? 8 : 15 - phoneDigits(phoneCode).length;
-              update({ [field("phone")]: digits.slice(0, maxDigits) });
+              const normalized = normalizePhoneInput(
+                event.target.value,
+                phoneCode,
+              );
+              update({
+                [field("phone_code")]: normalized.code,
+                [field("phone")]: normalized.subscriber,
+              });
             }}
             className="form-input"
             placeholder="20 123 456"
-            maxLength={15}
+            maxLength={30}
             aria-invalid={phoneInvalid}
             aria-describedby={phoneInvalid ? phoneErrorId : undefined}
           />
@@ -594,7 +632,7 @@ function ContactFields({ prefix, form, update }: { prefix: "pickup" | "dropoff";
   const phoneInvalid = form[phoneKey].length > 0 && !isValidPhone(form[codeKey], form[phoneKey]);
   return <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
     <label><FieldLabel required>Kontaktpersona</FieldLabel><input value={form[nameKey]} onChange={(event) => update({ [nameKey]: event.target.value })} className="form-input" maxLength={120}/></label>
-    <div><FieldLabel required>Kontakttālrunis</FieldLabel><div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2"><select value={form[codeKey]} onChange={(event) => update({ [codeKey]: event.target.value })} className="form-input" aria-label="Valsts tālruņa kods">{countryCodes.map(([code]) => <option key={code} value={code}>{code}</option>)}</select><input type="tel" inputMode="numeric" value={form[phoneKey]} onChange={(event) => { const max = form[codeKey] === "+371" ? 8 : 15 - phoneDigits(form[codeKey]).length; update({ [phoneKey]: phoneDigits(event.target.value).slice(0, max) }); }} className="form-input" aria-invalid={phoneInvalid}/></div>{phoneInvalid && <span className="mt-1 block text-sm text-red-600">{form[codeKey] === "+371" ? "Ievadiet tieši 8 tālruņa numura ciparus." : "Ievadiet korektu tālruņa numuru."}</span>}</div>
+    <div><FieldLabel required>Kontakttālrunis</FieldLabel><div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2"><select value={form[codeKey]} onChange={(event) => update({ [codeKey]: event.target.value })} className="form-input" aria-label="Valsts tālruņa kods">{countryCodes.map(([code]) => <option key={code} value={code}>{code}</option>)}</select><input type="tel" inputMode="numeric" value={form[phoneKey]} onChange={(event) => { const normalized = normalizePhoneInput(event.target.value, form[codeKey]); update({ [codeKey]: normalized.code, [phoneKey]: normalized.subscriber }); }} className="form-input" maxLength={30} aria-invalid={phoneInvalid}/></div>{phoneInvalid && <span className="mt-1 block text-sm text-red-600">{form[codeKey] === "+371" ? "Ievadiet tieši 8 tālruņa numura ciparus." : "Ievadiet korektu tālruņa numuru."}</span>}</div>
   </div>;
 }
 
