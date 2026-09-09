@@ -10,7 +10,9 @@ import MonthlySummary from "./MonthlySummary";
 import {
   calculateWorkHours,
   calculateTaskHoursByDate,
+  resolveWorkSchedule,
   roundToQuarterHour,
+  type WorkSchedulePeriod,
 } from "./utils";
 
 type WorkSegment = {
@@ -119,6 +121,8 @@ export default function SummaryPage() {
   const [eightHourWorkday, setEightHourWorkday] = useState(true);
   const [regularWorkStart, setRegularWorkStart] = useState("09:00");
   const [regularWorkEnd, setRegularWorkEnd] = useState("18:00");
+  const [workSchedulePeriods, setWorkSchedulePeriods] = useState<WorkSchedulePeriod[]>([]);
+  const [workScheduleReady, setWorkScheduleReady] = useState(false);
 
   useEffect(() => {
     async function resolveOwner() {
@@ -150,7 +154,11 @@ export default function SummaryPage() {
       if (selected && storageKey) localStorage.setItem(storageKey, selected);
       setOwnerId(selected);
       if (selected) {
-        const [{ data: financeSettings }, { data: workSchedule }] =
+        const [
+          { data: financeSettings },
+          { data: workSchedule },
+          { data: schedulePeriods },
+        ] =
           await Promise.all([
             supabase
               .from("user_finance_settings")
@@ -162,10 +170,17 @@ export default function SummaryPage() {
               .select("regular_start, regular_end")
               .eq("user_id", selected)
               .maybeSingle(),
+            supabase
+              .from("user_work_schedule_periods")
+              .select("valid_from, valid_until, regular_start, regular_end")
+              .eq("user_id", selected)
+              .order("valid_from", { ascending: false }),
           ]);
         setEightHourWorkday(financeSettings?.eight_hour_workday ?? true);
         setRegularWorkStart(workSchedule?.regular_start?.slice(0, 5) || "09:00");
         setRegularWorkEnd(workSchedule?.regular_end?.slice(0, 5) || "18:00");
+        setWorkSchedulePeriods((schedulePeriods || []) as WorkSchedulePeriod[]);
+        setWorkScheduleReady(true);
       }
       if (selected) await loadAvailableMonths(selected);
       else setLoading(false);
@@ -181,10 +196,10 @@ export default function SummaryPage() {
   }, []);
 
   useEffect(() => {
-    if (availableMonths.length > 0) {
+    if (availableMonths.length > 0 && workScheduleReady) {
       loadData(ownerId);
     }
-  }, [selectedYear, selectedMonth, availableMonths, ownerId]);
+  }, [selectedYear, selectedMonth, availableMonths, ownerId, workScheduleReady]);
 
   async function loadAvailableMonths(selectedOwnerId: string) {
     const { data: workLogs, error: workError } = await supabase
@@ -296,6 +311,20 @@ export default function SummaryPage() {
   }, [searchMonth, searchQuery, searchableTasks]);
 
   const searchActive = searchQuery.trim().length > 0 || searchMonth !== "all";
+  const monthSchedule = resolveWorkSchedule(
+    new Date(selectedYear, selectedMonth, 1),
+    regularWorkStart,
+    regularWorkEnd,
+    workSchedulePeriods,
+  );
+  const selectedDaySchedule = selectedDate
+    ? resolveWorkSchedule(
+        new Date(`${selectedDate}T12:00:00`),
+        regularWorkStart,
+        regularWorkEnd,
+        workSchedulePeriods,
+      )
+    : monthSchedule;
 
   async function loadData(selectedOwnerId: string) {
     setLoading(true);
@@ -347,12 +376,18 @@ export default function SummaryPage() {
       const start = new Date(log.start_time);
       const end = new Date(log.end_time);
       const date = format(start, "yyyy-MM-dd");
+      const schedule = resolveWorkSchedule(
+        start,
+        regularWorkStart,
+        regularWorkEnd,
+        workSchedulePeriods,
+      );
 
       const { baseHours, overtimeHours } = calculateWorkHours(
         start,
         end,
-        regularWorkStart,
-        regularWorkEnd,
+        schedule.regularStart,
+        schedule.regularEnd,
       );
       const entry = ensureDayEntry(dataMap, date);
 
@@ -521,8 +556,8 @@ export default function SummaryPage() {
             year={selectedYear}
             month={selectedMonth}
             data={entries}
-            regularWorkStart={regularWorkStart}
-            regularWorkEnd={regularWorkEnd}
+            regularWorkStart={monthSchedule.regularStart}
+            regularWorkEnd={monthSchedule.regularEnd}
             onDayClick={(date) => {
               setSelectedTaskId(null);
               setSelectedDate(date);
@@ -536,8 +571,8 @@ export default function SummaryPage() {
             ownerId={ownerId}
             showWorkTime={showWorkTime}
             isAdmin={isAdmin}
-            regularWorkStart={regularWorkStart}
-            regularWorkEnd={regularWorkEnd}
+            regularWorkStart={selectedDaySchedule.regularStart}
+            regularWorkEnd={selectedDaySchedule.regularEnd}
             deductWeekdayLunch={eightHourWorkday}
             initialTaskId={selectedTaskId}
             initialPlannedTaskId={selectedPlannedTaskId}

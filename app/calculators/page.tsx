@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabaseClient";
 import {
   applyWeekdayLunchDeduction,
   calculateWorkHours,
+  resolveWorkSchedule,
+  type WorkSchedulePeriod,
 } from "@/app/summary/utils";
 import { hasSectionAccess } from "@/lib/access";
 
@@ -149,6 +151,7 @@ export default function CalculatorsPage() {
         { data, error },
         { data: workSchedule },
         { data: financeSettings },
+        { data: schedulePeriods },
       ] = await Promise.all([
         supabase
           .from("work_logs")
@@ -166,6 +169,11 @@ export default function CalculatorsPage() {
           .select("eight_hour_workday")
           .eq("user_id", selectedUserId)
           .maybeSingle(),
+        supabase
+          .from("user_work_schedule_periods")
+          .select("valid_from, valid_until, regular_start, regular_end")
+          .eq("user_id", selectedUserId)
+          .order("valid_from", { ascending: false }),
       ]);
 
       if (error) {
@@ -184,6 +192,7 @@ export default function CalculatorsPage() {
       }));
       const regularStart = workSchedule?.regular_start?.slice(0, 5) || "09:00";
       const regularEnd = workSchedule?.regular_end?.slice(0, 5) || "18:00";
+      const periods = (schedulePeriods || []) as WorkSchedulePeriod[];
       ((data || []) as WorkLog[]).forEach((log) => {
         const start = new Date(log.start_time);
         if (Number.isNaN(start.getTime())) return;
@@ -199,11 +208,17 @@ export default function CalculatorsPage() {
         if (!log.end_time) return;
         const end = new Date(log.end_time);
         if (Number.isNaN(end.getTime())) return;
+        const schedule = resolveWorkSchedule(
+          start,
+          regularStart,
+          regularEnd,
+          periods,
+        );
         const calculated = calculateWorkHours(
           start,
           end,
-          regularStart,
-          regularEnd,
+          schedule.regularStart,
+          schedule.regularEnd,
         );
         workedDay.baseHours += calculated.baseHours;
         workedDay.overtimeHours += calculated.overtimeHours;

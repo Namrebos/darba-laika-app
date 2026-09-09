@@ -2,6 +2,32 @@ export function roundToQuarterHour(minutes: number): number {
   return Math.round((minutes / 60) * 4) / 4;
 }
 
+export type WorkSchedulePeriod = {
+  valid_from: string;
+  valid_until: string | null;
+  regular_start: string;
+  regular_end: string;
+};
+
+export function resolveWorkSchedule(
+  date: Date,
+  regularStart: string,
+  regularEnd: string,
+  periods: WorkSchedulePeriod[],
+) {
+  const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const period = periods.find(
+    (item) =>
+      item.valid_from <= dateKey &&
+      (item.valid_until === null || item.valid_until >= dateKey),
+  );
+
+  return {
+    regularStart: period?.regular_start.slice(0, 5) || regularStart,
+    regularEnd: period?.regular_end.slice(0, 5) || regularEnd,
+  };
+}
+
 export function calculateWorkHours(
   start: Date,
   end: Date,
