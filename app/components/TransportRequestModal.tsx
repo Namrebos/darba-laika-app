@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { SiWaze } from "react-icons/si";
 import AddressField from "@/app/components/AddressField";
+import { normalizeInternationalPhoneInput } from "@/lib/phoneInput";
 import { supabase } from "@/lib/supabaseClient";
 
 const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), {
@@ -131,10 +132,12 @@ function ReadonlyField({
   label,
   value,
   multiline = false,
+  type = "text",
 }: {
   label: string;
   value: string | null;
   multiline?: boolean;
+  type?: "text" | "tel";
 }) {
   if (!value?.trim()) return null;
 
@@ -151,6 +154,7 @@ function ReadonlyField({
         />
       ) : (
         <input
+          type={type}
           readOnly
           value={value || ""}
           className="form-input bg-slate-50"
@@ -323,12 +327,14 @@ function EditField({
   onChange,
   required = false,
   multiline = false,
+  type = "text",
 }: {
   label: string;
   value: string | null;
   onChange: (value: string) => void;
   required?: boolean;
   multiline?: boolean;
+  type?: "text" | "tel";
 }) {
   return (
     <label className="block">
@@ -343,6 +349,7 @@ function EditField({
         />
       ) : (
         <input
+          type={type}
           required={required}
           value={value || ""}
           onChange={(event) => onChange(event.target.value)}
@@ -425,7 +432,7 @@ function EditablePartySection({
             <EditField label="Uzvārds" value={String(request[key("last_name")] || "")} onChange={(value) => setText("last_name", value)} />
           </div>
         )}
-        <label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Tālrunis *</span><input type="tel" value={String(request[key("phone")] || "")} onChange={(e) => setText("phone", e.target.value.replace(/[^+\d\s()-]/g, ""))} pattern="\+[1-9]\d{7,14}" className="form-input bg-white" />{!/^\+[1-9]\d{7,14}$/.test(String(request[key("phone")] || "").replace(/[\s()-]/g, "")) && <span className="mt-1 block text-xs text-red-600">Ievadi valsts kodu un 8–15 ciparus.</span>}</label>
+        <label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Tālrunis *</span><input type="tel" value={String(request[key("phone")] || "")} onChange={(e) => setText("phone", normalizeInternationalPhoneInput(e.target.value))} maxLength={30} pattern="\+[1-9]\d{7,14}" className="form-input bg-white" />{!/^\+[1-9]\d{7,14}$/.test(String(request[key("phone")] || "").replace(/[\s()-]/g, "")) && <span className="mt-1 block text-xs text-red-600">Ievadi valsts kodu un 8–15 ciparus.</span>}</label>
       </div>
     </section>
   );
@@ -547,7 +554,7 @@ function EditableLocationSection({
         />
         <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
           <EditField label="Kontaktpersona" required value={request[contactNameKey]} onChange={(value) => update({ [contactNameKey]: value } as Partial<TransportRequest>)} />
-          <EditField label="Kontakttālrunis" required value={request[contactPhoneKey]} onChange={(value) => update({ [contactPhoneKey]: value } as Partial<TransportRequest>)} />
+          <EditField label="Kontakttālrunis" required type="tel" value={request[contactPhoneKey]} onChange={(value) => update({ [contactPhoneKey]: normalizeInternationalPhoneInput(value) } as Partial<TransportRequest>)} />
         </div>
         <EditField label="Piezīmes" value={request[notesKey]} multiline onChange={(value) => update({ [notesKey]: value } as Partial<TransportRequest>)} />
       </div>

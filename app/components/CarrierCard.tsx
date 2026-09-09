@@ -5,6 +5,7 @@ import { Check, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
+import { normalizeInternationalPhoneInput } from "@/lib/phoneInput";
 
 const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), { ssr: false });
 type Point = { lat: number; lng: number };
@@ -187,7 +188,7 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
       <div className="flex items-center justify-between"><h3 className="font-semibold">Kontaktpersonas</h3><button type="button" onClick={() => setContacts((current) => [...current, { name: "", phone: "+371" }])} className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm"><Plus size={16} /> Pievienot</button></div>
       {contacts.map((contact, index) => <div key={index} className="grid items-end gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_1fr_auto]">
         <label className="space-y-1 text-sm"><span className="font-medium">Kontaktpersona *</span><input value={contact.name} onChange={(event) => setContacts((current) => current.map((item, i) => i === index ? { ...item, name: event.target.value } : item))} className={inputClass} /></label>
-        <label className="space-y-1 text-sm"><span className="font-medium">Tālrunis *</span><input type="tel" value={contact.phone} onChange={(event) => setContacts((current) => current.map((item, i) => i === index ? { ...item, phone: event.target.value } : item))} className={inputClass} /></label>
+        <label className="space-y-1 text-sm"><span className="font-medium">Tālrunis *</span><input type="tel" value={contact.phone} onChange={(event) => setContacts((current) => current.map((item, i) => i === index ? { ...item, phone: normalizeInternationalPhoneInput(event.target.value) } : item))} maxLength={30} className={inputClass} /></label>
         <button type="button" disabled={contacts.length === 1} onClick={() => setContacts((current) => current.filter((_, i) => i !== index))} className="rounded-lg border border-red-300 p-2.5 text-red-600 disabled:opacity-30"><Trash2 size={18} /></button>
       </div>)}
       <label className="block space-y-1 text-sm"><span className="font-medium">E-pasts</span><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className={inputClass} /></label>

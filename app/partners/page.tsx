@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
+import { normalizeInternationalPhoneInput } from "@/lib/phoneInput";
 
 const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), { ssr: false });
 
@@ -346,7 +347,7 @@ export default function PartnersPage() {
           <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">Kontaktpersonas</h3><button type="button" onClick={() => setContacts((current) => [...current, { name: "", phone: "+371", sort_order: current.length }])} className="flex items-center gap-1 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm dark:border-zinc-600"><Plus size={16} /> Pievienot</button></div>
           {contacts.map((contact, index) => <div key={contact.id ?? `new-${index}`} className="grid items-end gap-2 rounded-lg border border-zinc-200 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] dark:border-zinc-700">
             <label className="space-y-1 text-sm"><span className="font-medium">Kontaktpersona *</span><input value={contact.name} onChange={(event) => setContacts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} className={inputClass} /></label>
-            <label className="space-y-1 text-sm"><span className="font-medium">Tālrunis *</span><input type="tel" value={contact.phone} onChange={(event) => setContacts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, phone: event.target.value } : item))} placeholder="+37120123456" className={inputClass} /></label>
+            <label className="space-y-1 text-sm"><span className="font-medium">Tālrunis *</span><input type="tel" value={contact.phone} onChange={(event) => setContacts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, phone: normalizeInternationalPhoneInput(event.target.value) } : item))} placeholder="+37120123456" maxLength={30} className={inputClass} /></label>
             <button type="button" disabled={contacts.length === 1} onClick={() => setContacts((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="justify-self-end rounded-lg border border-red-300 p-2.5 text-red-600 disabled:opacity-30 dark:border-red-800" aria-label="Dzēst kontaktpersonu"><Trash2 size={18} /></button>
           </div>)}
           <label className="block space-y-1 text-sm"><span className="font-medium">E-pasts</span><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className={inputClass} /></label>
