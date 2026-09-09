@@ -633,7 +633,7 @@ export default function RequestForm({
   );
   const [partnerSaving, setPartnerSaving] = useState(false);
   const [partnerMessage, setPartnerMessage] = useState("");
-  const [internalIsAdmin, setInternalIsAdmin] = useState(false);
+  const [internalCanManagePartners, setInternalCanManagePartners] = useState(false);
   const [recipientOpen, setRecipientOpen] = useState(false);
   const [recipientSameAsSender, setRecipientSameAsSender] = useState(true);
   const isPartnerRequest = Boolean(partnerPreset?.valid && partnerPreset.partner);
@@ -753,17 +753,18 @@ export default function RequestForm({
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role, can_access_planned_tasks")
+        .select("role, can_access_planned_tasks, can_access_partners")
         .eq("id", authData.user.id)
         .single();
       const isAdmin = profile?.role === "admin";
-      setInternalIsAdmin(isAdmin);
+      const canManagePartners = isAdmin || profile?.can_access_partners === true;
+      setInternalCanManagePartners(canManagePartners);
       setInternalAccess(
         isAdmin || profile?.can_access_planned_tasks === true
           ? "allowed"
           : "denied",
       );
-      if (isAdmin) {
+      if (canManagePartners) {
         const { data: partnerRows } = await supabase
           .from("partners")
           .select(partnerSelect)
@@ -1558,7 +1559,7 @@ export default function RequestForm({
           {!isPartnerRequest && (
             <>
           <FormCard title="Pasūtītājs">
-            {internalIsAdmin && (
+            {internalCanManagePartners && (
               <div className={newCustomerOpen ? "mb-4 grid gap-3 sm:grid-cols-2" : "grid gap-3 sm:grid-cols-2"}>
                 <select
                   value={selectedPartnerId}
@@ -1586,10 +1587,10 @@ export default function RequestForm({
                 </button>
               </div>
             )}
-            {(!internalIsAdmin || newCustomerOpen) && (
+            {(!internalCanManagePartners || newCustomerOpen) && (
               <PartyFields prefix="sender" form={form} update={update} />
             )}
-            {internalIsAdmin && newCustomerOpen && !selectedPartnerId && !matchingPartner && (
+            {internalCanManagePartners && newCustomerOpen && !selectedPartnerId && !matchingPartner && (
               <div className="mt-4 border-t border-slate-200 pt-4">
                 <button
                   type="button"
@@ -1605,12 +1606,12 @@ export default function RequestForm({
                 )}
               </div>
             )}
-            {internalIsAdmin && newCustomerOpen && !selectedPartnerId && matchingPartner && (
+            {internalCanManagePartners && newCustomerOpen && !selectedPartnerId && matchingPartner && (
               <p className="mt-3 text-sm text-slate-600">
                 Šis klients jau ir partneru sarakstā.
               </p>
             )}
-            {internalIsAdmin && selectedPartnerId && partnerMessage && (
+            {internalCanManagePartners && selectedPartnerId && partnerMessage && (
               <p className="mt-3 text-sm text-green-700">{partnerMessage}</p>
             )}
           </FormCard>
