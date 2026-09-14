@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
+  CalendarDays,
   CalendarClock,
   ChevronDown,
   ChevronLeft,
@@ -19,6 +20,7 @@ import {
   MessageSquareText,
   Pencil,
   Plus,
+  Route,
   Send,
   Trash2,
   Truck,
@@ -67,6 +69,14 @@ type PlannedImage = {
   id: number;
   planned_task_id: number;
   url: string;
+};
+
+type TransportRequestSummary = {
+  id: number;
+  pickup_date: string;
+  pickup_address: string;
+  dropoff_address: string;
+  cargo_type: string;
 };
 
 type DayTab = "planned" | "completed" | "canceled";
@@ -193,6 +203,14 @@ function notePreview(value: string) {
     : symbols.join("");
 }
 
+function addressLocality(value: string) {
+  const parts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  const postalIndex = parts.findIndex((part) => /\bLV-?\d{4}\b/i.test(part));
+  const candidates = (postalIndex > 0 ? parts.slice(0, postalIndex) : parts)
+    .filter((part) => !/^latvija$/i.test(part));
+  return candidates.at(-1) || value.trim();
+}
+
 export default function PlannedTasksPage() {
   const router = useRouter();
   const [userId, setUserId] = useState("");
@@ -200,6 +218,9 @@ export default function PlannedTasksPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [tasks, setTasks] = useState<PlannedTask[]>([]);
   const [images, setImages] = useState<Record<number, PlannedImage[]>>({});
+  const [requestSummaries, setRequestSummaries] = useState<
+    Record<number, TransportRequestSummary>
+  >({});
   const [selectedDate, setSelectedDate] = useState(todayInRiga());
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [dayTab, setDayTab] = useState<DayTab>("planned");
@@ -261,6 +282,7 @@ export default function PlannedTasksPage() {
         { data: imageRows, error: imageError },
         { data: tagRows, error: tagError },
         { data: vehicleRows, error: vehicleError },
+        { data: requestRows, error: requestError },
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -286,6 +308,9 @@ export default function PlannedTasksPage() {
           .order("usage_count", { ascending: false })
           .order("last_used_at", { ascending: false, nullsFirst: false })
           .order("registration_number"),
+        supabase
+          .from("transport_requests")
+          .select("id, pickup_date, pickup_address, dropoff_address, cargo_type"),
       ]);
 
       if (
@@ -293,7 +318,8 @@ export default function PlannedTasksPage() {
         taskError ||
         imageError ||
         tagError ||
-        vehicleError
+        vehicleError ||
+        requestError
       ) {
         setMessage("Neizdevās ielādēt plānotos uzdevumus.");
       }
@@ -312,6 +338,14 @@ export default function PlannedTasksPage() {
       );
       setTasks((taskRows || []) as PlannedTask[]);
       setVehicles((vehicleRows || []) as Vehicle[]);
+      setRequestSummaries(
+        Object.fromEntries(
+          ((requestRows || []) as TransportRequestSummary[]).map((request) => [
+            request.id,
+            request,
+          ]),
+        ),
+      );
       setDictionaryWords(
         (tagRows || []).map((word) => ({
           name: word.name,
@@ -1613,7 +1647,16 @@ export default function PlannedTasksPage() {
             Šajā tabā kartīšu nav.
           </p>
         ) : (
-          displayedInboxTasks.map((task) => (
+          displayedInboxTasks.map((task) => {
+            const request = task.transport_request_id
+              ? requestSummaries[task.transport_request_id]
+              : null;
+            const plannedDate = request?.pickup_date || task.scheduled_date;
+            const route = request
+              ? `${addressLocality(request.pickup_address)}–${addressLocality(request.dropoff_address)}`
+              : "";
+
+            return (
             <article
               key={task.id}
               id={`planned-task-${task.id}`}
@@ -1639,9 +1682,34 @@ export default function PlannedTasksPage() {
                       <h3 className="truncate font-semibold">
                         {task.title.trim() || "Bez nosaukuma"}
                       </h3>
-                      <p className="mt-1 truncate text-sm text-zinc-500">
-                        {notePreview(task.note)}
-                      </p>
+                      {request ? (
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+                          {plannedDate && (
+                            <span className="inline-flex items-center gap-1.5">
+                              <CalendarDays size={16} className="text-blue-600 dark:text-blue-400" />
+                              {shortDateLabel(plannedDate)}
+                            </span>
+                          )}
+                          <span className="inline-flex min-w-0 items-center gap-1.5">
+                            <Route size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
+                            <span className="truncate">{route}</span>
+                          </span>
+                          <span className="inline-flex min-w-0 items-center gap-1.5">
+                            <Truck size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
+                            <span className="truncate">{request.cargo_type}</span>
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+                          {plannedDate && (
+                            <span className="inline-flex items-center gap-1.5">
+                              <CalendarDays size={16} className="text-blue-600 dark:text-blue-400" />
+                              {shortDateLabel(plannedDate)}
+                            </span>
+                          )}
+                          <span className="truncate">{notePreview(task.note)}</span>
+                        </div>
+                      )}
                     </div>
                   </button>
                 ) : (
@@ -2138,7 +2206,8 @@ export default function PlannedTasksPage() {
                 </div>
               )}
             </article>
-          ))
+            );
+          })
         )}
           </>
         )}
