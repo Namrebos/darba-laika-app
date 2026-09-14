@@ -183,7 +183,7 @@ export default function AddressField({
           role="tooltip"
           className={`${helpOpen ? "block" : "hidden group-hover:block group-focus:block"} absolute right-0 top-7 z-[1100] w-64 rounded-lg bg-slate-900 px-3 py-2 text-left text-xs font-normal leading-5 text-white shadow-xl`}
         >
-          Rakstiet adresi vai ielīmējiet koordinātes, Google Maps vai WhatsApp saņemtu kartes saiti.
+          Rakstiet adresi vai ielīmējiet koordinātes, Google Maps, Waze vai Apple Maps saiti.
         </span>
       </button>
       {open && suggestions.length > 0 && (

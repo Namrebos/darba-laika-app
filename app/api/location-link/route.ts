@@ -9,6 +9,18 @@ function isGoogleMapsHost(hostname: string) {
   );
 }
 
+function isSupportedMapHost(hostname: string) {
+  const host = hostname.toLowerCase();
+  return (
+    isGoogleMapsHost(host) ||
+    host === "waze.com" ||
+    host === "www.waze.com" ||
+    host === "ul.waze.com" ||
+    host === "maps.apple.com" ||
+    host === "maps.apple"
+  );
+}
+
 function validPoint(lat: number, lng: number) {
   return (
     Number.isFinite(lat) &&
@@ -28,8 +40,8 @@ function pointFromText(value: string) {
   return validPoint(lat, lng) ? { lat, lng } : null;
 }
 
-function pointFromGoogleUrl(url: URL) {
-  for (const key of ["query", "q", "destination", "origin", "daddr", "saddr", "center", "ll"]) {
+function pointFromMapUrl(url: URL) {
+  for (const key of ["query", "q", "destination", "origin", "daddr", "saddr", "to", "center", "ll", "coordinate", "near", "sll"]) {
     const point = pointFromText(url.searchParams.get(key) || "");
     if (point) return point;
   }
@@ -70,7 +82,7 @@ function pointFromGoogleUrl(url: URL) {
   return null;
 }
 
-function pointFromGoogleContent(value: string) {
+function pointFromMapContent(value: string) {
   const decoded = value.replace(/\\u003d/g, "=").replace(/\\u0026/g, "&");
   const latLngPatterns = [
     /!3d(-?\d{1,2}(?:\.\d+)?).*?!4d(-?\d{1,3}(?:\.\d+)?)/,
@@ -96,8 +108,8 @@ function pointFromGoogleContent(value: string) {
   return null;
 }
 
-function searchTextFromGoogleUrl(url: URL) {
-  for (const key of ["query", "q", "destination", "origin", "daddr", "saddr"]) {
+function searchTextFromMapUrl(url: URL) {
+  for (const key of ["query", "q", "destination", "origin", "daddr", "saddr", "to", "address"]) {
     const value = url.searchParams.get(key)?.trim();
     if (value && !pointFromText(value) && !/^place_id:/i.test(value)) return value;
   }
@@ -137,15 +149,14 @@ async function geocodeSearchText(query: string) {
   }
 }
 
-function googleUrlFromText(value: string) {
-  const match = value.match(/(?:https?:\/\/)?(?:(?:www\.|maps\.)?google\.[a-z.]{2,12}|maps\.app\.goo\.gl|goo\.gl)\/[^\s]+/i);
+function mapUrlFromText(value: string) {
+  const match = value.match(/(?:https?:\/\/)?(?:(?:www\.|maps\.)?google\.[a-z.]{2,12}|maps\.app\.goo\.gl|goo\.gl|(?:www\.|ul\.)?waze\.com|maps\.apple\.com|maps\.apple)(?:\/[^\s]*)?/i);
   if (!match) return null;
   try {
     const normalized = /^https?:\/\//i.test(match[0]) ? match[0] : `https://${match[0]}`;
     const url = new URL(normalized.replace(/[),.;]+$/, ""));
-    return url.protocol === "https:" && isGoogleMapsHost(url.hostname)
-      ? url
-      : null;
+    if (url.protocol === "http:") url.protocol = "https:";
+    return url.protocol === "https:" && isSupportedMapHost(url.hostname) ? url : null;
   } catch {
     return null;
   }
@@ -165,16 +176,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ point: directPoint });
   }
 
-  let url = googleUrlFromText(value);
+  let url = mapUrlFromText(value);
   if (!url) {
     return NextResponse.json(
-      { error: "Ielīmē Google Maps saiti vai koordinātes, piemēram, 57.123, 25.456." },
+      { error: "Ielīmē Google Maps, Waze vai Apple Maps saiti vai koordinātes, piemēram, 57.123, 25.456." },
       { status: 400 },
     );
   }
 
-  let point = pointFromGoogleUrl(url);
-  let searchText = searchTextFromGoogleUrl(url);
+  let point = pointFromMapUrl(url);
+  let searchText = searchTextFromMapUrl(url);
   if (!point) {
     try {
       const response = await fetch(url, {
@@ -183,19 +194,19 @@ export async function POST(request: NextRequest) {
         headers: { "User-Agent": "DarbaLaikaApp/1.0 (location link resolver)" },
       });
       const resolvedUrl = new URL(response.url);
-      if (!isGoogleMapsHost(resolvedUrl.hostname)) throw new Error("Unexpected redirect");
+      if (!isSupportedMapHost(resolvedUrl.hostname)) throw new Error("Unexpected redirect");
       url = resolvedUrl;
-      point = pointFromGoogleUrl(url);
-      searchText = searchText || searchTextFromGoogleUrl(url);
+      point = pointFromMapUrl(url);
+      searchText = searchText || searchTextFromMapUrl(url);
       if (!point) {
         const contentType = response.headers.get("content-type") || "";
         if (contentType.includes("text/html")) {
           const html = (await response.text()).slice(0, 2_000_000);
-          point = pointFromGoogleContent(html);
+          point = pointFromMapContent(html);
         }
       }
     } catch {
-      // If Google blocks link expansion, the textual location may still be usable.
+      // If the map service blocks link expansion, textual location may still be usable.
     }
   }
 
