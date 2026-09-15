@@ -15,14 +15,7 @@ type PhotonFeature = {
   };
 };
 
-type GooglePlaceSuggestion = {
-  placePrediction?: {
-    placeId?: string;
-    text?: { text?: string };
-  };
-};
-
-type SearchResult = { label: string; placeId?: string; lat?: number; lng?: number };
+type SearchResult = { label: string; lat: number; lng: number };
 
 const cache = new Map<
   string,
@@ -52,50 +45,7 @@ function addressLabel(properties: PhotonFeature["properties"]) {
 }
 
 export async function GET(request: NextRequest) {
-  const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
-  const placeId = request.nextUrl.searchParams.get("placeId")?.trim() || "";
-  const sessionToken = request.nextUrl.searchParams.get("sessionToken")?.trim() || "";
-
-  if (placeId && googleApiKey) {
-    try {
-      const url = new URL(
-        `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
-      );
-      url.searchParams.set("languageCode", "lv");
-      url.searchParams.set("regionCode", "LV");
-      if (sessionToken) url.searchParams.set("sessionToken", sessionToken);
-      const response = await fetch(url, {
-        headers: {
-          Accept: "application/json",
-          "X-Goog-Api-Key": googleApiKey,
-          "X-Goog-FieldMask": "id,displayName,formattedAddress,location",
-        },
-        signal: AbortSignal.timeout(6000),
-      });
-      if (!response.ok) throw new Error("Google place details request failed");
-      const place = (await response.json()) as {
-        displayName?: { text?: string };
-        formattedAddress?: string;
-        location?: { latitude?: number; longitude?: number };
-      };
-      const lat = place.location?.latitude;
-      const lng = place.location?.longitude;
-      if (typeof lat === "number" && typeof lng === "number") {
-        const label = [place.displayName?.text, place.formattedAddress]
-          .filter(Boolean)
-          .filter((value, index, values) => values.indexOf(value) === index)
-          .join(", ");
-        return NextResponse.json({
-          result: { label: label || place.formattedAddress || "Izvēlētā vieta", lat, lng },
-        });
-      }
-    } catch {
-      return NextResponse.json(
-        { error: "Izvēlētās vietas koordinātes neizdevās nolasīt.", result: null },
-        { status: 503 },
-      );
-    }
-  }
+  const geoapifyApiKey = process.env.GEOAPIFY_API_KEY;
 
   const latParam = request.nextUrl.searchParams.get("lat");
   const lngParam = request.nextUrl.searchParams.get("lng");
@@ -161,46 +111,44 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ results: [] });
   }
 
-  const cacheKey = googleApiKey
-    ? `${query.toLocaleLowerCase("lv-LV")}:${sessionToken}`
-    : query.toLocaleLowerCase("lv-LV");
+  const cacheKey = query.toLocaleLowerCase("lv-LV");
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return NextResponse.json({ results: cached.results });
   }
 
-  let googleResults: SearchResult[] = [];
-  if (googleApiKey) {
+  let geoapifyResults: SearchResult[] = [];
+  if (geoapifyApiKey) {
     try {
-      const response = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
-        method: "POST",
+      const geoapifyUrl = new URL("https://api.geoapify.com/v1/geocode/autocomplete");
+      geoapifyUrl.searchParams.set("text", query);
+      geoapifyUrl.searchParams.set("format", "json");
+      geoapifyUrl.searchParams.set("filter", "countrycode:lv");
+      geoapifyUrl.searchParams.set("bias", "proximity:24.1052,56.9496");
+      geoapifyUrl.searchParams.set("lang", "lv");
+      geoapifyUrl.searchParams.set("limit", "5");
+      geoapifyUrl.searchParams.set("apiKey", geoapifyApiKey);
+      const response = await fetch(geoapifyUrl, {
         headers: {
           Accept: "application/json",
-          "Content-Type": "application/json",
-          "X-Goog-Api-Key": googleApiKey,
-          "X-Goog-FieldMask":
-            "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text",
         },
-        body: JSON.stringify({
-          input: query,
-          languageCode: "lv",
-          includedRegionCodes: ["lv"],
-          ...(sessionToken ? { sessionToken } : {}),
-        }),
         signal: AbortSignal.timeout(6000),
       });
       if (response.ok) {
-        const data = (await response.json()) as { suggestions?: GooglePlaceSuggestion[] };
-        googleResults = (data.suggestions || [])
-          .map((suggestion) => {
-            const placeId = suggestion.placePrediction?.placeId;
-            const label = suggestion.placePrediction?.text?.text;
-            return placeId && label ? { placeId, label } : null;
+        const data = (await response.json()) as {
+          results?: Array<{ formatted?: string; name?: string; lat?: number; lon?: number }>;
+        };
+        geoapifyResults = (data.results || [])
+          .map((result) => {
+            const label = result.formatted || result.name;
+            return label && typeof result.lat === "number" && typeof result.lon === "number"
+              ? { label, lat: result.lat, lng: result.lon }
+              : null;
           })
-          .filter((result): result is { placeId: string; label: string } => result !== null);
+          .filter((result): result is SearchResult => result !== null);
       }
     } catch {
-      // The existing address search still provides results if Google Places is unavailable.
+      // The existing address search still provides results if Geoapify is unavailable.
     }
   }
 
@@ -240,7 +188,7 @@ export async function GET(request: NextRequest) {
       );
 
     const seenLabels = new Set<string>();
-    const results = [...googleResults, ...addressResults].filter((result) => {
+    const results = [...geoapifyResults, ...addressResults].filter((result) => {
       const normalized = result.label.toLocaleLowerCase("lv-LV");
       if (seenLabels.has(normalized)) return false;
       seenLabels.add(normalized);
@@ -256,8 +204,8 @@ export async function GET(request: NextRequest) {
       { headers: { "Cache-Control": "public, max-age=300" } },
     );
   } catch {
-    if (googleResults.length > 0) {
-      return NextResponse.json({ results: googleResults });
+    if (geoapifyResults.length > 0) {
+      return NextResponse.json({ results: geoapifyResults });
     }
     return NextResponse.json(
       { error: "Adrešu meklēšana pašlaik nav pieejama.", results: [] },

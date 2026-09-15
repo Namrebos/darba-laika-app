@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CircleHelp, LoaderCircle, MapPin } from "lucide-react";
 
 type Point = { lat: number; lng: number };
-type Suggestion = { label: string; placeId?: string; lat?: number; lng?: number };
+type Suggestion = Point & { label: string };
 
 export default function AddressField({
   id,
@@ -29,7 +29,6 @@ export default function AddressField({
   const fieldRef = useRef<HTMLDivElement>(null);
   const selectedAddressRef = useRef("");
   const userQueryRef = useRef("");
-  const sessionTokenRef = useRef(crypto.randomUUID());
 
   useEffect(() => {
     if (!helpOpen) return;
@@ -107,17 +106,14 @@ export default function AddressField({
     const timeout = window.setTimeout(async () => {
       setLoading(true);
       try {
-        const response = await fetch(
-          `/api/geocode?q=${encodeURIComponent(query)}&sessionToken=${encodeURIComponent(sessionTokenRef.current)}`,
-          { signal: controller.signal },
-        );
+        const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
         const data = await response.json();
         const next = (data.results || []) as Suggestion[];
         setSuggestions(next);
         setOpen(next.length > 0);
-        if (typeof next[0]?.lat === "number" && typeof next[0]?.lng === "number") {
-          onMapFocus({ lat: next[0].lat, lng: next[0].lng });
-        }
+        if (next[0]) onMapFocus({ lat: next[0].lat, lng: next[0].lng });
       } catch {
         if (!controller.signal.aborted) setSuggestions([]);
       } finally {
@@ -194,30 +190,15 @@ export default function AddressField({
         <div className="absolute left-0 right-0 top-full z-[1000] mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
           {suggestions.map((suggestion) => (
             <button
-              key={suggestion.placeId || `${suggestion.lat}-${suggestion.lng}-${suggestion.label}`}
+              key={`${suggestion.lat}-${suggestion.lng}-${suggestion.label}`}
               type="button"
-              onPointerDown={async (event) => {
+              onPointerDown={(event) => {
                 event.preventDefault();
+                selectedAddressRef.current = suggestion.label.trim();
+                onChange(suggestion.label);
+                onMapFocus({ lat: suggestion.lat, lng: suggestion.lng });
                 setSuggestions([]);
                 setOpen(false);
-                let selected = suggestion;
-                if (suggestion.placeId) {
-                  setLoading(true);
-                  try {
-                    const response = await fetch(
-                      `/api/geocode?placeId=${encodeURIComponent(suggestion.placeId)}&sessionToken=${encodeURIComponent(sessionTokenRef.current)}`,
-                    );
-                    const data = (await response.json()) as { result?: Suggestion };
-                    if (response.ok && data.result) selected = data.result;
-                  } finally {
-                    setLoading(false);
-                    sessionTokenRef.current = crypto.randomUUID();
-                  }
-                }
-                if (typeof selected.lat !== "number" || typeof selected.lng !== "number") return;
-                selectedAddressRef.current = selected.label.trim();
-                onChange(selected.label);
-                onMapFocus({ lat: selected.lat, lng: selected.lng });
                 inputRef.current?.blur();
               }}
               className="flex w-full items-start gap-2 border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-800 last:border-0 hover:bg-blue-50"
