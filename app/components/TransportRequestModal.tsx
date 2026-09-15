@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { SiWaze } from "react-icons/si";
 import AddressField from "@/app/components/AddressField";
-import { normalizeInternationalPhoneInput } from "@/lib/phoneInput";
+import { isValidInternationalPhone, normalizeInternationalPhoneInput } from "@/lib/phoneInput";
 import { supabase } from "@/lib/supabaseClient";
 
 const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), {
@@ -360,6 +360,37 @@ function EditField({
   );
 }
 
+function PhoneEditField({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (value: string) => void;
+}) {
+  const phone = value || "+371";
+  const invalid = !isValidInternationalPhone(phone);
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-semibold text-slate-800">
+        Tālrunis <span className="text-red-500">*</span>
+      </span>
+      <input
+        type="tel"
+        inputMode="tel"
+        value={phone}
+        onChange={(event) => onChange(normalizeInternationalPhoneInput(event.target.value))}
+        className="form-input bg-white"
+        aria-invalid={invalid}
+      />
+      {invalid && (
+        <span className="mt-1 block text-xs text-red-600">
+          Latvijas numuram ievadi tieši 8 ciparus; valsts kods +371 tiek sakārtots automātiski.
+        </span>
+      )}
+    </label>
+  );
+}
+
 function EditablePartySection({
   title,
   prefix,
@@ -432,7 +463,7 @@ function EditablePartySection({
             <EditField label="Uzvārds" value={String(request[key("last_name")] || "")} onChange={(value) => setText("last_name", value)} />
           </div>
         )}
-        <label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Tālrunis *</span><input type="tel" value={String(request[key("phone")] || "")} onChange={(e) => setText("phone", normalizeInternationalPhoneInput(e.target.value))} maxLength={30} pattern="\+[1-9]\d{7,14}" className="form-input bg-white" />{!/^\+[1-9]\d{7,14}$/.test(String(request[key("phone")] || "").replace(/[\s()-]/g, "")) && <span className="mt-1 block text-xs text-red-600">Ievadi valsts kodu un 8–15 ciparus.</span>}</label>
+        <PhoneEditField value={String(request[key("phone")] || "")} onChange={(value) => setText("phone", value)} />
       </div>
     </section>
   );
@@ -554,7 +585,7 @@ function EditableLocationSection({
         />
         <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
           <EditField label="Kontaktpersona" required value={request[contactNameKey]} onChange={(value) => update({ [contactNameKey]: value } as Partial<TransportRequest>)} />
-          <EditField label="Kontakttālrunis" required type="tel" value={request[contactPhoneKey]} onChange={(value) => update({ [contactPhoneKey]: normalizeInternationalPhoneInput(value) } as Partial<TransportRequest>)} />
+          <PhoneEditField value={request[contactPhoneKey]} onChange={(value) => update({ [contactPhoneKey]: value } as Partial<TransportRequest>)} />
         </div>
         <EditField label="Piezīmes" value={request[notesKey]} multiline onChange={(value) => update({ [notesKey]: value } as Partial<TransportRequest>)} />
       </div>
@@ -666,9 +697,10 @@ export default function TransportRequestModal({
 
   async function saveRequest() {
     if (!transportRequest || !requestId) return;
-    const validPhone = (value: string) => /^\+[1-9]\d{7,14}$/.test(value.replace(/[\s()-]/g, ""));
-    if (!validPhone(transportRequest.sender_phone) || !validPhone(transportRequest.recipient_phone)) {
-      setError("Pārbaudi abus tālruņa numurus: nepieciešams valsts kods un 8–15 cipari.");
+    const phones = [transportRequest.sender_phone, transportRequest.recipient_phone,
+      transportRequest.pickup_contact_phone, transportRequest.dropoff_contact_phone];
+    if (phones.some((phone) => !isValidInternationalPhone(phone))) {
+      setError("Pārbaudi visus tālruņa numurus. Latvijas numuram nepieciešami tieši 8 cipari.");
       return;
     }
     if (!transportRequest.pickup_date || !transportRequest.dropoff_date) {
@@ -710,9 +742,7 @@ export default function TransportRequestModal({
     const registrationNumber = String(
       transportRequest.sender_registration_number || "",
     ).trim();
-    const validPhone = /^\+[1-9]\d{7,14}$/.test(
-      transportRequest.sender_phone.replace(/[\s()-]/g, ""),
-    );
+    const validPhone = isValidInternationalPhone(transportRequest.sender_phone);
     if (
       !displayName ||
       !address ||

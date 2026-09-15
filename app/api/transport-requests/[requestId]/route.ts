@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
+import { isValidInternationalPhone } from "@/lib/phoneInput";
 
 export async function GET(
   request: NextRequest,
@@ -168,6 +169,13 @@ export async function PUT(
     !Number.isFinite(dropoffLat) || !Number.isFinite(dropoffLng)
   ) {
     return NextResponse.json({ error: "Aizpildi obligātos pieteikuma laukus." }, { status: 400 });
+  }
+  if (["sender_phone", "recipient_phone", "pickup_contact_phone", "dropoff_contact_phone"]
+    .some((key) => !isValidInternationalPhone(text(key)))) {
+    return NextResponse.json(
+      { error: "Pārbaudi visus tālruņa numurus. Latvijas numuram nepieciešami tieši 8 cipari." },
+      { status: 400 },
+    );
   }
   const pickupMoment = `${text("pickup_date")}T${text("pickup_time") || "00:00"}`;
   const dropoffMoment = `${text("dropoff_date")}T${text("dropoff_time") || "23:59"}`;

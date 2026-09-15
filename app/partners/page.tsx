@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
-import { normalizeInternationalPhoneInput } from "@/lib/phoneInput";
+import { isValidInternationalPhone, normalizeInternationalPhoneInput } from "@/lib/phoneInput";
 
 const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), { ssr: false });
 
@@ -196,7 +196,7 @@ export default function PartnersPage() {
     const normalizedContacts = contacts.map((contact, index) => ({
       name: contact.name.trim(), phone: contact.phone.replace(/\s/g, ""), sort_order: index,
     }));
-    const contactsValid = normalizedContacts.length > 0 && normalizedContacts.every((contact) => contact.name && /^\+[1-9]\d{7,14}$/.test(contact.phone));
+    const contactsValid = normalizedContacts.length > 0 && normalizedContacts.every((contact) => contact.name && isValidInternationalPhone(contact.phone));
     if (!displayName || !identityValid || !contactsValid || !form.address.trim() || !point) {
       setMessage("Aizpildi partnera nosaukumu, rekvizītus, kontaktpersonu, korektu tālruni un atzīmē lokāciju kartē.");
       return;

@@ -5,7 +5,7 @@ import { Check, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
-import { normalizeInternationalPhoneInput } from "@/lib/phoneInput";
+import { isValidInternationalPhone, normalizeInternationalPhoneInput } from "@/lib/phoneInput";
 
 const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), { ssr: false });
 type Point = { lat: number; lng: number };
@@ -91,7 +91,7 @@ export default function CarrierCard({ onMessage }: { onMessage: (message: string
     const displayName = form.display_name.trim() || (form.partner_type === "company" ? form.company_name.trim() : `${form.first_name} ${form.last_name}`.trim());
     const normalizedContacts = contacts.map((item) => ({ name: item.name.trim(), phone: item.phone.replace(/\s/g, "") }));
     const identityValid = form.partner_type === "company" ? form.company_name.trim() && form.registration_number.trim() : form.first_name.trim();
-    if (!displayName || !identityValid || !form.address.trim() || !point || normalizedContacts.some((item) => !item.name || !/^\+[1-9]\d{7,14}$/.test(item.phone))) {
+    if (!displayName || !identityValid || !form.address.trim() || !point || normalizedContacts.some((item) => !item.name || !isValidInternationalPhone(item.phone))) {
       onMessage("Aizpildi pārvadātāja rekvizītus, kontaktpersonas, korektus tālruņus un lokāciju."); return;
     }
     const { data: authData } = await supabase.auth.getUser();

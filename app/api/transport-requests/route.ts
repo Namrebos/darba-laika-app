@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
+import { isValidInternationalPhone } from "@/lib/phoneInput";
 
 const allowedTypes = new Set([
   "image/jpeg",
@@ -21,11 +22,6 @@ function cleanText(value: unknown, maxLength: number) {
 function validCoordinate(value: unknown, min: number, max: number) {
   const number = Number(value);
   return Number.isFinite(number) && number >= min && number <= max;
-}
-
-function validInternationalPhone(value: unknown) {
-  const compact = cleanText(value, 30).replace(/[\s()-]/g, "");
-  return /^\+[1-9]\d{7,14}$/.test(compact);
 }
 
 function validDropoffOrder(input: Record<string, unknown>) {
@@ -58,12 +54,12 @@ function validatePayload(
   return Boolean(
     senderIdentity &&
       recipientIdentity &&
-      (trustedPartnerRequest || validInternationalPhone(input.sender_phone)) &&
-      (trustedPartnerRequest || validInternationalPhone(input.recipient_phone)) &&
+      (trustedPartnerRequest || isValidInternationalPhone(input.sender_phone)) &&
+      (trustedPartnerRequest || isValidInternationalPhone(input.recipient_phone)) &&
       cleanText(input.pickup_contact_name, 120) &&
-      validInternationalPhone(input.pickup_contact_phone) &&
+      isValidInternationalPhone(input.pickup_contact_phone) &&
       cleanText(input.dropoff_contact_name, 120) &&
-      validInternationalPhone(input.dropoff_contact_phone) &&
+      isValidInternationalPhone(input.dropoff_contact_phone) &&
       cleanText(input.pickup_address, 250) &&
       cleanText(input.dropoff_address, 250) &&
       cleanText(input.pickup_date, 10) &&

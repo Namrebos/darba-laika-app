@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import AddressField from "@/app/components/AddressField";
+import { countryCodes, isValidPhone, normalizePhoneInput, phoneDigits } from "@/lib/phoneInput";
 import { supabase } from "@/lib/supabaseClient";
 
 const LocationPicker = dynamic(
@@ -143,69 +144,6 @@ const defaultCargoTypes = [
   "Celtniecības tehnika",
   "Automašīna",
 ];
-
-const countryCodes = [
-  ["+371", "Latvija"],
-  ["+370", "Lietuva"],
-  ["+372", "Igaunija"],
-  ["+358", "Somija"],
-  ["+46", "Zviedrija"],
-  ["+47", "Norvēģija"],
-  ["+45", "Dānija"],
-  ["+48", "Polija"],
-  ["+49", "Vācija"],
-  ["+44", "Apvienotā Karaliste"],
-  ["+353", "Īrija"],
-  ["+31", "Nīderlande"],
-  ["+32", "Beļģija"],
-  ["+33", "Francija"],
-  ["+34", "Spānija"],
-  ["+39", "Itālija"],
-] as const;
-
-const countryCodesByLength = [...countryCodes].sort(
-  ([first], [second]) => second.length - first.length,
-);
-
-function phoneDigits(value: string) {
-  return value.replace(/\D/g, "");
-}
-
-function maxSubscriberDigits(code: string) {
-  return code === "+371" ? 8 : 15 - phoneDigits(code).length;
-}
-
-function normalizePhoneInput(value: string, currentCode: string) {
-  let digits = phoneDigits(value);
-  if (digits.startsWith("00")) digits = digits.slice(2);
-
-  const currentMax = maxSubscriberDigits(currentCode);
-  const looksInternational =
-    value.trim().startsWith("+") ||
-    value.trim().startsWith("00") ||
-    digits.length > currentMax;
-  const matchedCode = looksInternational
-    ? countryCodesByLength.find(([code]) =>
-        digits.startsWith(phoneDigits(code)),
-      )?.[0]
-    : undefined;
-  const code = matchedCode || currentCode;
-  const subscriber = matchedCode
-    ? digits.slice(phoneDigits(matchedCode).length)
-    : digits;
-
-  return {
-    code,
-    subscriber: subscriber.slice(0, maxSubscriberDigits(code)),
-  };
-}
-
-function isValidPhone(code: string, value: string) {
-  const subscriber = phoneDigits(value);
-  if (code === "+371") return /^\d{8}$/.test(subscriber);
-  const fullNumber = `${code}${subscriber}`;
-  return /^\+[1-9]\d{7,14}$/.test(fullNumber);
-}
 
 function FieldLabel({
   children,
