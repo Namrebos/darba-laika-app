@@ -15,6 +15,7 @@ import {
 import { SiWaze } from "react-icons/si";
 import AddressField from "@/app/components/AddressField";
 import { isValidInternationalPhone, normalizeInternationalPhoneInput } from "@/lib/phoneInput";
+import { shortPartnerName } from "@/lib/partnerName";
 import { supabase } from "@/lib/supabaseClient";
 
 const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), {
@@ -733,7 +734,7 @@ export default function TransportRequestModal({
   async function addSenderToPartners() {
     if (!transportRequest || senderIsPartner) return;
     const displayName = transportRequest.sender_type === "company"
-      ? String(transportRequest.sender_company_name || "").trim()
+      ? shortPartnerName(String(transportRequest.sender_company_name || ""))
       : [transportRequest.sender_first_name, transportRequest.sender_last_name]
           .filter(Boolean)
           .join(" ")

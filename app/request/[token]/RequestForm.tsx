@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import AddressField from "@/app/components/AddressField";
 import { countryCodes, isValidPhone, normalizePhoneInput, phoneDigits } from "@/lib/phoneInput";
+import { shortPartnerName } from "@/lib/partnerName";
 import { supabase } from "@/lib/supabaseClient";
 
 const LocationPicker = dynamic(
@@ -853,7 +854,7 @@ export default function RequestForm({
 
   const addSenderToPartners = async () => {
     const displayName = form.sender_type === "company"
-      ? form.sender_company_name.trim()
+      ? shortPartnerName(form.sender_company_name)
       : [form.sender_first_name, form.sender_last_name]
           .map((value) => value.trim())
           .filter(Boolean)
@@ -944,7 +945,10 @@ export default function RequestForm({
           form.sender_type === "private"
             ? form.sender_last_name.trim() || null
             : null,
-        company_name: form.sender_type === "company" ? displayName : null,
+        company_name:
+          form.sender_type === "company"
+            ? form.sender_company_name.trim()
+            : null,
         registration_number:
           form.sender_type === "company" ? registrationNumber : null,
         contact_name: displayName,
