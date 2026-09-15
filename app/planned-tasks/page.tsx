@@ -26,7 +26,7 @@ import {
   Truck,
   X,
 } from "lucide-react";
-import TransportRequestModal from "@/app/components/TransportRequestModal";
+import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -2443,10 +2443,10 @@ export default function PlannedTasksPage() {
           </>
         )}
       </section>
-      <TransportRequestModal
+      <UnifiedTransportRequestForm
+        mode="edit"
         requestId={openedRequestId}
         onClose={() => setOpenedRequestId(null)}
-        editable
         onSaved={() => window.location.reload()}
       />
     </div>

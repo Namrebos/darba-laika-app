@@ -8,7 +8,7 @@ import { applyWeekdayLunchDeduction, calculateWorkHours } from "./utils";
 import ImageGalleryModal from "@/app/components/ImageGalleryModal";
 import TaskPreviewCard from "@/app/components/TaskPreviewCard";
 import TaskDetailsCard from "@/app/components/TaskDetailsCard";
-import TransportRequestModal from "@/app/components/TransportRequestModal";
+import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 
 type DayModalProps = {
   date: string;
@@ -877,7 +877,8 @@ export default function DayModal({
         setSelectedIndex={setSelectedIndex}
         onClose={closeImageModal}
       />
-      <TransportRequestModal
+      <UnifiedTransportRequestForm
+        mode="summary"
         requestId={openedRequestId}
         onClose={() => setOpenedRequestId(null)}
       />
