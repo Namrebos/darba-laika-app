@@ -41,7 +41,20 @@ function pointFromText(value: string) {
 }
 
 function pointFromMapUrl(url: URL) {
-  for (const key of ["query", "q", "destination", "origin", "daddr", "saddr", "to", "center", "ll", "coordinate", "near", "sll"]) {
+  const destinationKeys = ["destination", "daddr", "to"];
+  for (const key of destinationKeys) {
+    const point = pointFromText(url.searchParams.get(key) || "");
+    if (point) return point;
+  }
+
+  // A directions link can contain a textual destination and coordinate-based
+  // origin. In that case the destination must be geocoded instead of silently
+  // returning the origin coordinates.
+  if (destinationKeys.some((key) => url.searchParams.get(key)?.trim())) {
+    return null;
+  }
+
+  for (const key of ["query", "q", "center", "ll", "coordinate", "near", "sll", "origin", "saddr"]) {
     const point = pointFromText(url.searchParams.get(key) || "");
     if (point) return point;
   }
@@ -109,7 +122,7 @@ function pointFromMapContent(value: string) {
 }
 
 function searchTextFromMapUrl(url: URL) {
-  for (const key of ["query", "q", "destination", "origin", "daddr", "saddr", "to", "address"]) {
+  for (const key of ["destination", "daddr", "to", "query", "q", "address", "origin", "saddr"]) {
     const value = url.searchParams.get(key)?.trim();
     if (value && !pointFromText(value) && !/^place_id:/i.test(value)) return value;
   }
@@ -121,6 +134,35 @@ function searchTextFromMapUrl(url: URL) {
   }
   const match = pathname.match(/\/maps\/(?:place|search)\/([^/@]+)/i);
   return match?.[1]?.replace(/\+/g, " ").trim() || "";
+}
+
+async function expandShortMapUrl(startUrl: URL) {
+  let currentUrl = startUrl;
+  for (let redirectCount = 0; redirectCount < 6; redirectCount += 1) {
+    const point = pointFromMapUrl(currentUrl);
+    const searchText = searchTextFromMapUrl(currentUrl);
+    if (point || searchText) return { url: currentUrl, point, searchText, response: null as Response | null };
+
+    const response = await fetch(currentUrl, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(7000),
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1",
+      },
+    });
+    const location = response.headers.get("location");
+    if (!location) {
+      return { url: currentUrl, point: null, searchText: "", response };
+    }
+
+    const nextUrl = new URL(location, currentUrl);
+    if (!isSupportedMapHost(nextUrl.hostname)) {
+      throw new Error(`Unexpected redirect host: ${nextUrl.hostname}`);
+    }
+    currentUrl = nextUrl;
+  }
+  throw new Error("Too many map link redirects");
 }
 
 async function geocodeSearchText(query: string) {
@@ -147,6 +189,24 @@ async function geocodeSearchText(query: string) {
   } catch {
     return null;
   }
+}
+
+async function geocodeMapSearchText(query: string) {
+  const candidates = [query];
+  const parts = query
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const addressStart = parts.findIndex(
+    (part) => /\d/.test(part) && /[a-zāčēģīķļņšūž]/i.test(part),
+  );
+  if (addressStart > 0) candidates.push(parts.slice(addressStart).join(", "));
+
+  for (const candidate of [...new Set(candidates)]) {
+    const point = await geocodeSearchText(candidate);
+    if (point) return point;
+  }
+  return null;
 }
 
 function mapUrlFromText(value: string) {
@@ -188,31 +248,30 @@ export async function POST(request: NextRequest) {
   let searchText = searchTextFromMapUrl(url);
   if (!point) {
     try {
-      const response = await fetch(url, {
-        redirect: "follow",
-        signal: AbortSignal.timeout(7000),
-        headers: { "User-Agent": "DarbaLaikaApp/1.0 (location link resolver)" },
-      });
-      const resolvedUrl = new URL(response.url);
-      if (!isSupportedMapHost(resolvedUrl.hostname)) throw new Error("Unexpected redirect");
-      url = resolvedUrl;
-      point = pointFromMapUrl(url);
-      searchText = searchText || searchTextFromMapUrl(url);
-      if (!point) {
-        const contentType = response.headers.get("content-type") || "";
+      const expanded = await expandShortMapUrl(url);
+      url = expanded.url;
+      point = expanded.point;
+      searchText = expanded.searchText || searchText;
+      if (!point && !searchText && expanded.response) {
+        const contentType = expanded.response.headers.get("content-type") || "";
         if (contentType.includes("text/html")) {
-          const html = (await response.text()).slice(0, 2_000_000);
+          const html = (await expanded.response.text()).slice(0, 2_000_000);
           point = pointFromMapContent(html);
         }
       }
-    } catch {
+    } catch (error) {
+      console.warn("[location-link] map link expansion failed", {
+        host: url.hostname,
+        error: error instanceof Error ? error.message : String(error),
+      });
       // If the map service blocks link expansion, textual location may still be usable.
     }
   }
 
-  if (!point && searchText) point = await geocodeSearchText(searchText);
+  if (!point && searchText) point = await geocodeMapSearchText(searchText);
 
   if (!point) {
+    console.warn("[location-link] coordinates not found", { host: url.hostname });
     return NextResponse.json(
       { error: "Saitē neizdevās atrast precīzas koordinātes." },
       { status: 400 },
