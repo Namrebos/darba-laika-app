@@ -171,21 +171,25 @@ function SignaturePad({ label, initialSignature, onSave }: SignaturePadProps) {
   }
 
   return (
-    <div className="space-y-2 border-t border-slate-200 pt-4">
+    <div className="pt-4">
       <span className="text-sm font-semibold text-slate-800">{label}</span>
-      {signature && (
-        <div className="flex h-24 items-center justify-center rounded-lg border border-slate-300 bg-white p-2">
+      <div className="relative mt-2 h-24 border-b border-slate-900">
+        {signature && (
+          <div className="absolute inset-x-8 bottom-1 top-0 flex items-end justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={signature} alt={label} className="h-full max-w-full object-contain" />
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="delivery-note-no-print flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 font-semibold text-white hover:bg-blue-800"
-      >
-        <PenLine size={18} /> {signature ? "Mainīt parakstu" : "Parakstīt"}
-      </button>
+            <img src={signature} alt={label} className="max-h-full max-w-full object-contain" />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="delivery-note-no-print absolute bottom-1 right-0 p-1 text-slate-600 transition hover:text-blue-700"
+          aria-label={signature ? `Mainīt: ${label}` : `Parakstīt: ${label}`}
+          title={signature ? "Mainīt parakstu" : "Parakstīt"}
+        >
+          <PenLine size={19} />
+        </button>
+      </div>
 
       {open && (
         <div
