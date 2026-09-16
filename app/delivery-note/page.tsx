@@ -634,7 +634,7 @@ export default function DeliveryNotePage() {
         <section className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-5 pr-0 sm:border-r sm:border-slate-300 sm:pr-5">
             <div className="text-sm">
-              <p className="font-semibold">Nosūtītājs / pasūtītājs</p>
+              <p className="font-semibold">Nosūtītājs</p>
               <p className="mt-1 whitespace-pre-line leading-relaxed text-slate-800">
                 {customer || "Nav norādīts"}
               </p>
