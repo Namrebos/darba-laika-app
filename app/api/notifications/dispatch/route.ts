@@ -15,11 +15,26 @@ export async function POST(request: NextRequest) {
 
   const { data: config } = await admin
     .from("notification_dispatch_config")
-    .select("token_hash")
+    .select("token_hash, notifications_paused")
     .eq("id", true)
     .maybeSingle();
   if (!config || config.token_hash !== sha256(token)) {
     return NextResponse.json({ error: "Nav piekļuves." }, { status: 401 });
+  }
+
+  if (config.notifications_paused) {
+    const { data: suppressed } = await admin
+      .from("notification_queue")
+      .update({ sent_at: new Date().toISOString() })
+      .is("sent_at", null)
+      .eq("originated_by_admin", true)
+      .select("id");
+    return NextResponse.json({
+      ok: true,
+      paused: true,
+      suppressedAdminNotifications: suppressed?.length || 0,
+      sent: 0,
+    });
   }
 
   const { data: notifications } = await admin
