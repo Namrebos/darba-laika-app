@@ -75,13 +75,10 @@ Mērķis: partnerim ir sava droša pieeja, kurā var izveidot pieteikumus un red
 - [ ] Izveidot partnera mēneša pārskatu.
 - [ ] Vienoties par pārskatā redzamajiem datiem, filtriem un eksportu.
 
-### A-004 — Pieteikuma izveidotājs, saņemšanas laiks un statistika
+### A-004 — Pieteikumu izveides statistika
 
-Mērķis: katram brauciena pieteikumam ir redzams, kas un kādā veidā to izveidoja, kā arī precīzs izveidošanas vai saņemšanas laiks; administrators var apskatīt šo informāciju statistikā.
+Mērķis: administrators var apskatīt statistiku par izveidotajiem pieteikumiem un to avotiem.
 
-- [x] Saglabāt izveidotāju: administrators, lietotājs vai partneris.
-- [x] Saglabāt precīzu pieteikuma izveidošanas vai saņemšanas datumu un laiku.
-- [x] Kartītē un vēsturē parādīt pieteikuma izveidotāju, datumu un laiku.
 - [ ] Izveidot statistiku par izveidotajiem pieteikumiem un to avotiem (pagaidām atlikts).
 
 ### A-005 — Aplikācijas optimizācija
