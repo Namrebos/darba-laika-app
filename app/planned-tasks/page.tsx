@@ -1742,7 +1742,7 @@ export default function PlannedTasksPage() {
                           </span>
                           {currentUserRole === "admin" && <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]">
                             <UserRoundPen size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
-                            <span>Izveidoja {requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}</span>
+                            <span>{requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}</span>
                           </span>}
                         </div>
                       ) : (
@@ -1788,7 +1788,7 @@ export default function PlannedTasksPage() {
               {request && currentUserRole === "admin" && (
                 <p className="flex items-center gap-2 text-[11px] text-zinc-400 dark:text-zinc-500">
                   <UserRoundPen size={14} className="shrink-0" />
-                  Izveidoja {requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}
+                  {requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}
                 </p>
               )}
               <div className="relative">
@@ -2429,7 +2429,7 @@ export default function PlannedTasksPage() {
                     {currentUserRole === "admin" && task.transport_request_id && requestSummaries[task.transport_request_id] && (
                       <p className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
                         <UserRoundPen size={14} className="shrink-0" />
-                        Izveidoja {requestSourceLabel(requestSummaries[task.transport_request_id])} · {receivedAtLabel(requestSummaries[task.transport_request_id].created_at)}
+                        {requestSourceLabel(requestSummaries[task.transport_request_id])} · {receivedAtLabel(requestSummaries[task.transport_request_id].created_at)}
                       </p>
                     )}
                     {(images[task.id] || []).length > 0 && (
