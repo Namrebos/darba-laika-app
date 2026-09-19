@@ -84,14 +84,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Nederīgs paraksts." }, { status: 400 });
     }
     const prefix = body.signerRole === "sender" ? "sender" : "recipient";
-    const { error } = await context.admin.from("delivery_notes").update({
+    const signedAt = new Date().toISOString();
+    const signatureChanges: Record<string, string> = {
       [`${prefix}_signature_data`]: body.signatureData,
       [`${prefix}_signer_name`]: signerName,
-      [`${prefix}_signed_at`]: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      [`${prefix}_signed_at`]: signedAt,
+      updated_at: signedAt,
+    };
+    if (context.sameParty) {
+      signatureChanges.sender_signature_data = body.signatureData;
+      signatureChanges.sender_signer_name = signerName;
+      signatureChanges.sender_signed_at = signedAt;
+      signatureChanges.recipient_signature_data = body.signatureData;
+      signatureChanges.recipient_signer_name = signerName;
+      signatureChanges.recipient_signed_at = signedAt;
+    }
+    const { error } = await context.admin.from("delivery_notes").update({
+      ...signatureChanges,
     }).eq("id", noteId);
     if (error) return NextResponse.json({ error: "Parakstu neizdevās saglabāt." }, { status: 400 });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, appliedToBoth: context.sameParty });
   }
 
   if (body.action !== "create-link" || !['sender', 'recipient'].includes(body.signerRole || '')) {

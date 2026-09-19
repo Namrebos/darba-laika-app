@@ -23,6 +23,35 @@ export function dateInRiga(value: Date | string = new Date()) {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
+type TransportPartyData = {
+  sender_type?: unknown;
+  sender_first_name?: unknown;
+  sender_last_name?: unknown;
+  sender_company_name?: unknown;
+  sender_registration_number?: unknown;
+  recipient_type?: unknown;
+  recipient_first_name?: unknown;
+  recipient_last_name?: unknown;
+  recipient_company_name?: unknown;
+  recipient_registration_number?: unknown;
+};
+
+function normalizedPartyValue(value: unknown) {
+  return String(value || "").trim().toLocaleLowerCase("lv").replace(/\s+/g, " ");
+}
+
+export function sameTransportParties(request: TransportPartyData) {
+  if (request.sender_type !== request.recipient_type) return false;
+  if (request.sender_type === "company") {
+    const senderRegistration = normalizedPartyValue(request.sender_registration_number).replace(/\s/g, "");
+    const recipientRegistration = normalizedPartyValue(request.recipient_registration_number).replace(/\s/g, "");
+    if (senderRegistration && recipientRegistration) return senderRegistration === recipientRegistration;
+    return normalizedPartyValue(request.sender_company_name) === normalizedPartyValue(request.recipient_company_name);
+  }
+  return normalizedPartyValue(`${request.sender_first_name || ""} ${request.sender_last_name || ""}`) ===
+    normalizedPartyValue(`${request.recipient_first_name || ""} ${request.recipient_last_name || ""}`);
+}
+
 export async function getAuthenticatedDeliveryNoteContext(
   accessToken: string,
   requestId: number,
@@ -67,5 +96,5 @@ export async function getAuthenticatedDeliveryNoteContext(
     destination: request.dropoff_address || "",
     cargo: request.cargo_type || "",
   };
-  return { admin, user: authData.user, snapshot, taskStatus: task?.status || null } as const;
+  return { admin, user: authData.user, snapshot, taskStatus: task?.status || null, sameParty: sameTransportParties(request) } as const;
 }

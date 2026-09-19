@@ -563,6 +563,14 @@ export default function DeliveryNotePage() {
       body: JSON.stringify({ action: "save-signature", signerRole: role, signatureData, signerName }),
     });
     if (!response.ok) throw new Error("Parakstu neizdevās saglabāt.");
+    const result = (await response.json()) as { appliedToBoth?: boolean };
+    if (result.appliedToBoth) {
+      setSenderSignature(signatureData);
+      setRecipientSignature(signatureData);
+      setSenderSignerName(signerName);
+      setRecipientSignerName(signerName);
+      return;
+    }
     if (role === "sender") {
       setSenderSignature(signatureData);
       setSenderSignerName(signerName);
