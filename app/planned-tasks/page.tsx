@@ -24,6 +24,7 @@ import {
   Send,
   Trash2,
   Truck,
+  UserRoundPen,
   X,
 } from "lucide-react";
 import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
@@ -1740,7 +1741,7 @@ export default function PlannedTasksPage() {
                             <span className="truncate">{request.cargo_type}</span>
                           </span>
                           {currentUserRole === "admin" && <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]">
-                            <CalendarClock size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
+                            <UserRoundPen size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
                             <span>Izveidoja {requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}</span>
                           </span>}
                         </div>
@@ -1786,7 +1787,7 @@ export default function PlannedTasksPage() {
                 <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
               {request && currentUserRole === "admin" && (
                 <p className="flex items-center gap-2 text-[11px] text-zinc-400 dark:text-zinc-500">
-                  <CalendarClock size={14} className="shrink-0" />
+                  <UserRoundPen size={14} className="shrink-0" />
                   Izveidoja {requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}
                 </p>
               )}
@@ -2427,7 +2428,7 @@ export default function PlannedTasksPage() {
                     </p>
                     {currentUserRole === "admin" && task.transport_request_id && requestSummaries[task.transport_request_id] && (
                       <p className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-                        <CalendarClock size={14} className="shrink-0" />
+                        <UserRoundPen size={14} className="shrink-0" />
                         Izveidoja {requestSourceLabel(requestSummaries[task.transport_request_id])} · {receivedAtLabel(requestSummaries[task.transport_request_id].created_at)}
                       </p>
                     )}

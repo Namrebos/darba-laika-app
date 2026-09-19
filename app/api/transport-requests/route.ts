@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
 import { isValidInternationalPhone } from "@/lib/phoneInput";
+import { shortPartnerName } from "@/lib/partnerName";
 
 const allowedTypes = new Set([
   "image/jpeg",
@@ -290,6 +291,22 @@ export async function POST(request: NextRequest) {
     safePayload.recipient_phone = safePayload.sender_phone;
   }
 
+  let taskDisplayName = safePayload.sender_type === "company"
+    ? shortPartnerName(String(safePayload.sender_company_name || ""))
+    : [safePayload.sender_first_name, safePayload.sender_last_name]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .join(" ");
+  const partnerId = Number(safePayload.partner_id);
+  if (Number.isSafeInteger(partnerId) && partnerId > 0) {
+    const { data: partner } = await adminClient
+      .from("partners")
+      .select("display_name")
+      .eq("id", partnerId)
+      .maybeSingle();
+    taskDisplayName = String(partner?.display_name || taskDisplayName).trim();
+  }
+
   const { data, error } = await adminClient.rpc("submit_transport_request", {
     target_token_hash: submissionTokenHash,
     payload: safePayload,
@@ -329,6 +346,24 @@ export async function POST(request: NextRequest) {
       { error: "Brauciens izveidots, bet saņēmēja datus neizdevās saglabāt." },
       { status: 500 },
     );
+  }
+
+  if (taskDisplayName) {
+    const titleUpdates = [
+      adminClient
+        .from("notification_queue")
+        .update({ title: `Jauns brauciens: ${taskDisplayName}` })
+        .eq("url", `/planned-tasks?transportRequest=${submission.request_id}`),
+    ];
+    if (submission.planned_task_id) {
+      titleUpdates.push(
+        adminClient
+        .from("planned_tasks")
+        .update({ title: taskDisplayName })
+        .eq("id", submission.planned_task_id),
+      );
+    }
+    await Promise.all(titleUpdates);
   }
 
   let skippedImages = 0;

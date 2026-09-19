@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
 import { isValidInternationalPhone } from "@/lib/phoneInput";
+import { shortPartnerName } from "@/lib/partnerName";
 
 export async function GET(
   request: NextRequest,
@@ -231,7 +232,7 @@ export async function PUT(
   }
 
   let taskTitle = senderType === "company"
-    ? text("sender_company_name")
+    ? shortPartnerName(text("sender_company_name"))
     : [text("sender_first_name"), text("sender_last_name")].filter(Boolean).join(" ");
   if (updatedRequest.partner_id) {
     const { data: partner } = await adminClient
