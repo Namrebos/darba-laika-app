@@ -137,7 +137,6 @@ _Pašlaik nav._
 
 Mērķis: autocomplete darbojas vienādi visur, kur atļauts izveidot vai rediģēt brauciena kartītes teksta laukus, neatkarīgi no brauciena statusa un sadaļas.
 
-- [ ] Ievadot uzņēmuma reģistrācijas numuru, piedāvāt atbilstošo uzņēmumu un aizpildīt uzņēmuma datus.
 - [ ] Nodrošināt uzņēmuma un pārējo autocomplete lauku darbību gan jaunā, gan jau izveidotā braucienā.
 - [ ] Nodrošināt autocomplete darbību **Plānotajos uzdevumos**, lietotājam nosūtītā braucienā un jau sāktā braucienā, ja attiecīgie lauki ir rediģējami.
 - [ ] Nodrošināt vienādu autocomplete darbību visos pārējos rediģēšanas skatos.

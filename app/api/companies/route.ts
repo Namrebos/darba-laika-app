@@ -16,7 +16,13 @@ type RegistryResponse = {
 };
 
 export async function GET(request: NextRequest) {
-  const query = (request.nextUrl.searchParams.get("q") || "").trim();
+  const rawQuery = (request.nextUrl.searchParams.get("q") || "").trim();
+  const registrationWithCountryCode = rawQuery.match(
+    /^[a-z]{2}[\s._-]*([0-9][0-9\s._-]*)$/i,
+  );
+  const query = registrationWithCountryCode
+    ? registrationWithCountryCode[1].replace(/\D/g, "")
+    : rawQuery;
   if (query.length < 2) {
     return NextResponse.json({ companies: [] });
   }
