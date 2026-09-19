@@ -209,6 +209,7 @@ export default function DayModal({
       .from("work_logs")
       .select("id, start_time, end_time")
       .eq("user_id", ownerId)
+      .eq("is_test", false)
       .gte("start_time", from)
       .lte("start_time", to)
       .order("start_time", { ascending: true });
@@ -255,7 +256,10 @@ export default function DayModal({
     }
 
     const work = ((workLogs || []) as WorkLog[])[0] || null;
-    const taskRows = (taskLogs || []) as Task[];
+    const regularSessionIds = new Set((workLogs || []).map((log) => log.id));
+    const taskRows = ((taskLogs || []) as Task[]).filter(
+      (task) => task.session_id === null || regularSessionIds.has(task.session_id),
+    );
 
     setWorkLog(work);
     if (work) {

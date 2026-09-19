@@ -48,8 +48,6 @@ export default function UsersPage() {
   const [deletingUserId, setDeletingUserId] = useState("");
   const [savingUserId, setSavingUserId] = useState("");
   const [expandedUserId, setExpandedUserId] = useState("");
-  const [notificationsPaused, setNotificationsPaused] = useState(false);
-  const [savingNotificationPause, setSavingNotificationPause] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -70,8 +68,7 @@ export default function UsersPage() {
         return;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const [{ data, error }, { data: accessRows }, notificationResponse] = await Promise.all([
+      const [{ data, error }, { data: accessRows }] = await Promise.all([
         supabase
           .from("profiles")
           .select(`
@@ -91,21 +88,7 @@ export default function UsersPage() {
           `)
           .order("created_at", { ascending: true }),
         supabase.from("summary_access").select("viewer_id, owner_id"),
-        fetch("/api/admin/notifications", {
-          headers: {
-            Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
-          },
-        }),
       ]);
-
-      if (notificationResponse.ok) {
-        const notificationState = (await notificationResponse.json()) as {
-          paused?: boolean;
-        };
-        setNotificationsPaused(notificationState.paused === true);
-      } else {
-        setMessage("Neizdevās ielādēt kopējo paziņojumu statusu.");
-      }
 
       if (error) setMessage("Neizdevās ielādēt lietotājus.");
       const rows = (data || []) as AccessProfile[];
@@ -129,39 +112,6 @@ export default function UsersPage() {
 
     load();
   }, [router]);
-
-  async function toggleNotificationPause() {
-    const nextPaused = !notificationsPaused;
-    setSavingNotificationPause(true);
-    setMessage("");
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    const response = await fetch("/api/admin/notifications", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
-      },
-      body: JSON.stringify({ paused: nextPaused }),
-    });
-    const result = (await response.json()) as {
-      paused?: boolean;
-      error?: string;
-    };
-
-    setSavingNotificationPause(false);
-    if (!response.ok || typeof result.paused !== "boolean") {
-      setMessage(result.error || "Paziņojumu statusu neizdevās saglabāt.");
-      return;
-    }
-
-    setNotificationsPaused(result.paused);
-    setMessage(
-      result.paused
-        ? "Paziņojumi ir apturēti. Administratora radītie netiks sūtīti; pārējie gaidīs rindā. Lietotāju iestatījumi nav mainīti."
-        : "Paziņojumu nosūtīšana ir atjaunota ar iepriekšējiem lietotāju iestatījumiem.",
-    );
-  }
 
   async function saveUserAccess(profile: AccessProfile) {
     const permissions = permissionDrafts[profile.id] || emptyPermissions;
@@ -291,34 +241,6 @@ export default function UsersPage() {
       </div>
 
       {message && <p className="rounded bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">{message}</p>}
-
-      <section className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-        <div>
-          <h2 className="font-semibold">Paziņojumu testa pauze</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            {notificationsPaused
-              ? "Sūtīšana ir apturēta. Administratora radītie paziņojumi tiek atmesti, bet citu lietotāju paziņojumi gaida rindā."
-              : "Paziņojumi tiek sūtīti atbilstoši katra lietotāja iestatījumiem."}
-          </p>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={notificationsPaused}
-          aria-label="Apturēt visus paziņojumus"
-          disabled={savingNotificationPause}
-          onClick={toggleNotificationPause}
-          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-            notificationsPaused ? "bg-red-600" : "bg-zinc-300 dark:bg-zinc-600"
-          }`}
-        >
-          <span
-            className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-              notificationsPaused ? "translate-x-5" : "translate-x-0"
-            }`}
-          />
-        </button>
-      </section>
 
       <CarrierCard onMessage={setMessage} />
 

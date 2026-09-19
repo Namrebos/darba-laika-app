@@ -157,6 +157,7 @@ export default function CalculatorsPage() {
           .from("work_logs")
           .select("start_time, end_time")
           .eq("user_id", selectedUserId)
+          .eq("is_test", false)
           .gte("start_time", new Date(2026, 0, 1).toISOString())
           .lt("start_time", new Date(2027, 0, 1).toISOString()),
         supabase

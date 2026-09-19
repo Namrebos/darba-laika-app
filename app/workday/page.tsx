@@ -66,6 +66,10 @@ export default function WorkdayPage() {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [sessionOfflineId, setSessionOfflineId] = useState<string | null>(null);
   const [sessionStartTime, setSessionStartTime] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [testModeEnabled, setTestModeEnabled] = useState(false);
+  const [isTestWorkday, setIsTestWorkday] = useState(false);
+  const [testActionPending, setTestActionPending] = useState(false);
   const [savingTasks, setSavingTasks] = useState<Record<string, boolean>>({});
   const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([]);
   const [openedRequestId, setOpenedRequestId] = useState<number | null>(null);
@@ -86,7 +90,7 @@ export default function WorkdayPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role, can_access_workday")
+        .select("role, can_access_workday, test_mode_enabled")
         .eq("id", user.id)
         .single();
       const cachedAccess = !profile
@@ -97,6 +101,8 @@ export default function WorkdayPage() {
         return;
       }
 
+      setIsAdmin(profile?.role === "admin" || cachedAccess?.role === "admin");
+      setTestModeEnabled(profile?.role === "admin" && profile.test_mode_enabled === true);
       setUser(user);
       await checkSession(user);
       await loadDictionary(user.id);
@@ -109,7 +115,7 @@ export default function WorkdayPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!user || !sessionOfflineId || !sessionStartTime || workdayState !== "active") return;
+    if (!user || isTestWorkday || !sessionOfflineId || !sessionStartTime || workdayState !== "active") return;
     const timeout = window.setTimeout(async () => {
       const previous = await getOfflineWorkday(user.id);
       const visibleIds = new Set(tasks.map((task) => task.offlineId));
@@ -141,15 +147,15 @@ export default function WorkdayPage() {
       void saveOfflineWorkday(record, { needsSync: true });
     }, 100);
     return () => window.clearTimeout(timeout);
-  }, [user, sessionOfflineId, sessionStartTime, sessionId, workdayState, tasks]);
+  }, [user, isTestWorkday, sessionOfflineId, sessionStartTime, sessionId, workdayState, tasks]);
 
   useEffect(() => {
-    if (!user || workdayState !== "active") return;
+    if (!user || isTestWorkday || workdayState !== "active") return;
     const timeout = window.setTimeout(() => {
       if (navigator.onLine) void syncOfflineWorkday(user.id);
     }, 3000);
     return () => window.clearTimeout(timeout);
-  }, [user, workdayState, tasks]);
+  }, [user, isTestWorkday, workdayState, tasks]);
 
   useEffect(() => {
     const handleSynced = async () => {
@@ -322,6 +328,7 @@ export default function WorkdayPage() {
       setSessionId(data[0].id);
       setSessionOfflineId(data[0].created_at);
       setSessionStartTime(data[0].start_time);
+      setIsTestWorkday(data[0].is_test === true);
       setWorkdayState("active");
       return;
     }
@@ -493,6 +500,32 @@ export default function WorkdayPage() {
           ? (task.endTime ? new Date(task.endTime) : new Date()).toISOString()
           : null;
 
+      if (isTestWorkday) {
+        if (!sessionId) return;
+        const { data: savedTask, error } = await supabase
+          .from("task_logs")
+          .insert({
+            session_id: sessionId,
+            title: task.title.trim(),
+            note: task.notes.trim(),
+            start_time: startISO,
+            end_time: endISO,
+            user_id: user.id,
+          })
+          .select("id")
+          .single();
+        if (error || !savedTask) throw error || new Error("Testa uzdevumu neizdevās saglabāt.");
+        const uploadedImageUrls = await uploadImages(task, savedTask.id);
+        setTasks((current) =>
+          current.map((item) =>
+            item.id === task.id
+              ? { ...item, supabaseTaskId: savedTask.id, uploadedImageUrls }
+              : item,
+          ),
+        );
+        return;
+      }
+
       updateTask(task.id, { startTime: new Date(startISO), endTime: endISO ? new Date(endISO) : undefined });
       await new Promise((resolve) => setTimeout(resolve, 400));
       await syncOfflineWorkday(user.id);
@@ -520,6 +553,74 @@ export default function WorkdayPage() {
       const synced = await getOfflineWorkday(user.id);
       setSessionId(synced?.serverId ?? null);
     }
+  };
+
+  const startTestWorkday = async () => {
+    if (!user || !isAdmin || !navigator.onLine || testActionPending) {
+      if (!navigator.onLine) alert("Testa darbadienu var sākt tikai ar interneta savienojumu.");
+      return;
+    }
+
+    setTestActionPending(true);
+    const { data, error } = await supabase.rpc("start_own_test_workday");
+    setTestActionPending(false);
+    if (error || !data) {
+      alert(`Testa darbadienu neizdevās sākt: ${error?.message || "nezināma kļūda"}`);
+      return;
+    }
+
+    const workday = Array.isArray(data) ? data[0] : data;
+    setSessionId(workday.id);
+    setSessionOfflineId(null);
+    setSessionStartTime(workday.start_time);
+    setIsTestWorkday(true);
+    setTasks([]);
+    setWorkdayState("active");
+  };
+
+  const deleteTestWorkday = async () => {
+    if (!user || !sessionId || !isTestWorkday || testActionPending) return;
+    if (!navigator.onLine) {
+      alert("Testa darbadienu var izdzēst tikai ar interneta savienojumu.");
+      return;
+    }
+    if (!window.confirm("Vai dzēst visu testa darbadienu un tajā izveidotos testa datus?")) return;
+
+    setTestActionPending(true);
+    const taskIds = tasks.flatMap((task) => task.supabaseTaskId ? [task.supabaseTaskId] : []);
+    if (taskIds.length > 0) {
+      const { data: imageRows } = await supabase
+        .from("task_images")
+        .select("url")
+        .in("task_log_id", taskIds);
+      const paths = (imageRows || []).flatMap(({ url }) => {
+        const marker = "/task-images/";
+        const index = url.indexOf(marker);
+        if (index < 0) return [];
+        const path = decodeURIComponent(url.slice(index + marker.length));
+        return taskIds.some((taskId) => path.startsWith(`${user.id}/${taskId}/`))
+          ? [path]
+          : [];
+      });
+      if (paths.length > 0) await supabase.storage.from("task-images").remove(paths);
+    }
+
+    const { data, error } = await supabase.rpc("delete_own_test_workday", {
+      target_session_id: sessionId,
+    });
+    setTestActionPending(false);
+    if (error || data !== true) {
+      alert(`Testa darbadienu neizdevās izdzēst: ${error?.message || "nezināma kļūda"}`);
+      return;
+    }
+
+    setWorkdayState("inactive");
+    setIsTestWorkday(false);
+    setTasks([]);
+    setSessionId(null);
+    setSessionOfflineId(null);
+    setSessionStartTime(null);
+    await loadTodayPlannedTasks(user.id);
   };
 
   const endWorkday = async () => {
@@ -727,7 +828,12 @@ export default function WorkdayPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4">
       <div className="space-y-4 rounded border p-4">
-        <div className="flex justify-between">
+        {isTestWorkday && (
+          <div className="rounded-lg border-2 border-amber-500 bg-amber-100 px-4 py-3 text-center font-bold text-amber-950">
+            TESTA REŽĪMS — šī darbadiena netiks ieskaitīta darba laikā
+          </div>
+        )}
+        <div className="flex flex-wrap justify-between gap-2">
           <button
             onClick={startWorkday}
             disabled={workdayState === "active"}
@@ -736,13 +842,35 @@ export default function WorkdayPage() {
             Sākt darbadienu
           </button>
 
-          <button
-            onClick={endWorkday}
-            disabled={workdayState === "inactive"}
-            className={`rounded px-4 py-2 text-white ${workdayState === "inactive" ? "bg-gray-400" : "bg-red-600 hover:bg-red-700"}`}
-          >
-            Pabeigt darbadienu
-          </button>
+          {isAdmin && testModeEnabled && workdayState === "inactive" && (
+            <button
+              type="button"
+              onClick={startTestWorkday}
+              disabled={testActionPending}
+              className="rounded bg-amber-500 px-4 py-2 font-medium text-amber-950 hover:bg-amber-400 disabled:opacity-50"
+            >
+              {testActionPending ? "Atver..." : "Sākt testa darbadienu"}
+            </button>
+          )}
+
+          {isTestWorkday ? (
+            <button
+              type="button"
+              onClick={deleteTestWorkday}
+              disabled={testActionPending}
+              className="rounded bg-red-700 px-4 py-2 text-white hover:bg-red-800 disabled:opacity-50"
+            >
+              {testActionPending ? "Dzēš..." : "Dzēst testa darbadienu"}
+            </button>
+          ) : (
+            <button
+              onClick={endWorkday}
+              disabled={workdayState === "inactive"}
+              className={`rounded px-4 py-2 text-white ${workdayState === "inactive" ? "bg-gray-400" : "bg-red-600 hover:bg-red-700"}`}
+            >
+              Pabeigt darbadienu
+            </button>
+          )}
         </div>
       </div>
 

@@ -204,8 +204,9 @@ export default function SummaryPage() {
   async function loadAvailableMonths(selectedOwnerId: string) {
     const { data: workLogs, error: workError } = await supabase
       .from("work_logs")
-      .select("start_time")
-      .eq("user_id", selectedOwnerId);
+      .select("id, start_time")
+      .eq("user_id", selectedOwnerId)
+      .eq("is_test", false);
 
     const [
       { data: taskLogs, error: taskError },
@@ -237,7 +238,10 @@ export default function SummaryPage() {
       return;
     }
 
-    const taskRows = (taskLogs || []) as TaskLogRow[];
+    const regularSessionIds = new Set((workLogs || []).map((log) => log.id));
+    const taskRows = ((taskLogs || []) as TaskLogRow[]).filter(
+      (task) => task.session_id === null || regularSessionIds.has(task.session_id),
+    );
     const taskIds = taskRows.flatMap((task) => task.id ? [task.id] : []);
     const { data: linkedRequests } = taskIds.length
       ? await supabase.from("planned_tasks").select("task_log_id, transport_request_id").in("task_log_id", taskIds).not("transport_request_id", "is", null)
@@ -249,7 +253,7 @@ export default function SummaryPage() {
       ...((workLogs || []) as { start_time: string }[]).map(
         (w) => new Date(w.start_time),
       ),
-      ...((taskLogs || []) as TaskLogRow[]).map((t) => new Date(t.start_time)),
+      ...taskRows.map((t) => new Date(t.start_time)),
       ...((plannedTasks || []) as { scheduled_date: string }[]).map(
         (task) => new Date(`${task.scheduled_date}T12:00:00`),
       ),
@@ -334,8 +338,9 @@ export default function SummaryPage() {
 
     const { data: workLogs, error: workError } = await supabase
       .from("work_logs")
-      .select("start_time, end_time")
+      .select("id, start_time, end_time")
       .eq("user_id", selectedOwnerId)
+      .eq("is_test", false)
       .gte("start_time", from.toISOString())
       .lt("start_time", nextMonthStart.toISOString());
 
@@ -397,7 +402,10 @@ export default function SummaryPage() {
       addWorkSegmentsByDate(dataMap, start, end);
     });
 
-    const allTasks = (taskLogs || []) as TaskLogRow[];
+    const regularSessionIds = new Set((workLogs || []).map((log) => log.id));
+    const allTasks = ((taskLogs || []) as TaskLogRow[]).filter(
+      (task) => task.session_id === null || regularSessionIds.has(task.session_id),
+    );
     const taskByDate = calculateTaskHoursByDate(allTasks);
 
     Object.entries(taskByDate).forEach(([date, hours]) => {

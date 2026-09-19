@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
     .from("work_logs")
     .select("id, start_time, end_time")
     .eq("user_id", ownerId)
+    .eq("is_test", false)
     .gte("start_time", dayStart.toISOString())
     .lte("start_time", dayEnd.toISOString())
     .order("start_time", { ascending: true });
@@ -145,6 +146,7 @@ export async function POST(request: NextRequest) {
       .select("id, start_time, end_time")
       .eq("id", body.workLogId)
       .eq("user_id", ownerId)
+      .eq("is_test", false)
       .maybeSingle();
     if (!data) {
       return NextResponse.json({ error: "Darba dienas ieraksts nav atrasts." }, { status: 404 });
@@ -156,6 +158,7 @@ export async function POST(request: NextRequest) {
     .from("work_logs")
     .select("id")
     .eq("user_id", ownerId)
+    .eq("is_test", false)
     .lt("start_time", end.toISOString())
     .or(`end_time.is.null,end_time.gt.${start.toISOString()}`);
   if (body.workLogId) overlapQuery = overlapQuery.neq("id", body.workLogId);

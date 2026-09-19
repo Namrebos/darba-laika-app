@@ -78,6 +78,11 @@ export default function ProfilePage() {
   const [notificationPreferences, setNotificationPreferences] =
     useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFERENCES);
   const [savingNotifications, setSavingNotifications] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [testModeEnabled, setTestModeEnabled] = useState(false);
+  const [savingTestMode, setSavingTestMode] = useState(false);
+  const [notificationsPaused, setNotificationsPaused] = useState(false);
+  const [savingNotificationPause, setSavingNotificationPause] = useState(false);
   const workTimePickerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -90,12 +95,26 @@ export default function ProfilePage() {
       setOriginalEmail(authEmail);
       const { data } = await supabase
         .from("profiles")
-        .select("display_name, avatar_url")
+        .select("display_name, avatar_url, role, test_mode_enabled")
         .eq("id", authData.user.id)
         .single();
       if (data) {
         setDisplayName(data.display_name || "");
         setAvatarUrl(data.avatar_url);
+        setIsAdmin(data.role === "admin");
+        setTestModeEnabled(data.role === "admin" && data.test_mode_enabled === true);
+        if (data.role === "admin") {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const response = await fetch("/api/admin/notifications", {
+            headers: {
+              Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
+            },
+          });
+          if (response.ok) {
+            const notificationState = (await response.json()) as { paused?: boolean };
+            setNotificationsPaused(notificationState.paused === true);
+          }
+        }
       }
       const { data: workSchedule } = await supabase
         .from("user_work_schedule_settings")
@@ -157,6 +176,53 @@ export default function ProfilePage() {
         name: word.name,
         usageCount: word.usage_count || 0,
       })),
+    );
+  }
+
+  async function toggleTestMode() {
+    if (!isAdmin || savingTestMode) return;
+    const nextEnabled = !testModeEnabled;
+    if (!nextEnabled && notificationsPaused) {
+      setMessage("Vispirms ieslēdz paziņojumu sūtīšanu, pēc tam izslēdz testa vidi.");
+      return;
+    }
+    setSavingTestMode(true);
+    const { data, error } = await supabase.rpc("set_own_test_mode", {
+      enabled: nextEnabled,
+    });
+    setSavingTestMode(false);
+    if (error || data !== nextEnabled) {
+      setMessage("Testa vides iestatījumu neizdevās saglabāt.");
+      return;
+    }
+    setTestModeEnabled(nextEnabled);
+    setMessage(nextEnabled ? "Testa vide ieslēgta." : "Testa vide izslēgta.");
+  }
+
+  async function toggleNotificationPause() {
+    if (!isAdmin || !testModeEnabled || savingNotificationPause) return;
+    const nextPaused = !notificationsPaused;
+    setSavingNotificationPause(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch("/api/admin/notifications", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
+      },
+      body: JSON.stringify({ paused: nextPaused }),
+    });
+    const result = (await response.json()) as { paused?: boolean; error?: string };
+    setSavingNotificationPause(false);
+    if (!response.ok || typeof result.paused !== "boolean") {
+      setMessage(result.error || "Paziņojumu statusu neizdevās saglabāt.");
+      return;
+    }
+    setNotificationsPaused(result.paused);
+    setMessage(
+      result.paused
+        ? "Paziņojumi testa laikā ir apturēti."
+        : "Paziņojumu sūtīšana atjaunota ar iepriekšējiem lietotāju iestatījumiem.",
     );
   }
 
@@ -576,6 +642,65 @@ export default function ProfilePage() {
           </button>
         </div>
       </form>
+      {isAdmin && (
+        <section className="space-y-4 rounded-lg border-2 border-amber-400 bg-amber-50 p-5 dark:border-amber-700 dark:bg-amber-950/30">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-semibold">Testa vide</h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                Ieslēdz tikai tad, kad nepieciešami administratora testēšanas rīki.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={testModeEnabled}
+              aria-label="Ieslēgt testa vidi"
+              disabled={savingTestMode}
+              onClick={toggleTestMode}
+              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                testModeEnabled ? "bg-amber-500" : "bg-zinc-300 dark:bg-zinc-600"
+              }`}
+            >
+              <span
+                className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  testModeEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          {testModeEnabled && (
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-300 bg-white p-4 dark:border-amber-800 dark:bg-zinc-900">
+              <div>
+                <h3 className="font-medium">Paziņojumu testa pauze</h3>
+                <p className="mt-1 text-sm text-zinc-500">
+                  {notificationsPaused
+                    ? "Sūtīšana apturēta. Administratora radītie paziņojumi tiek atmesti, pārējie gaida rindā."
+                    : "Paziņojumi darbojas atbilstoši lietotāju iestatījumiem."}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={notificationsPaused}
+                aria-label="Apturēt paziņojumu sūtīšanu"
+                disabled={savingNotificationPause}
+                onClick={toggleNotificationPause}
+                className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                  notificationsPaused ? "bg-red-600" : "bg-zinc-300 dark:bg-zinc-600"
+                }`}
+              >
+                <span
+                  className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    notificationsPaused ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          )}
+        </section>
+      )}
       <section className="space-y-4 rounded-lg border border-zinc-200 p-5 dark:border-zinc-700">
         <div className="flex items-start justify-between gap-4">
           <div className="flex gap-3">
