@@ -79,10 +79,10 @@ Mērķis: partnerim ir sava droša pieeja, kurā var izveidot pieteikumus un red
 
 Mērķis: katram brauciena pieteikumam ir redzams, kas un kādā veidā to izveidoja, kā arī precīzs izveidošanas vai saņemšanas laiks; administrators var apskatīt šo informāciju statistikā.
 
-- [ ] Saglabāt izveidotāju: administrators, lietotājs vai partneris.
-- [ ] Saglabāt precīzu pieteikuma izveidošanas vai saņemšanas datumu un laiku.
-- [ ] Kartītē un vēsturē parādīt pieteikuma izveidotāju, datumu un laiku.
-- [ ] Izveidot statistiku par izveidotajiem pieteikumiem un to avotiem.
+- [x] Saglabāt izveidotāju: administrators, lietotājs vai partneris.
+- [x] Saglabāt precīzu pieteikuma izveidošanas vai saņemšanas datumu un laiku.
+- [x] Kartītē un vēsturē parādīt pieteikuma izveidotāju, datumu un laiku.
+- [x] Izveidot statistiku par izveidotajiem pieteikumiem un to avotiem.
 
 ### A-005 — Aplikācijas optimizācija
 

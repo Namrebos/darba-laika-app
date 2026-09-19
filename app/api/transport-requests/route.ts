@@ -189,6 +189,8 @@ export async function POST(request: NextRequest) {
     additional_notes: cleanText(payload.additional_notes, 500),
   };
 
+  let submissionSource: "admin" | "user" | "partner" = "partner";
+
   let submissionTokenHash = token ? tokenHash(token) : "";
   if (internalRequest) {
     const bearer = request.headers.get("authorization");
@@ -216,6 +218,7 @@ export async function POST(request: NextRequest) {
         { status: 403 },
       );
     }
+    submissionSource = profile?.role === "admin" ? "admin" : "user";
     if (profile?.role === "admin") {
       const requestedPartnerId = Number(payload.partner_id);
       safePayload.partner_id = Number.isSafeInteger(requestedPartnerId) && requestedPartnerId > 0
@@ -311,6 +314,7 @@ export async function POST(request: NextRequest) {
   const { error: recipientUpdateError } = await adminClient
     .from("transport_requests")
     .update({
+      submission_source: submissionSource,
       recipient_type: safePayload.recipient_type,
       recipient_first_name: safePayload.recipient_first_name,
       recipient_last_name: safePayload.recipient_last_name,
