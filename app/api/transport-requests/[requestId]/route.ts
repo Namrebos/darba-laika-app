@@ -254,8 +254,16 @@ export async function PUT(
       updated_at: new Date().toISOString(),
     })
     .eq("transport_request_id", numericId)
-    .select("task_log_id")
+    .select("id, task_log_id")
     .maybeSingle();
+
+  if (linkedTask?.id && profile?.role === "admin") {
+    await adminClient
+      .from("notification_queue")
+      .update({ originated_by_admin: true })
+      .is("sent_at", null)
+      .like("url", `%&plannedTask=${linkedTask.id}`);
+  }
 
   if (linkedTask?.task_log_id) {
     await adminClient

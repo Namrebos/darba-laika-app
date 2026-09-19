@@ -352,7 +352,10 @@ export async function POST(request: NextRequest) {
     const titleUpdates = [
       adminClient
         .from("notification_queue")
-        .update({ title: `Jauns brauciens: ${taskDisplayName}` })
+        .update({
+          title: `Jauns brauciens: ${taskDisplayName}`,
+          originated_by_admin: submissionSource === "admin",
+        })
         .eq("url", `/planned-tasks?transportRequest=${submission.request_id}`),
     ];
     if (submission.planned_task_id) {

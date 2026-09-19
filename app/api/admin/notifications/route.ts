@@ -63,19 +63,59 @@ export async function PATCH(request: NextRequest) {
   }
 
   async function suppressPendingNotifications() {
-    return authorizedAdmin
+    const suppressedAt = new Date().toISOString();
+    const directResult = await authorizedAdmin
       .from("notification_queue")
-      .update({ sent_at: new Date().toISOString() })
+      .update({ sent_at: suppressedAt })
       .is("sent_at", null)
       .eq("originated_by_admin", true);
+    if (directResult.error) return directResult;
+
+    // Vecākām rindām, kas izveidotas servera RPC kontekstā, auth.uid() nebija
+    // pieejams un administratora izcelsme varēja palikt neatzīmēta.
+    const { data: pendingRows, error: pendingError } = await authorizedAdmin
+      .from("notification_queue")
+      .select("id, url")
+      .is("sent_at", null)
+      .eq("notification_type", "new_request");
+    if (pendingError) return { error: pendingError };
+
+    const requestIds = (pendingRows || [])
+      .map((row) => Number(String(row.url || "").match(/transportRequest=(\d+)/)?.[1]))
+      .filter((id) => Number.isSafeInteger(id) && id > 0);
+    if (requestIds.length === 0) return { error: null };
+
+    const { data: adminRequests, error: requestError } = await authorizedAdmin
+      .from("transport_requests")
+      .select("id")
+      .in("id", requestIds)
+      .eq("submission_source", "admin");
+    if (requestError) return { error: requestError };
+
+    const adminRequestIds = new Set((adminRequests || []).map((item) => item.id));
+    const queueIds = (pendingRows || [])
+      .filter((row) => {
+        const requestId = Number(String(row.url || "").match(/transportRequest=(\d+)/)?.[1]);
+        return adminRequestIds.has(requestId);
+      })
+      .map((row) => row.id);
+    if (queueIds.length === 0) return { error: null };
+
+    return authorizedAdmin
+      .from("notification_queue")
+      .update({ sent_at: suppressedAt, originated_by_admin: true })
+      .in("id", queueIds)
+      .is("sent_at", null);
   }
 
   // Administratora radītos paziņojumus pauzes laikā neatliekam. Citu
   // lietotāju radītie paliek rindā un tiek nosūtīti pēc pauzes izslēgšanas.
-  const firstResult = await setPauseState();
-  const secondResult = body.paused
-    ? await suppressPendingNotifications()
-    : { error: null };
+  // Vispirms izmetam administratora rindu un tikai pēc tam mainām pauzes
+  // stāvokli. Pretējā secībā cron var paspēt rindu nosūtīt.
+  const secondResult = await suppressPendingNotifications();
+  const firstResult = secondResult.error
+    ? { error: secondResult.error }
+    : await setPauseState();
 
   if (firstResult.error || secondResult.error) {
     return NextResponse.json(
