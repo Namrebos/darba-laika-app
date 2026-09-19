@@ -8,7 +8,6 @@ import {
   ArrowUp,
   CalendarDays,
   CalendarClock,
-  ChartNoAxesColumnIncreasing,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -76,7 +75,8 @@ type TransportRequestSummary = {
   id: number;
   created_at: string;
   created_by: string;
-  submission_source: "admin" | "user" | "partner";
+  partner_id: number | null;
+  submission_source: "admin" | "user" | "partner" | "unknown";
   pickup_date: string;
   pickup_address: string;
   dropoff_address: string;
@@ -90,6 +90,11 @@ type DictionaryField = "title" | "note";
 type DictionaryWord = {
   name: string;
   usageCount: number;
+};
+
+type PartnerSummary = {
+  id: number;
+  display_name: string;
 };
 
 type MultiDateMode = "manual" | "range" | "month";
@@ -237,6 +242,7 @@ export default function PlannedTasksPage() {
   const [requestSummaries, setRequestSummaries] = useState<
     Record<number, TransportRequestSummary>
   >({});
+  const [partnerNames, setPartnerNames] = useState<Record<number, string>>({});
   const [selectedDate, setSelectedDate] = useState(todayInRiga());
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [dayTab, setDayTab] = useState<DayTab>("planned");
@@ -299,6 +305,7 @@ export default function PlannedTasksPage() {
         { data: tagRows, error: tagError },
         { data: vehicleRows, error: vehicleError },
         { data: requestRows, error: requestError },
+        { data: partnerRows, error: partnerError },
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -326,7 +333,8 @@ export default function PlannedTasksPage() {
           .order("registration_number"),
         supabase
           .from("transport_requests")
-          .select("id, created_at, created_by, submission_source, pickup_date, pickup_address, dropoff_address, cargo_type"),
+          .select("id, created_at, created_by, partner_id, submission_source, pickup_date, pickup_address, dropoff_address, cargo_type"),
+        supabase.from("partners").select("id, display_name"),
       ]);
 
       if (
@@ -335,7 +343,8 @@ export default function PlannedTasksPage() {
         imageError ||
         tagError ||
         vehicleError ||
-        requestError
+        requestError ||
+        partnerError
       ) {
         setMessage("Neizdevās ielādēt plānotos uzdevumus.");
       }
@@ -361,6 +370,11 @@ export default function PlannedTasksPage() {
             request.id,
             request,
           ]),
+        ),
+      );
+      setPartnerNames(
+        Object.fromEntries(
+          ((partnerRows || []) as PartnerSummary[]).map((partner) => [partner.id, partner.display_name]),
         ),
       );
       setDictionaryWords(
@@ -554,16 +568,6 @@ export default function PlannedTasksPage() {
     };
   }, [selectedDate, selectedEmployeeId, tasks]);
 
-  const requestStats = useMemo(() => {
-    const requests = Object.values(requestSummaries);
-    return {
-      total: requests.length,
-      admin: requests.filter((request) => request.submission_source === "admin").length,
-      user: requests.filter((request) => request.submission_source === "user").length,
-      partner: requests.filter((request) => request.submission_source === "partner").length,
-    };
-  }, [requestSummaries]);
-
   function nextTimeForDate(date: string, excludedTaskId?: number) {
     const latestMinutes = tasks
       .filter(
@@ -590,12 +594,14 @@ export default function PlannedTasksPage() {
     return profile?.display_name || profile?.email || "Nezināms lietotājs";
   }
 
-  function requestSourceLabel(request: TransportRequestSummary, taskTitle: string) {
+  function requestSourceLabel(request: TransportRequestSummary) {
     if (request.submission_source === "partner") {
-      return `Partneris: ${taskTitle.trim() || "pieteikuma saite"}`;
+      return request.partner_id ? partnerNames[request.partner_id] || "Nezināms" : "Nezināms";
     }
-    const source = request.submission_source === "admin" ? "Administrators" : "Lietotājs";
-    return `${source}: ${profileName(request.created_by)}`;
+    if (request.submission_source === "admin" || request.submission_source === "user") {
+      return profileName(request.created_by);
+    }
+    return "Nezināms";
   }
 
   function changeLocalTask(id: number, changes: Partial<PlannedTask>) {
@@ -1510,28 +1516,6 @@ export default function PlannedTasksPage() {
         </p>
       )}
 
-      {currentUserRole === "admin" && (
-        <details className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-          <summary className="flex cursor-pointer list-none items-center gap-2 font-semibold">
-            <ChartNoAxesColumnIncreasing size={19} className="text-blue-600 dark:text-blue-400" />
-            Pieteikumu statistika
-          </summary>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              ["Kopā", requestStats.total],
-              ["Administratori", requestStats.admin],
-              ["Lietotāji", requestStats.user],
-              ["Partneri", requestStats.partner],
-            ].map(([label, count]) => (
-              <div key={label} className="rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
-                <p className="mt-1 text-2xl font-bold">{count}</p>
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
-
       <div className="flex justify-end">
         <div className="relative">
           <button
@@ -1755,10 +1739,10 @@ export default function PlannedTasksPage() {
                             <Truck size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
                             <span className="truncate">{request.cargo_type}</span>
                           </span>
-                          <span className="inline-flex min-w-0 items-center gap-1.5">
+                          {currentUserRole === "admin" && <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]">
                             <CalendarClock size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
-                            <span>{requestSourceLabel(request, task.title)} · saņemts {receivedAtLabel(request.created_at)}</span>
-                          </span>
+                            <span>Izveidoja {requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}</span>
+                          </span>}
                         </div>
                       ) : (
                         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -1800,10 +1784,10 @@ export default function PlannedTasksPage() {
               </div>
               {expandedTaskIds.has(task.id) && (
                 <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-              {request && (
-                <p className="flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                  <CalendarClock size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
-                  {requestSourceLabel(request, task.title)} · saņemts {receivedAtLabel(request.created_at)}
+              {request && currentUserRole === "admin" && (
+                <p className="flex items-center gap-2 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  <CalendarClock size={14} className="shrink-0" />
+                  Izveidoja {requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}
                 </p>
               )}
               <div className="relative">
@@ -2441,10 +2425,10 @@ export default function PlannedTasksPage() {
                         ? ` · ${task.scheduled_time.slice(0, 5)}`
                         : ""}
                     </p>
-                    {task.transport_request_id && requestSummaries[task.transport_request_id] && (
-                      <p className="mt-2 flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                        <CalendarClock size={15} className="shrink-0 text-blue-600 dark:text-blue-400" />
-                        {requestSourceLabel(requestSummaries[task.transport_request_id], task.title)} · saņemts {receivedAtLabel(requestSummaries[task.transport_request_id].created_at)}
+                    {currentUserRole === "admin" && task.transport_request_id && requestSummaries[task.transport_request_id] && (
+                      <p className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                        <CalendarClock size={14} className="shrink-0" />
+                        Izveidoja {requestSourceLabel(requestSummaries[task.transport_request_id])} · {receivedAtLabel(requestSummaries[task.transport_request_id].created_at)}
                       </p>
                     )}
                     {(images[task.id] || []).length > 0 && (

@@ -82,7 +82,7 @@ Mērķis: katram brauciena pieteikumam ir redzams, kas un kādā veidā to izvei
 - [x] Saglabāt izveidotāju: administrators, lietotājs vai partneris.
 - [x] Saglabāt precīzu pieteikuma izveidošanas vai saņemšanas datumu un laiku.
 - [x] Kartītē un vēsturē parādīt pieteikuma izveidotāju, datumu un laiku.
-- [x] Izveidot statistiku par izveidotajiem pieteikumiem un to avotiem.
+- [ ] Izveidot statistiku par izveidotajiem pieteikumiem un to avotiem (pagaidām atlikts).
 
 ### A-005 — Aplikācijas optimizācija
 

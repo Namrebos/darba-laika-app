@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
     additional_notes: cleanText(payload.additional_notes, 500),
   };
 
-  let submissionSource: "admin" | "user" | "partner" = "partner";
+  let submissionSource: "admin" | "user" | "partner" | "unknown" = "unknown";
 
   let submissionTokenHash = token ? tokenHash(token) : "";
   if (internalRequest) {
@@ -241,6 +241,7 @@ export async function POST(request: NextRequest) {
       );
     }
   } else if (partnerToken) {
+    submissionSource = "partner";
     const { data: partnerLink } = await adminClient
       .from("partner_request_links")
       .select("partner_id, created_by")
