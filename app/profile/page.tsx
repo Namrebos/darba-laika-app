@@ -183,8 +183,22 @@ export default function ProfilePage() {
     if (!isAdmin || savingTestMode) return;
     const nextEnabled = !testModeEnabled;
     if (!nextEnabled && notificationsPaused) {
-      setMessage("Vispirms ieslēdz paziņojumu sūtīšanu, pēc tam izslēdz testa vidi.");
-      return;
+      setSavingTestMode(true);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch("/api/admin/notifications", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
+        },
+        body: JSON.stringify({ paused: false }),
+      });
+      if (!response.ok) {
+        setSavingTestMode(false);
+        setMessage("Paziņojumu sūtīšanu neizdevās atjaunot, tādēļ testa vide palika ieslēgta.");
+        return;
+      }
+      setNotificationsPaused(false);
     }
     setSavingTestMode(true);
     const { data, error } = await supabase.rpc("set_own_test_mode", {
@@ -196,7 +210,11 @@ export default function ProfilePage() {
       return;
     }
     setTestModeEnabled(nextEnabled);
-    setMessage(nextEnabled ? "Testa vide ieslēgta." : "Testa vide izslēgta.");
+    setMessage(
+      nextEnabled
+        ? "Testa vide ieslēgta."
+        : "Testa vide un tās palīgrīki izslēgti. Paziņojumu sūtīšana darbojas.",
+    );
   }
 
   async function toggleNotificationPause() {
