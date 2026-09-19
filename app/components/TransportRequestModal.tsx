@@ -626,6 +626,7 @@ export default function TransportRequestModal({
       setError("");
       const { data: sessionData } = await supabase.auth.getSession();
       const response = await fetch(`/api/transport-requests/${requestId}`, {
+        cache: "no-store",
         headers: {
           Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
         },

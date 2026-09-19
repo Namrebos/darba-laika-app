@@ -101,12 +101,19 @@ export async function GET(
     }),
   );
 
-  return NextResponse.json({
-    request: transportRequest,
-    vehicleId: task?.vehicle_id || null,
-    partnerContacts: partnerContacts || [],
-    images: signedImages.filter((image) => image.url),
-  });
+  return NextResponse.json(
+    {
+      request: transportRequest,
+      vehicleId: task?.vehicle_id || null,
+      partnerContacts: partnerContacts || [],
+      images: signedImages.filter((image) => image.url),
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    },
+  );
 }
 
 export async function PUT(
