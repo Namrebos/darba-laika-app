@@ -36,21 +36,26 @@ type TransportRequest = {
 type SignaturePadProps = {
   label: string;
   initialSignature?: string | null;
-  onSave: (signature: string) => Promise<void>;
+  initialSignerName?: string | null;
+  onSave: (signature: string, signerName: string) => Promise<void>;
 };
 
-function SignaturePad({ label, initialSignature, onSave }: SignaturePadProps) {
+function SignaturePad({ label, initialSignature, initialSignerName, onSave }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const hasInkRef = useRef(false);
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<"name" | "signature">("name");
   const [signature, setSignature] = useState<string | null>(initialSignature || null);
+  const [signerName, setSignerName] = useState(initialSignerName || "");
+  const [nameError, setNameError] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => setSignature(initialSignature || null), [initialSignature]);
+  useEffect(() => setSignerName(initialSignerName || ""), [initialSignerName]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || step !== "signature") return;
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
@@ -60,7 +65,25 @@ function SignaturePad({ label, initialSignature, onSave }: SignaturePadProps) {
     const image = new window.Image();
     image.onload = () => context.drawImage(image, 0, 0, canvas.width, canvas.height);
     image.src = signature;
-  }, [open, signature]);
+  }, [open, signature, step]);
+
+  function openSigning() {
+    setSignerName(initialSignerName || "");
+    setNameError("");
+    setStep("name");
+    setOpen(true);
+  }
+
+  function continueToSignature() {
+    const normalizedName = signerName.trim().replace(/\s+/g, " ");
+    if (normalizedName.split(" ").length < 2) {
+      setNameError("Ievadi vārdu un uzvārdu.");
+      return;
+    }
+    setSignerName(normalizedName);
+    setNameError("");
+    setStep("signature");
+  }
 
   function point(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = event.currentTarget;
@@ -162,7 +185,7 @@ function SignaturePad({ label, initialSignature, onSave }: SignaturePadProps) {
     const value = normalized.toDataURL("image/png");
     setSaving(true);
     try {
-      await onSave(value);
+      await onSave(value, signerName);
       setSignature(value);
       setOpen(false);
     } finally {
@@ -173,7 +196,10 @@ function SignaturePad({ label, initialSignature, onSave }: SignaturePadProps) {
   return (
     <div className="pt-4">
       <span className="text-sm font-semibold text-slate-800">{label}</span>
-      <div className="relative mt-2 h-24 border-b border-slate-900">
+      <p className="mt-2 min-h-5 text-sm text-slate-800">
+        {initialSignerName || ""}
+      </p>
+      <div className="relative h-16 border-b border-slate-900">
         {signature && (
           <div className="absolute inset-x-8 bottom-1 top-0 flex items-end justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -182,7 +208,7 @@ function SignaturePad({ label, initialSignature, onSave }: SignaturePadProps) {
         )}
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={openSigning}
           className="delivery-note-no-print absolute bottom-1 right-0 p-1 text-slate-600 transition hover:text-blue-700"
           aria-label={signature ? `Mainīt: ${label}` : `Parakstīt: ${label}`}
           title={signature ? "Mainīt parakstu" : "Parakstīt"}
@@ -210,34 +236,69 @@ function SignaturePad({ label, initialSignature, onSave }: SignaturePadProps) {
                 <X size={22} />
               </button>
             </div>
-            <canvas
-              ref={canvasRef}
-              width={900}
-              height={420}
-              onPointerDown={startDrawing}
-              onPointerMove={draw}
-              onPointerUp={stopDrawing}
-              onPointerCancel={stopDrawing}
-              className="h-[45vh] max-h-[420px] min-h-64 w-full touch-none rounded-xl border-2 border-slate-300 bg-white shadow-inner"
-              aria-label={label}
-            />
-            <div className="mt-4 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={clear}
-                className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              >
-                <Eraser size={14} /> Notīrīt
-              </button>
-              <button
-                type="button"
-                onClick={() => void save()}
-                disabled={saving}
-                className="flex items-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 font-semibold text-white hover:bg-green-700"
-              >
-                <Check size={18} /> {saving ? "Saglabā..." : "Saglabāt"}
-              </button>
-            </div>
+            {step === "name" ? (
+              <div>
+                <label className="block text-sm font-semibold text-slate-800" htmlFor={`${label}-signer-name`}>
+                  Vārds un uzvārds
+                </label>
+                <input
+                  id={`${label}-signer-name`}
+                  type="text"
+                  value={signerName}
+                  onChange={(event) => {
+                    setSignerName(event.target.value);
+                    setNameError("");
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") continueToSignature();
+                  }}
+                  autoComplete="name"
+                  autoFocus
+                  className="mt-2 w-full rounded-xl border-2 border-slate-300 px-4 py-3 text-base text-slate-950 outline-none focus:border-blue-600"
+                />
+                {nameError && <p className="mt-2 text-sm font-medium text-red-600">{nameError}</p>}
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={continueToSignature}
+                    className="rounded-lg bg-blue-700 px-5 py-2.5 font-semibold text-white hover:bg-blue-800"
+                  >
+                    Turpināt
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <canvas
+                  ref={canvasRef}
+                  width={900}
+                  height={420}
+                  onPointerDown={startDrawing}
+                  onPointerMove={draw}
+                  onPointerUp={stopDrawing}
+                  onPointerCancel={stopDrawing}
+                  className="h-[45vh] max-h-[420px] min-h-64 w-full touch-none rounded-xl border-2 border-slate-300 bg-white shadow-inner"
+                  aria-label={label}
+                />
+                <div className="mt-4 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={clear}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    <Eraser size={14} /> Notīrīt
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void save()}
+                    disabled={saving}
+                    className="flex items-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                  >
+                    <Check size={18} /> {saving ? "Saglabā..." : "Saglabāt"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -266,6 +327,8 @@ export default function DeliveryNotePage() {
   const [accessToken, setAccessToken] = useState("");
   const [senderSignature, setSenderSignature] = useState<string | null>(null);
   const [recipientSignature, setRecipientSignature] = useState<string | null>(null);
+  const [senderSignerName, setSenderSignerName] = useState("");
+  const [recipientSignerName, setRecipientSignerName] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -388,6 +451,8 @@ export default function DeliveryNotePage() {
           }
           setSenderSignature(noteBody.signatures?.sender_signature_data || null);
           setRecipientSignature(noteBody.signatures?.recipient_signature_data || null);
+          setSenderSignerName(noteBody.signatures?.sender_signer_name || "");
+          setRecipientSignerName(noteBody.signatures?.recipient_signer_name || "");
         }
       }
       setLoading(false);
@@ -490,16 +555,21 @@ export default function DeliveryNotePage() {
     }
   }
 
-  async function saveSignature(role: "sender" | "recipient", signatureData: string) {
+  async function saveSignature(role: "sender" | "recipient", signatureData: string, signerName: string) {
     if (!requestId || !accessToken) throw new Error("Pavadzīme nav pieejama.");
     const response = await fetch(`/api/delivery-notes/${requestId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify({ action: "save-signature", signerRole: role, signatureData }),
+      body: JSON.stringify({ action: "save-signature", signerRole: role, signatureData, signerName }),
     });
     if (!response.ok) throw new Error("Parakstu neizdevās saglabāt.");
-    if (role === "sender") setSenderSignature(signatureData);
-    else setRecipientSignature(signatureData);
+    if (role === "sender") {
+      setSenderSignature(signatureData);
+      setSenderSignerName(signerName);
+    } else {
+      setRecipientSignature(signatureData);
+      setRecipientSignerName(signerName);
+    }
   }
 
   async function shareSigningLink(role: "sender" | "recipient") {
@@ -645,7 +715,7 @@ export default function DeliveryNotePage() {
                 {origin || "Nav norādīta"}
               </p>
             </div>
-            <SignaturePad label="Nosūtītāja paraksts" initialSignature={senderSignature} onSave={(value) => saveSignature("sender", value)} />
+            <SignaturePad label="Nosūtītāja paraksts" initialSignature={senderSignature} initialSignerName={senderSignerName} onSave={(value, signerName) => saveSignature("sender", value, signerName)} />
           </div>
           <div className="space-y-5 sm:pl-1">
             <div className="text-sm">
@@ -660,7 +730,7 @@ export default function DeliveryNotePage() {
                 {destination || "Nav norādīta"}
               </p>
             </div>
-            <SignaturePad label="Saņēmēja paraksts" initialSignature={recipientSignature} onSave={(value) => saveSignature("recipient", value)} />
+            <SignaturePad label="Saņēmēja paraksts" initialSignature={recipientSignature} initialSignerName={recipientSignerName} onSave={(value, signerName) => saveSignature("recipient", value, signerName)} />
           </div>
         </section>
 

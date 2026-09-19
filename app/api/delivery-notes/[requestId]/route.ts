@@ -79,13 +79,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const noteId = note.id;
 
   if (body.action === "save-signature") {
-    if (!['sender', 'recipient'].includes(body.signerRole || '') || !body.signatureData?.startsWith("data:image/png;base64,") || body.signatureData.length > 600000) {
+    const signerName = body.signerName?.trim().replace(/\s+/g, " ") || "";
+    if (!['sender', 'recipient'].includes(body.signerRole || '') || signerName.split(" ").length < 2 || signerName.length > 120 || !body.signatureData?.startsWith("data:image/png;base64,") || body.signatureData.length > 600000) {
       return NextResponse.json({ error: "Nederīgs paraksts." }, { status: 400 });
     }
     const prefix = body.signerRole === "sender" ? "sender" : "recipient";
     const { error } = await context.admin.from("delivery_notes").update({
       [`${prefix}_signature_data`]: body.signatureData,
-      [`${prefix}_signer_name`]: body.signerName?.trim() || null,
+      [`${prefix}_signer_name`]: signerName,
       [`${prefix}_signed_at`]: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", noteId);
