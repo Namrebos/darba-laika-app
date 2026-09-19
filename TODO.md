@@ -130,15 +130,6 @@ _Pašlaik nav._
 
 Šeit pievienojam testējot vai ikdienas lietošanā atrastas kļūdas.
 
-### F-003 — Brauciena kartītes autocomplete visās rediģēšanas sadaļās
-
-Mērķis: autocomplete darbojas vienādi visur, kur atļauts izveidot vai rediģēt brauciena kartītes teksta laukus, neatkarīgi no brauciena statusa un sadaļas.
-
-- [ ] Nodrošināt uzņēmuma un pārējo autocomplete lauku darbību gan jaunā, gan jau izveidotā braucienā.
-- [ ] Nodrošināt autocomplete darbību **Plānotajos uzdevumos**, lietotājam nosūtītā braucienā un jau sāktā braucienā, ja attiecīgie lauki ir rediģējami.
-- [ ] Nodrošināt vienādu autocomplete darbību visos pārējos rediģēšanas skatos.
-- [ ] Pārbaudīt rezultātu datorā un telefonā, nemainot tikai lasāmo skatu darbību.
-
 ## Plānots
 
 ### F-001 — Darba laika korekciju sistēma
