@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import RequestForm from "@/app/request/[token]/RequestForm";
+import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 import type { PartnerPreset } from "@/app/request/[token]/RequestForm";
 import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
 
@@ -23,5 +23,5 @@ export default async function PartnerRequestPage({ params }: { params: Promise<{
       };
     }
   }
-  return <main className="min-h-screen bg-slate-50 px-3 py-5 text-slate-950 sm:px-6"><RequestForm token={token} initiallyValid={Boolean(preset?.valid)} partnerPreset={preset} /></main>;
+  return <main className="min-h-screen bg-slate-50 px-3 py-5 text-slate-950 sm:px-6"><UnifiedTransportRequestForm mode="create" token={token} initiallyValid={Boolean(preset?.valid)} partnerPreset={preset} /></main>;
 }

@@ -135,7 +135,7 @@ export default function LocationPicker({
 
   return (
     <div className="space-y-2">
-      <div className="relative h-64 overflow-hidden rounded-xl border border-slate-200">
+      <div className="relative z-0 isolate h-64 overflow-hidden rounded-xl border border-slate-200">
         <MapContainer
           ref={mapRef}
           center={point ? [point.lat, point.lng] : defaultCenter}

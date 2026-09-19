@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
 import { supabase } from "@/lib/supabaseClient";
 import { isValidInternationalPhone, normalizeInternationalPhoneInput } from "@/lib/phoneInput";
+import { shortPartnerName } from "@/lib/partnerName";
 
 const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), { ssr: false });
 
@@ -184,12 +185,14 @@ export default function PartnersPage() {
       company_name: company.name,
       registration_number: company.registrationNumber,
       address: company.address || current.address,
-      display_name: current.display_name || company.name,
+      display_name: current.display_name || shortPartnerName(company.name),
     }));
   }
 
   async function savePartner() {
-    const displayName = form.display_name.trim() || identityName(form);
+    const displayName = form.display_name.trim() || (form.partner_type === "company"
+      ? shortPartnerName(form.company_name)
+      : identityName(form));
     const identityValid = form.partner_type === "company"
       ? form.company_name.trim() && form.registration_number.trim()
       : form.first_name.trim();

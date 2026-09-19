@@ -26,7 +26,7 @@ import {
   Truck,
   X,
 } from "lucide-react";
-import TransportRequestModal from "@/app/components/TransportRequestModal";
+import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -73,6 +73,10 @@ type PlannedImage = {
 
 type TransportRequestSummary = {
   id: number;
+  created_at: string;
+  created_by: string;
+  partner_id: number | null;
+  submission_source: "admin" | "user" | "partner" | "unknown";
   pickup_date: string;
   pickup_address: string;
   dropoff_address: string;
@@ -86,6 +90,11 @@ type DictionaryField = "title" | "note";
 type DictionaryWord = {
   name: string;
   usageCount: number;
+};
+
+type PartnerSummary = {
+  id: number;
+  display_name: string;
 };
 
 type MultiDateMode = "manual" | "range" | "month";
@@ -211,9 +220,21 @@ function addressLocality(value: string) {
   return candidates.at(-1) || value.trim();
 }
 
+function receivedAtLabel(value: string) {
+  return new Intl.DateTimeFormat("lv-LV", {
+    timeZone: "Europe/Riga",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 export default function PlannedTasksPage() {
   const router = useRouter();
   const [userId, setUserId] = useState("");
+  const [currentUserRole, setCurrentUserRole] = useState<Profile["role"] | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [tasks, setTasks] = useState<PlannedTask[]>([]);
@@ -221,6 +242,7 @@ export default function PlannedTasksPage() {
   const [requestSummaries, setRequestSummaries] = useState<
     Record<number, TransportRequestSummary>
   >({});
+  const [partnerNames, setPartnerNames] = useState<Record<number, string>>({});
   const [selectedDate, setSelectedDate] = useState(todayInRiga());
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [dayTab, setDayTab] = useState<DayTab>("planned");
@@ -283,6 +305,7 @@ export default function PlannedTasksPage() {
         { data: tagRows, error: tagError },
         { data: vehicleRows, error: vehicleError },
         { data: requestRows, error: requestError },
+        { data: partnerRows, error: partnerError },
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -310,7 +333,8 @@ export default function PlannedTasksPage() {
           .order("registration_number"),
         supabase
           .from("transport_requests")
-          .select("id, pickup_date, pickup_address, dropoff_address, cargo_type"),
+          .select("id, created_at, created_by, partner_id, submission_source, pickup_date, pickup_address, dropoff_address, cargo_type"),
+        supabase.from("partners").select("id, display_name"),
       ]);
 
       if (
@@ -319,12 +343,14 @@ export default function PlannedTasksPage() {
         imageError ||
         tagError ||
         vehicleError ||
-        requestError
+        requestError ||
+        partnerError
       ) {
         setMessage("Neizdevās ielādēt plānotos uzdevumus.");
       }
 
       setUserId(authData.user.id);
+      setCurrentUserRole(ownProfile?.role || null);
       const loadedProfiles = (profileRows || []) as Profile[];
       setProfiles(loadedProfiles);
       const employees = loadedProfiles.filter(
@@ -344,6 +370,11 @@ export default function PlannedTasksPage() {
             request.id,
             request,
           ]),
+        ),
+      );
+      setPartnerNames(
+        Object.fromEntries(
+          ((partnerRows || []) as PartnerSummary[]).map((partner) => [partner.id, partner.display_name]),
         ),
       );
       setDictionaryWords(
@@ -561,6 +592,16 @@ export default function PlannedTasksPage() {
     if (!profileId) return "Nav piešķirts";
     const profile = profiles.find((item) => item.id === profileId);
     return profile?.display_name || profile?.email || "Nezināms lietotājs";
+  }
+
+  function requestSourceLabel(request: TransportRequestSummary) {
+    if (request.submission_source === "partner") {
+      return request.partner_id ? partnerNames[request.partner_id] || "Nezināms" : "Nezināms";
+    }
+    if (request.submission_source === "admin" || request.submission_source === "user") {
+      return profileName(request.created_by);
+    }
+    return "Nezināms";
   }
 
   function changeLocalTask(id: number, changes: Partial<PlannedTask>) {
@@ -1698,6 +1739,10 @@ export default function PlannedTasksPage() {
                             <Truck size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
                             <span className="truncate">{request.cargo_type}</span>
                           </span>
+                          {currentUserRole === "admin" && <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]">
+                            <CalendarClock size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
+                            <span>Izveidoja {requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}</span>
+                          </span>}
                         </div>
                       ) : (
                         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -1739,6 +1784,12 @@ export default function PlannedTasksPage() {
               </div>
               {expandedTaskIds.has(task.id) && (
                 <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+              {request && currentUserRole === "admin" && (
+                <p className="flex items-center gap-2 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  <CalendarClock size={14} className="shrink-0" />
+                  Izveidoja {requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}
+                </p>
+              )}
               <div className="relative">
                 <input
                   value={task.title}
@@ -2374,6 +2425,12 @@ export default function PlannedTasksPage() {
                         ? ` · ${task.scheduled_time.slice(0, 5)}`
                         : ""}
                     </p>
+                    {currentUserRole === "admin" && task.transport_request_id && requestSummaries[task.transport_request_id] && (
+                      <p className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                        <CalendarClock size={14} className="shrink-0" />
+                        Izveidoja {requestSourceLabel(requestSummaries[task.transport_request_id])} · {receivedAtLabel(requestSummaries[task.transport_request_id].created_at)}
+                      </p>
+                    )}
                     {(images[task.id] || []).length > 0 && (
                       <div className="mt-2 flex gap-2 overflow-x-auto">
                         {(images[task.id] || []).map((image) => (
@@ -2443,10 +2500,10 @@ export default function PlannedTasksPage() {
           </>
         )}
       </section>
-      <TransportRequestModal
+      <UnifiedTransportRequestForm
+        mode="edit"
         requestId={openedRequestId}
         onClose={() => setOpenedRequestId(null)}
-        editable
         onSaved={() => window.location.reload()}
       />
     </div>

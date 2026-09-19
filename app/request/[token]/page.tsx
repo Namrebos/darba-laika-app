@@ -1,4 +1,4 @@
-import RequestForm from "./RequestForm";
+import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 
 export default async function TransportRequestPage({
   params,
@@ -25,7 +25,7 @@ export default async function TransportRequestPage({
 
   return (
     <main className="min-h-screen bg-slate-50 px-3 py-5 text-slate-950 sm:px-6">
-      <RequestForm token={token} initiallyValid={initiallyValid} />
+      <UnifiedTransportRequestForm mode="create" token={token} initiallyValid={initiallyValid} />
     </main>
   );
 }

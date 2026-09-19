@@ -23,7 +23,27 @@ Katru darbu abās plūsmās virzām secīgi: **Jauns → Plānots → Procesā �
 
 Šeit pievienojam jaunas idejas un uzlabojumus, kuriem vēl nav noteikta prioritāte.
 
-_Pašlaik nav._
+### A-008 — Vairākas izkraušanas adreses vienam braucienam
+
+Mērķis: vienam braucienam pēc uzkraušanas vietas var pievienot vairākas secīgas izkraušanas vietas, lai vienu kravu varētu nogādāt vairākās adresēs.
+
+- [ ] Ļaut pievienot, rediģēt un noņemt vairākas izkraušanas vietas.
+- [ ] Katrai izkraušanas vietai atsevišķi saglabāt adresi, kartes punktu un precīzas koordinātes.
+- [ ] Parādīt un ļaut mainīt izkraušanas vietu secību.
+- [ ] Korekti attēlot visas izkraušanas vietas pieteikuma izveidē, rediģēšanā un tikai lasāmajā skatā.
+- [ ] Saglabāt esošo darbību braucieniem ar vienu izkraušanas vietu.
+- [ ] Pārbaudīt vairāku izkraušanas vietu darbību datorā un telefonā.
+
+### A-009 — Jauno pieteikumu skaits uz aplikācijas ikonas
+
+Mērķis: uz instalētās aplikācijas ikonas redzēt neatvērto jauno pieteikumu skaitu, saglabājot esošo paziņojumu par katru saņemto pieteikumu.
+
+- [ ] Par katru jaunu pieteikumu turpināt nosūtīt esošo push paziņojumu.
+- [ ] Ikonas aplītī rādīt datubāzē esošo pieteikumu skaitu ar statusu **Jauns**.
+- [ ] Atverot pieteikumu un tam automātiski pārejot uz **Plānots**, uzreiz samazināt ikonas skaitli.
+- [ ] Ja nav neviena jauna pieteikuma, noņemt aplīti no ikonas.
+- [ ] Sinhronizēt skaitu starp lietotāja telefonu un datoru.
+- [ ] Pārbaudīt darbību instalētā PWA iPhone, Android un atbalstītā datora vidē.
 
 ## Plānots — prioritārā secībā
 
@@ -55,13 +75,14 @@ Mērķis: partnerim ir sava droša pieeja, kurā var izveidot pieteikumus un red
 - [ ] Izveidot partnera mēneša pārskatu.
 - [ ] Vienoties par pārskatā redzamajiem datiem, filtriem un eksportu.
 
-### A-004 — Pieteikuma izveidotāja atzīme un statistika
+### A-004 — Pieteikuma izveidotājs, saņemšanas laiks un statistika
 
-Mērķis: katram jaunam brauciena pieteikumam ir redzams, kas un kādā veidā to izveidoja, un administrators var apskatīt statistiku.
+Mērķis: katram brauciena pieteikumam ir redzams, kas un kādā veidā to izveidoja, kā arī precīzs izveidošanas vai saņemšanas laiks; administrators var apskatīt šo informāciju statistikā.
 
-- [ ] Saglabāt izveidotāju: administrators, lietotājs vai partneris.
-- [ ] Kartītē un vēsturē parādīt pieteikuma izveidotāju.
-- [ ] Izveidot statistiku par izveidotajiem pieteikumiem un to avotiem.
+- [x] Saglabāt izveidotāju: administrators, lietotājs vai partneris.
+- [x] Saglabāt precīzu pieteikuma izveidošanas vai saņemšanas datumu un laiku.
+- [x] Kartītē un vēsturē parādīt pieteikuma izveidotāju, datumu un laiku.
+- [ ] Izveidot statistiku par izveidotajiem pieteikumiem un to avotiem (pagaidām atlikts).
 
 ### A-005 — Aplikācijas optimizācija
 
@@ -112,7 +133,15 @@ _Pašlaik nav._
 
 Šeit pievienojam testējot vai ikdienas lietošanā atrastas kļūdas.
 
-_Pašlaik nav._
+### F-003 — Brauciena kartītes autocomplete visās rediģēšanas sadaļās
+
+Mērķis: autocomplete darbojas vienādi visur, kur atļauts izveidot vai rediģēt brauciena kartītes teksta laukus, neatkarīgi no brauciena statusa un sadaļas.
+
+- [ ] Ievadot uzņēmuma reģistrācijas numuru, piedāvāt atbilstošo uzņēmumu un aizpildīt uzņēmuma datus.
+- [ ] Nodrošināt uzņēmuma un pārējo autocomplete lauku darbību gan jaunā, gan jau izveidotā braucienā.
+- [ ] Nodrošināt autocomplete darbību **Plānotajos uzdevumos**, lietotājam nosūtītā braucienā un jau sāktā braucienā, ja attiecīgie lauki ir rediģējami.
+- [ ] Nodrošināt vienādu autocomplete darbību visos pārējos rediģēšanas skatos.
+- [ ] Pārbaudīt rezultātu datorā un telefonā, nemainot tikai lasāmo skatu darbību.
 
 ## Plānots
 

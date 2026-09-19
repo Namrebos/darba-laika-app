@@ -15,6 +15,7 @@ import {
 import { SiWaze } from "react-icons/si";
 import AddressField from "@/app/components/AddressField";
 import { isValidInternationalPhone, normalizeInternationalPhoneInput } from "@/lib/phoneInput";
+import { shortPartnerName } from "@/lib/partnerName";
 import { supabase } from "@/lib/supabaseClient";
 
 const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), {
@@ -733,7 +734,7 @@ export default function TransportRequestModal({
   async function addSenderToPartners() {
     if (!transportRequest || senderIsPartner) return;
     const displayName = transportRequest.sender_type === "company"
-      ? String(transportRequest.sender_company_name || "").trim()
+      ? shortPartnerName(String(transportRequest.sender_company_name || ""))
       : [transportRequest.sender_first_name, transportRequest.sender_last_name]
           .filter(Boolean)
           .join(" ")
@@ -854,8 +855,8 @@ export default function TransportRequestModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3">
-      <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-slate-50 text-slate-950 shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
+      <div className="isolate max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-slate-50 text-slate-950 shadow-2xl">
+        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
           <h2 className="text-xl font-bold">Pārvadājuma pieteikums</h2>
           <button
             type="button"
@@ -900,7 +901,7 @@ export default function TransportRequestModal({
                 <label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Kravas veids *</span><select value={transportRequest.cargo_type} onChange={(event) => updateRequest({ cargo_type: event.target.value })} className="form-input bg-white"><option value="">Izvēlies</option>{cargoTypes.map((name) => <option key={name} value={name}>{name}</option>)}{transportRequest.cargo_type && !cargoTypes.includes(transportRequest.cargo_type) && <option value={transportRequest.cargo_type}>{transportRequest.cargo_type}</option>}</select></label>
                 <EditField label="Papildu piezīmes" value={transportRequest.additional_notes} multiline onChange={(value) => updateRequest({ additional_notes: value })} />
               </section>
-              <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 py-3">
+              <div className="sticky bottom-0 z-20 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 py-3">
                 <button type="button" onClick={reverseRoute} aria-label="Apgriezt maršrutu" title="Apgriezt maršrutu" className="rounded-lg border border-slate-400 p-3 text-slate-800">
                   <Repeat2 size={22} />
                 </button>

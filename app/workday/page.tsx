@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import Image from "next/image";
 import TaskCard from "../components/TaskCard";
-import TransportRequestModal from "@/app/components/TransportRequestModal";
+import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 import { ExternalLink } from "lucide-react";
 import {
   getCachedAccess,
@@ -842,7 +842,8 @@ export default function WorkdayPage() {
               savingTasks={savingTasks}
             />
           ))}
-          <TransportRequestModal
+          <UnifiedTransportRequestForm
+            mode="readonly"
             requestId={openedRequestId}
             onClose={() => setOpenedRequestId(null)}
           />

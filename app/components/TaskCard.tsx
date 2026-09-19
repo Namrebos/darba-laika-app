@@ -26,7 +26,7 @@ import ImageGalleryModal from "@/app/components/ImageGalleryModal";
 import TaskPreviewCard from "@/app/components/TaskPreviewCard";
 import TaskDetailsCard from "@/app/components/TaskDetailsCard";
 import { addPhotoTimestamp } from "@/lib/addPhotoTimestamp";
-import TransportRequestModal from "@/app/components/TransportRequestModal";
+import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 
 type Task = {
   id: string;
@@ -1578,7 +1578,8 @@ export default function TaskCard({
         </div>
       </div>
 
-      <TransportRequestModal
+      <UnifiedTransportRequestForm
+        mode="readonly"
         requestId={requestOpen ? task.transportRequestId || null : null}
         onClose={() => setRequestOpen(false)}
       />
