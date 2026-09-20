@@ -23,17 +23,6 @@ Katru darbu abās plūsmās virzām secīgi: **Jauns → Plānots → Procesā �
 
 Šeit pievienojam jaunas idejas un uzlabojumus, kuriem vēl nav noteikta prioritāte.
 
-### A-008 — Vairākas izkraušanas adreses vienam braucienam
-
-Mērķis: vienam braucienam pēc uzkraušanas vietas var pievienot vairākas secīgas izkraušanas vietas, lai vienu kravu varētu nogādāt vairākās adresēs.
-
-- [ ] Ļaut pievienot, rediģēt un noņemt vairākas izkraušanas vietas.
-- [ ] Katrai izkraušanas vietai atsevišķi saglabāt adresi, kartes punktu un precīzas koordinātes.
-- [ ] Parādīt un ļaut mainīt izkraušanas vietu secību.
-- [ ] Korekti attēlot visas izkraušanas vietas pieteikuma izveidē, rediģēšanā un tikai lasāmajā skatā.
-- [ ] Saglabāt esošo darbību braucieniem ar vienu izkraušanas vietu.
-- [ ] Pārbaudīt vairāku izkraušanas vietu darbību datorā un telefonā.
-
 ## Plānots — prioritārā secībā
 
 ### A-001 — Kravas veida precizēšana un meklēšanas uzlabošana
