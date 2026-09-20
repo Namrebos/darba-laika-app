@@ -562,16 +562,21 @@ function FormCard({
   title,
   children,
   className = "",
+  actions,
 }: {
   title: string;
   children: React.ReactNode;
   className?: string;
+  actions?: React.ReactNode;
 }) {
   return (
     <section
       className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 ${className}`}
     >
-      <h2 className="mb-4 text-xl font-bold text-slate-900">{title}</h2>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold text-slate-900">{title}</h2>
+        {actions}
+      </div>
       {children}
     </section>
   );
@@ -1275,6 +1280,67 @@ export default function RequestForm({
     );
   };
 
+  const moveDropoff = (fromIndex: number, toIndex: number) => {
+    const allDropoffs: AdditionalDropoff[] = [
+      {
+        id: "primary-dropoff",
+        address: form.dropoff_address,
+        point: dropoffPoint,
+        focusPoint: dropoffFocus,
+        contactName: form.dropoff_contact_name,
+        phoneCode: form.dropoff_contact_phone_code,
+        phone: form.dropoff_contact_phone,
+        date: form.dropoff_date,
+        time: form.dropoff_time,
+        notes: form.dropoff_notes,
+      },
+      ...additionalDropoffs,
+    ];
+    if (toIndex < 0 || toIndex >= allDropoffs.length) return;
+    [allDropoffs[fromIndex], allDropoffs[toIndex]] = [
+      allDropoffs[toIndex],
+      allDropoffs[fromIndex],
+    ];
+    const [first, ...rest] = allDropoffs;
+    update({
+      dropoff_address: first.address,
+      dropoff_contact_name: first.contactName,
+      dropoff_contact_phone_code: first.phoneCode,
+      dropoff_contact_phone: first.phone,
+      dropoff_date: first.date,
+      dropoff_time: first.time,
+      dropoff_notes: first.notes,
+    });
+    setDropoffPoint(first.point);
+    setDropoffFocus(first.focusPoint);
+    setAdditionalDropoffs(rest);
+  };
+
+  const dropoffOrderButtons = (index: number, total: number) => (
+    <div className="flex items-center gap-1" aria-label="Mainīt izkraušanas vietas secību">
+      <button
+        type="button"
+        onClick={() => moveDropoff(index, index - 1)}
+        disabled={index === 0}
+        aria-label="Pārvietot izkraušanas vietu uz augšu"
+        title="Pārvietot uz augšu"
+        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-600 disabled:invisible"
+      >
+        <ChevronUp size={20} />
+      </button>
+      <button
+        type="button"
+        onClick={() => moveDropoff(index, index + 1)}
+        disabled={index === total - 1}
+        aria-label="Pārvietot izkraušanas vietu uz leju"
+        title="Pārvietot uz leju"
+        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-600 disabled:invisible"
+      >
+        <ChevronDown size={20} />
+      </button>
+    </div>
+  );
+
   const updateAdditionalDropoffPoint = async (id: string, point: Point) => {
     updateAdditionalDropoff(id, { point, focusPoint: point });
     try {
@@ -1560,7 +1626,10 @@ export default function RequestForm({
         </div>
 
         <div className={`order-3 space-y-4 ${sectionClass(3)}`}>
-          <FormCard title="Uz kurieni">
+          <FormCard
+            title="Uz kurieni"
+            actions={additionalDropoffs.length > 0 ? dropoffOrderButtons(0, additionalDropoffs.length + 1) : null}
+          >
             <div className="space-y-4">
               <div>
                 <label htmlFor="dropoff_address">
@@ -1641,7 +1710,11 @@ export default function RequestForm({
           {additionalDropoffs.map((item, index) => {
             const phoneInvalid = item.phone.length > 0 && !isValidPhone(item.phoneCode, item.phone);
             return (
-              <FormCard key={item.id} title={`Uz kurieni ${index + 2}`}>
+              <FormCard
+                key={item.id}
+                title={`Uz kurieni ${index + 2}`}
+                actions={dropoffOrderButtons(index + 1, additionalDropoffs.length + 1)}
+              >
                 <div className="space-y-4">
                   <div className="flex justify-end">
                     <button type="button" onClick={() => setAdditionalDropoffs((current) => current.filter((entry) => entry.id !== item.id))} className="text-sm text-slate-500 hover:text-red-600">

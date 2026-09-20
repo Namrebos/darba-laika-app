@@ -30,6 +30,7 @@ type TransportRequest = {
   pickup_address: string | null;
   pickup_date: string;
   dropoff_address: string | null;
+  additional_dropoffs?: Array<{ address?: string | null }> | null;
   cargo_type: string;
 };
 
@@ -429,7 +430,14 @@ export default function DeliveryNotePage() {
             .join("\n"),
         );
         setOrigin(transportRequest.pickup_address || "");
-        setDestination(transportRequest.dropoff_address || "");
+        const additionalDropoffs = Array.isArray(transportRequest.additional_dropoffs)
+          ? transportRequest.additional_dropoffs
+          : [];
+        setDestination(
+          additionalDropoffs.length > 0
+            ? additionalDropoffs[additionalDropoffs.length - 1]?.address || transportRequest.dropoff_address || ""
+            : transportRequest.dropoff_address || "",
+        );
         setCargo(transportRequest.cargo_type || "");
         const noteResponse = await fetch(`/api/delivery-notes/${requestId}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },

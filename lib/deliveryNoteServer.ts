@@ -36,6 +36,10 @@ type TransportPartyData = {
   recipient_registration_number?: unknown;
 };
 
+type DeliveryDropoff = {
+  address?: unknown;
+};
+
 function normalizedPartyValue(value: unknown) {
   return String(value || "").trim().toLocaleLowerCase("lv").replace(/\s+/g, " ");
 }
@@ -85,6 +89,12 @@ export async function getAuthenticatedDeliveryNoteContext(
   const carrierName = carrier?.partner_type === "company"
     ? carrier.company_name
     : [carrier?.first_name, carrier?.last_name].filter(Boolean).join(" ");
+  const additionalDropoffs = Array.isArray(request.additional_dropoffs)
+    ? request.additional_dropoffs as DeliveryDropoff[]
+    : [];
+  const finalDropoff = additionalDropoffs.length > 0
+    ? String(additionalDropoffs[additionalDropoffs.length - 1]?.address || request.dropoff_address || "")
+    : String(request.dropoff_address || "");
   const snapshot = {
     noteNumber: String(request.id),
     date: dateInRiga(),
@@ -93,7 +103,7 @@ export async function getAuthenticatedDeliveryNoteContext(
     sender: [senderName, request.sender_registration_number ? `Reģ. Nr. ${request.sender_registration_number}` : "", request.sender_address].filter(Boolean).join("\n"),
     recipient: [recipientName, request.recipient_registration_number ? `Reģ. Nr. ${request.recipient_registration_number}` : ""].filter(Boolean).join("\n"),
     origin: request.pickup_address || "",
-    destination: request.dropoff_address || "",
+    destination: finalDropoff,
     cargo: request.cargo_type || "",
   };
   return { admin, user: authData.user, snapshot, taskStatus: task?.status || null, sameParty: sameTransportParties(request) } as const;
