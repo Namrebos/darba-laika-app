@@ -22,6 +22,17 @@ const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), 
   ssr: false,
 });
 
+type AdditionalDropoff = {
+  address: string;
+  lat: number;
+  lng: number;
+  contact_name: string;
+  contact_phone: string;
+  date: string;
+  time: string;
+  notes: string;
+};
+
 type TransportRequest = {
   id: number;
   partner_id: number | null;
@@ -57,6 +68,7 @@ type TransportRequest = {
   dropoff_notes: string;
   cargo_type: string;
   additional_notes: string;
+  additional_dropoffs: AdditionalDropoff[];
 };
 
 type RequestImage = {
@@ -902,6 +914,21 @@ export default function TransportRequestModal({
               <div className="grid gap-4 md:grid-cols-2">
                 <EditableLocationSection title="Uzkraušana" prefix="pickup" request={transportRequest} update={updateRequest} markerColor="blue" />
                 <EditableLocationSection title="Izkraušana" prefix="dropoff" request={transportRequest} update={updateRequest} markerColor="red" />
+                {(transportRequest.additional_dropoffs || []).map((dropoff, index) => (
+                  <LocationSection
+                    key={`${dropoff.lat}-${dropoff.lng}-${index}`}
+                    title={`Izkraušana ${index + 2}`}
+                    address={dropoff.address}
+                    lat={dropoff.lat}
+                    lng={dropoff.lng}
+                    date={dropoff.date}
+                    time={dropoff.time}
+                    notes={dropoff.notes}
+                    contactName={dropoff.contact_name}
+                    contactPhone={dropoff.contact_phone}
+                    markerColor="red"
+                  />
+                ))}
               </div>
               <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-xl font-bold text-slate-900">Kravas informācija</h3>
@@ -963,6 +990,21 @@ export default function TransportRequestModal({
                   contactPhone={transportRequest.dropoff_contact_phone}
                   markerColor="red"
                 />
+                {(transportRequest.additional_dropoffs || []).map((dropoff, index) => (
+                  <LocationSection
+                    key={`${dropoff.lat}-${dropoff.lng}-${index}`}
+                    title={`Izkraušana ${index + 2}`}
+                    address={dropoff.address}
+                    lat={dropoff.lat}
+                    lng={dropoff.lng}
+                    date={dropoff.date}
+                    time={dropoff.time}
+                    notes={dropoff.notes}
+                    contactName={dropoff.contact_name}
+                    contactPhone={dropoff.contact_phone}
+                    markerColor="red"
+                  />
+                ))}
               </div>
 
               <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -691,7 +691,7 @@ export default function RequestForm({
       const response = await fetch(`/api/transport-requests/${sourceRequestId}`, { headers: { Authorization: `Bearer ${data.session?.access_token || ""}` } });
       const result = await response.json();
       if (!response.ok) { setError(result.error || "Iepriekšējo braucienu neizdevās ielādēt."); return; }
-      const request = result.request as Record<string, string | number | null>;
+      const request = result.request as Record<string, unknown>;
       const splitPhone = (value: string) => {
         const compact = String(value || "").replace(/\D/g, "");
         const match = countryCodes.find(([code]) => compact.startsWith(code.slice(1)));
@@ -712,6 +712,27 @@ export default function RequestForm({
       const pickup = { lat: Number(request.pickup_lat), lng: Number(request.pickup_lng) };
       const dropoff = { lat: Number(request.dropoff_lat), lng: Number(request.dropoff_lng) };
       setPickupPoint(pickup); setPickupFocus(pickup); setDropoffPoint(dropoff); setDropoffFocus(dropoff);
+      const storedDropoffs = Array.isArray(request.additional_dropoffs)
+        ? request.additional_dropoffs as Array<Record<string, unknown>>
+        : [];
+      setAdditionalDropoffs(storedDropoffs.map((item, index) => {
+        const contactPhone = splitPhone(String(item.contact_phone || ""));
+        const lat = Number(item.lat);
+        const lng = Number(item.lng);
+        const point = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+        return {
+          id: `stored-${index}`,
+          address: String(item.address || ""),
+          point,
+          focusPoint: point,
+          contactName: String(item.contact_name || ""),
+          phoneCode: contactPhone.code,
+          phone: contactPhone.number,
+          date: String(item.date || ""),
+          time: String(item.time || "").slice(0, 5),
+          notes: String(item.notes || ""),
+        };
+      }));
       const copiedImages = await Promise.all((result.images || []).map(async (image: { url: string; fileName: string }) => {
         const fileResponse = await fetch(image.url); const blob = await fileResponse.blob(); return new File([blob], image.fileName, { type: blob.type });
       }));
@@ -1298,6 +1319,16 @@ export default function RequestForm({
       setError(issues.length ? `Pārbaudi: ${issues.join(", ")}.` : "Pārbaudi obligātos laukus.");
       return;
     }
+    const invalidAdditionalDropoff = additionalDropoffs.find((item) =>
+      !item.address.trim() ||
+      !item.point ||
+      !item.date ||
+      (item.phone.length > 0 && !isValidPhone(item.phoneCode, item.phone)),
+    );
+    if (invalidAdditionalDropoff) {
+      setError("Papildu izkraušanas vietai norādi adresi, precīzu punktu kartē un datumu. Ja ievadi tālruni, pārbaudi tā formātu.");
+      return;
+    }
 
     setSubmitting(true);
     setError("");
@@ -1332,6 +1363,18 @@ export default function RequestForm({
       pickup_lng: pickupPoint.lng,
       dropoff_lat: dropoffPoint.lat,
       dropoff_lng: dropoffPoint.lng,
+      additional_dropoffs: additionalDropoffs.map((item) => ({
+        address: item.address.trim(),
+        lat: item.point?.lat,
+        lng: item.point?.lng,
+        contact_name: item.contactName.trim(),
+        contact_phone: item.phone
+          ? `${item.phoneCode}${phoneDigits(item.phone)}`
+          : "",
+        date: item.date,
+        time: item.time,
+        notes: item.notes.trim(),
+      })),
     };
     const body = new FormData();
     if (internal) {

@@ -3,6 +3,23 @@ import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
 import { isValidInternationalPhone } from "@/lib/phoneInput";
 import { shortPartnerName } from "@/lib/partnerName";
 
+function cleanAdditionalDropoffs(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 10).map((entry) => {
+    const item = (entry || {}) as Record<string, unknown>;
+    return {
+      address: String(item.address || "").trim().slice(0, 250),
+      lat: Number(item.lat),
+      lng: Number(item.lng),
+      contact_name: String(item.contact_name || "").trim().slice(0, 120),
+      contact_phone: String(item.contact_phone || "").trim().slice(0, 30),
+      date: String(item.date || "").trim().slice(0, 10),
+      time: String(item.time || "").trim().slice(0, 5),
+      notes: String(item.notes || "").trim().slice(0, 500),
+    };
+  });
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ requestId: string }> },
@@ -157,6 +174,7 @@ export async function PUT(
   const pickupLng = number("pickup_lng");
   const dropoffLat = number("dropoff_lat");
   const dropoffLng = number("dropoff_lng");
+  const additionalDropoffs = cleanAdditionalDropoffs(payload.additional_dropoffs);
 
   const senderName = senderType === "company"
     ? text("sender_company_name")
@@ -182,6 +200,15 @@ export async function PUT(
     .some((key) => !isValidInternationalPhone(text(key)))) {
     return NextResponse.json(
       { error: "Pārbaudi visus tālruņa numurus. Latvijas numuram nepieciešami tieši 8 cipari." },
+      { status: 400 },
+    );
+  }
+  if (additionalDropoffs.some((item) =>
+    !item.address || !item.date ||
+    !Number.isFinite(item.lat) || !Number.isFinite(item.lng) ||
+    (item.contact_phone && !isValidInternationalPhone(item.contact_phone)))) {
+    return NextResponse.json(
+      { error: "Pārbaudi papildu izkraušanas vietu datus." },
       { status: 400 },
     );
   }
@@ -225,6 +252,7 @@ export async function PUT(
     dropoff_notes: text("dropoff_notes"),
     cargo_type: text("cargo_type"),
     additional_notes: text("additional_notes"),
+    additional_dropoffs: additionalDropoffs,
     updated_at: new Date().toISOString(),
   };
 

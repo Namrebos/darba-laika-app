@@ -25,6 +25,23 @@ function validCoordinate(value: unknown, min: number, max: number) {
   return Number.isFinite(number) && number >= min && number <= max;
 }
 
+function cleanAdditionalDropoffs(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 10).map((entry) => {
+    const item = (entry || {}) as Record<string, unknown>;
+    return {
+      address: cleanText(item.address, 250),
+      lat: Number(item.lat),
+      lng: Number(item.lng),
+      contact_name: cleanText(item.contact_name, 120),
+      contact_phone: cleanText(item.contact_phone, 30),
+      date: cleanText(item.date, 10),
+      time: cleanText(item.time, 5),
+      notes: cleanText(item.notes, 500),
+    };
+  });
+}
+
 function validDropoffOrder(input: Record<string, unknown>) {
   const pickupDate = cleanText(input.pickup_date, 10);
   const dropoffDate = cleanText(input.dropoff_date, 10);
@@ -52,6 +69,15 @@ function validatePayload(
     recipientType === "company"
       ? cleanText(input.recipient_company_name, 120)
       : cleanText(input.recipient_first_name, 60);
+  const additionalDropoffs = cleanAdditionalDropoffs(input.additional_dropoffs);
+  const validAdditionalDropoffs = additionalDropoffs.every((item) =>
+    Boolean(
+      item.address && item.date &&
+      validCoordinate(item.lat, -90, 90) &&
+      validCoordinate(item.lng, -180, 180) &&
+      (!item.contact_phone || isValidInternationalPhone(item.contact_phone)),
+    ),
+  );
   return Boolean(
     senderIdentity &&
       recipientIdentity &&
@@ -70,7 +96,8 @@ function validatePayload(
       validCoordinate(input.pickup_lat, -90, 90) &&
       validCoordinate(input.pickup_lng, -180, 180) &&
       validCoordinate(input.dropoff_lat, -90, 90) &&
-      validCoordinate(input.dropoff_lng, -180, 180)
+      validCoordinate(input.dropoff_lng, -180, 180) &&
+      validAdditionalDropoffs
   );
 }
 
@@ -188,6 +215,7 @@ export async function POST(request: NextRequest) {
     dropoff_notes: cleanText(payload.dropoff_notes, 500),
     cargo_type: cleanText(payload.cargo_type, 100),
     additional_notes: cleanText(payload.additional_notes, 500),
+    additional_dropoffs: cleanAdditionalDropoffs(payload.additional_dropoffs),
   };
 
   let submissionSource: "admin" | "user" | "partner" | "unknown" = "unknown";
@@ -339,6 +367,7 @@ export async function POST(request: NextRequest) {
       recipient_company_name: safePayload.recipient_company_name,
       recipient_registration_number: safePayload.recipient_registration_number,
       recipient_phone: safePayload.recipient_phone,
+      additional_dropoffs: safePayload.additional_dropoffs,
     })
     .eq("id", submission.request_id);
   if (recipientUpdateError) {
