@@ -1618,9 +1618,9 @@ export default function RequestForm({
                     <LocationPicker point={item.point} focusPoint={item.focusPoint} onChange={(point) => void updateAdditionalDropoffPoint(item.id, point)} markerColor="red" active={step === 3}/>
                   </div>
                   <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
-                    <label><FieldLabel required>Kontaktpersona</FieldLabel><input value={item.contactName} onChange={(event) => updateAdditionalDropoff(item.id, { contactName: event.target.value })} className="form-input" maxLength={120}/></label>
+                    <label><FieldLabel>Kontaktpersona</FieldLabel><input value={item.contactName} onChange={(event) => updateAdditionalDropoff(item.id, { contactName: event.target.value })} className="form-input" maxLength={120}/></label>
                     <div>
-                      <FieldLabel required>Kontakttālrunis</FieldLabel>
+                      <FieldLabel>Kontakttālrunis</FieldLabel>
                       <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
                         <select value={item.phoneCode} onChange={(event) => updateAdditionalDropoff(item.id, { phoneCode: event.target.value })} className="form-input">{countryCodes.map(([code]) => <option key={code} value={code}>{code}</option>)}</select>
                         <input type="tel" inputMode="numeric" value={item.phone} onChange={(event) => { const normalized = normalizePhoneInput(event.target.value, item.phoneCode); updateAdditionalDropoff(item.id, { phoneCode: normalized.code, phone: normalized.subscriber }); }} onPaste={(event) => { const pasted = event.clipboardData.getData("text"); if (!pasted) return; event.preventDefault(); const normalized = normalizePhoneInput(pasted, item.phoneCode); updateAdditionalDropoff(item.id, { phoneCode: normalized.code, phone: normalized.subscriber }); }} className="form-input" maxLength={30} aria-invalid={phoneInvalid}/>
