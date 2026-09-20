@@ -1626,13 +1626,15 @@ export default function RequestForm({
                   maxLength={500}
                 />
               </label>
-              <button
-                type="button"
-                onClick={addAdditionalDropoff}
-                className="text-left text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
-              >
-                + Pievienot vēl vienu adresi
-              </button>
+              {additionalDropoffs.length === 0 && (
+                <button
+                  type="button"
+                  onClick={addAdditionalDropoff}
+                  className="text-left text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  + Pievienot vēl vienu adresi
+                </button>
+              )}
             </div>
           </FormCard>
 
@@ -1673,6 +1675,15 @@ export default function RequestForm({
                   </div>
                   <DateTimeField label="Izkraušanas datums un laiks" date={item.date} time={item.time} min={dropoffMinimum()} onChange={(date, time) => updateAdditionalDropoff(item.id, { date, time })}/>
                   <label><FieldLabel>Piezīmes par izkraušanu</FieldLabel><textarea value={item.notes} onChange={(event) => updateAdditionalDropoff(item.id, { notes: event.target.value })} className="form-input min-h-24 resize-y" maxLength={500}/></label>
+                  {index === additionalDropoffs.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={addAdditionalDropoff}
+                      className="text-left text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      + Pievienot vēl vienu adresi
+                    </button>
+                  )}
                 </div>
               </FormCard>
             );
