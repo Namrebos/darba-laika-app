@@ -50,6 +50,28 @@ type DictionaryWord = {
   usageCount: number;
 };
 
+function HatGlassesIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg
+      aria-hidden="true"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 18a2 2 0 0 0-4 0" />
+      <path d="m19 11-2.11-6.657a2 2 0 0 0-2.752-1.148l-1.276.61A2 2 0 0 1 12 4H8.5a2 2 0 0 0-1.925 1.456L5 11" />
+      <path d="M2 11h20" />
+      <circle cx="17" cy="18" r="3" />
+      <circle cx="7" cy="18" r="3" />
+    </svg>
+  );
+}
+
 function makeLocalId() {
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -833,11 +855,11 @@ export default function WorkdayPage() {
             TESTA REŽĪMS — šī darbadiena netiks ieskaitīta darba laikā
           </div>
         )}
-        <div className="flex flex-wrap justify-between gap-2">
+        <div className="flex flex-nowrap gap-2">
           <button
             onClick={startWorkday}
             disabled={workdayState === "active"}
-            className={`rounded px-4 py-2 text-white ${workdayState === "active" ? "bg-gray-400" : "bg-green-600 hover:bg-green-700"}`}
+            className={`min-w-0 flex-1 rounded px-3 py-2 text-sm text-white ${workdayState === "active" ? "bg-gray-400" : "bg-green-600 hover:bg-green-700"}`}
           >
             Sākt darbadienu
           </button>
@@ -847,9 +869,11 @@ export default function WorkdayPage() {
               type="button"
               onClick={startTestWorkday}
               disabled={testActionPending}
-              className="rounded bg-amber-500 px-4 py-2 font-medium text-amber-950 hover:bg-amber-400 disabled:opacity-50"
+              aria-label="Sākt testa darbadienu"
+              title="Sākt testa darbadienu"
+              className="inline-flex shrink-0 items-center justify-center rounded bg-amber-500 p-2 text-amber-950 hover:bg-amber-400 disabled:opacity-50"
             >
-              {testActionPending ? "Atver..." : "Sākt testa darbadienu"}
+              <HatGlassesIcon size={22} />
             </button>
           )}
 
@@ -866,7 +890,7 @@ export default function WorkdayPage() {
             <button
               onClick={endWorkday}
               disabled={workdayState === "inactive"}
-              className={`rounded px-4 py-2 text-white ${workdayState === "inactive" ? "bg-gray-400" : "bg-red-600 hover:bg-red-700"}`}
+              className={`min-w-0 flex-1 rounded px-3 py-2 text-sm text-white ${workdayState === "inactive" ? "bg-gray-400" : "bg-red-600 hover:bg-red-700"}`}
             >
               Pabeigt darbadienu
             </button>
