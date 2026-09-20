@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import "./globals.css";
 import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister";
+import AppBadgeSync from "@/app/components/AppBadgeSync";
 import OfflineStatus from "@/app/components/OfflineStatus";
 import { getCachedAccess, saveCachedAccess } from "@/lib/offlineStore";
 import {
@@ -288,6 +289,7 @@ export default function RootLayout({
     <html lang="lv">
       <body className="bg-white dark:bg-zinc-900 text-black dark:text-white transition-colors">
       <ServiceWorkerRegister />
+      <AppBadgeSync />
       <OfflineStatus />
 
         <div className="flex h-screen">

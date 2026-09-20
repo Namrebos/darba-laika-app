@@ -52,6 +52,11 @@ export async function POST(request: NextRequest) {
     body: string;
     url: string;
   }>;
+  const { count: newRequestCount } = await admin
+    .from("planned_tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "new")
+    .is("viewed_at", null);
   let sent = 0;
   for (const notification of pendingNotifications) {
     const { data: preferencesData } = await admin
@@ -103,6 +108,7 @@ export async function POST(request: NextRequest) {
             title: notification.title,
             body: notification.body,
             url: notification.url || "/",
+            badgeCount: newRequestCount || 0,
           }),
         );
         sent += 1;

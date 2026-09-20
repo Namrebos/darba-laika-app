@@ -422,6 +422,7 @@ export default function PlannedTasksPage() {
     setInboxTab(targetTask.viewed_at ? "planned" : "new");
     setInboxExpanded(true);
     setExpandedTaskIds((current) => new Set(current).add(targetTask.id));
+    if (!targetTask.viewed_at) void markTaskViewed(targetTask);
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete("plannedTask");
     cleanUrl.searchParams.delete("transportRequest");
@@ -759,7 +760,11 @@ export default function PlannedTasksPage() {
       .from("planned_tasks")
       .update({ viewed_at: viewedAt })
       .eq("id", task.id);
-    if (error) changeLocalTask(task.id, { viewed_at: null });
+    if (error) {
+      changeLocalTask(task.id, { viewed_at: null });
+    } else {
+      window.dispatchEvent(new Event("app-badge-refresh"));
+    }
   }
 
   function discardTemporaryTask(taskId: number) {
@@ -812,6 +817,7 @@ export default function PlannedTasksPage() {
       next.add(task.id);
       return next;
     });
+    if (!task.viewed_at) void markTaskViewed(task);
   }
 
   function toggleInbox() {

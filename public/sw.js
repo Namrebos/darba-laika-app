@@ -65,12 +65,17 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   const data = event.data?.json() || {};
   event.waitUntil(
-    self.registration.showNotification(data.title || "Darba laiks", {
-      body: data.body || "Saņemts jauns paziņojums.",
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      data: { url: data.url || "/" },
-    }),
+    Promise.all([
+      self.registration.showNotification(data.title || "Darba laiks", {
+        body: data.body || "Saņemts jauns paziņojums.",
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        data: { url: data.url || "/" },
+      }),
+      typeof data.badgeCount === "number" && "setAppBadge" in self.navigator
+        ? self.navigator.setAppBadge(data.badgeCount)
+        : Promise.resolve(),
+    ]),
   );
 });
 
