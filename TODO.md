@@ -84,17 +84,7 @@ _Pašlaik nav._
 
 ## Testēšanā
 
-### A-007 — Vienotā brauciena pieteikuma forma
-
-- [ ] Notestēt jauna brauciena izveidi no `+ Jauns`.
-- [ ] Notestēt izveidi un rediģēšanu sadaļā **Plānotie uzdevumi**.
-- [ ] Notestēt tikai lasāmo skatu **Kopsavilkumā** un **Darbadienā**.
-- [ ] Pārbaudīt vienādus tālruņa, datuma, adreses, kartes un obligāto lauku noteikumus visos ieejas punktos.
-- [ ] Pārbaudīt kartes slāņus, marķieri, saišu importu un ritināšanu datorā un telefonā.
-- [ ] Pārbaudīt pavadzīmes paraksta līniju un pildspalvas ikonu.
-- [ ] Pārbaudīt, ka pavadzīmē redzams virsraksts **Nosūtītājs**.
-- [ ] Pēc apstiprināšanas pievienot izmaiņas `main` zaram.
-- [ ] Pēc publicēšanas pārbaudīt, ka paziņojumos tiek lietots partnera īsais nosaukums.
+_Pašlaik nav._
 
 ## Pabeigts
 
