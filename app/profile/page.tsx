@@ -13,6 +13,7 @@ type DictionaryWord = {
 
 type NotificationPreferences = {
   enabled: boolean;
+  app_badge_enabled: boolean;
   new_requests: boolean;
   assigned_tasks: boolean;
   task_changes: boolean;
@@ -28,6 +29,7 @@ type NotificationPreferences = {
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   enabled: false,
+  app_badge_enabled: true,
   new_requests: true,
   assigned_tasks: true,
   task_changes: true,
@@ -132,7 +134,7 @@ export default function ProfilePage() {
       const { data: savedNotificationPreferences } = await supabase
         .from("notification_preferences")
         .select(
-          "enabled, new_requests, assigned_tasks, task_changes, task_cancellations, work_start_reminders, work_end_reminders, work_start_reminder_time, work_end_reminder_time, quiet_hours_enabled, quiet_hours_start, quiet_hours_end",
+          "enabled, app_badge_enabled, new_requests, assigned_tasks, task_changes, task_cancellations, work_start_reminders, work_end_reminders, work_start_reminder_time, work_end_reminder_time, quiet_hours_enabled, quiet_hours_start, quiet_hours_end",
         )
         .eq("user_id", authData.user.id)
         .maybeSingle();
@@ -461,6 +463,7 @@ export default function ProfilePage() {
       updated_at: new Date().toISOString(),
     });
     setSavingNotifications(false);
+    if (!error) window.dispatchEvent(new Event("app-badge-refresh"));
     setMessage(
       error
         ? "Paziņojumu iestatījumus neizdevās saglabāt."
@@ -746,6 +749,18 @@ export default function ProfilePage() {
             <span className="h-6 w-11 rounded-full bg-zinc-300 transition after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition peer-checked:bg-blue-600 peer-checked:after:translate-x-5 dark:bg-zinc-600" />
           </label>
         </div>
+
+        <label className="flex items-center justify-between gap-3 rounded border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700">
+          <span>Jauno pieteikumu skaits uz aplikācijas ikonas</span>
+          <input
+            type="checkbox"
+            checked={notificationPreferences.app_badge_enabled}
+            onChange={(event) =>
+              updateNotificationPreference("app_badge_enabled", event.target.checked)
+            }
+            className="h-5 w-5 shrink-0 accent-blue-600"
+          />
+        </label>
 
         <div className={`space-y-3 ${notificationPreferences.enabled ? "" : "pointer-events-none opacity-45"}`}>
           {([

@@ -61,11 +61,12 @@ export async function POST(request: NextRequest) {
   for (const notification of pendingNotifications) {
     const { data: preferencesData } = await admin
       .from("notification_preferences")
-      .select("enabled, quiet_hours_enabled, quiet_hours_start, quiet_hours_end")
+      .select("enabled, app_badge_enabled, quiet_hours_enabled, quiet_hours_start, quiet_hours_end")
       .eq("user_id", notification.recipient_id)
       .maybeSingle();
     const preferences = preferencesData as {
       enabled: boolean;
+      app_badge_enabled: boolean;
       quiet_hours_enabled: boolean;
       quiet_hours_start: string;
       quiet_hours_end: string;
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
             title: notification.title,
             body: notification.body,
             url: notification.url || "/",
-            badgeCount: newRequestCount || 0,
+            badgeCount: preferences.app_badge_enabled === false ? 0 : newRequestCount || 0,
           }),
         );
         sent += 1;

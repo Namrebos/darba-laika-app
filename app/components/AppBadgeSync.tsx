@@ -12,6 +12,16 @@ export default function AppBadgeSync() {
       return;
     }
 
+    const { data: preferences } = await supabase
+      .from("notification_preferences")
+      .select("app_badge_enabled")
+      .eq("user_id", authData.user.id)
+      .maybeSingle();
+    if (preferences?.app_badge_enabled === false) {
+      await updateAppBadge(0);
+      return;
+    }
+
     const { count, error } = await supabase
       .from("planned_tasks")
       .select("id", { count: "exact", head: true })
