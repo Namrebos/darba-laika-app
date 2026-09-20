@@ -104,6 +104,19 @@ type FormState = {
   additional_notes: string;
 };
 
+type AdditionalDropoff = {
+  id: string;
+  address: string;
+  point: Point | null;
+  focusPoint: Point | null;
+  contactName: string;
+  phoneCode: string;
+  phone: string;
+  date: string;
+  time: string;
+  notes: string;
+};
+
 const initialForm: FormState = {
   sender_type: "private",
   sender_first_name: "",
@@ -593,6 +606,7 @@ export default function RequestForm({
   const [dropoffPoint, setDropoffPoint] = useState<Point | null>(null);
   const [pickupFocus, setPickupFocus] = useState<Point | null>(null);
   const [dropoffFocus, setDropoffFocus] = useState<Point | null>(null);
+  const [additionalDropoffs, setAdditionalDropoffs] = useState<AdditionalDropoff[]>([]);
   const [images, setImages] = useState<File[]>([]);
   const [step, setStep] = useState(1);
   const [customCargo, setCustomCargo] = useState("");
@@ -1216,6 +1230,44 @@ export default function RequestForm({
     [updatePointFromMap],
   );
 
+  const addAdditionalDropoff = () => {
+    setAdditionalDropoffs((current) => [
+      ...current,
+      {
+        id: `${Date.now()}-${current.length}`,
+        address: "",
+        point: null,
+        focusPoint: null,
+        contactName: "",
+        phoneCode: "+371",
+        phone: "",
+        date: form.dropoff_date,
+        time: form.dropoff_time,
+        notes: "",
+      },
+    ]);
+  };
+
+  const updateAdditionalDropoff = (id: string, changes: Partial<AdditionalDropoff>) => {
+    setAdditionalDropoffs((current) =>
+      current.map((item) => item.id === id ? { ...item, ...changes } : item),
+    );
+  };
+
+  const updateAdditionalDropoffPoint = async (id: string, point: Point) => {
+    updateAdditionalDropoff(id, { point, focusPoint: point });
+    try {
+      const response = await fetch(
+        `/api/geocode?lat=${encodeURIComponent(point.lat)}&lng=${encodeURIComponent(point.lng)}`,
+      );
+      const data = await response.json() as { result?: { label?: string } | null };
+      const label = data.result?.label?.trim();
+      if (response.ok && label) updateAdditionalDropoff(id, { address: label });
+    } catch {
+      // Precīzās koordinātes saglabājas arī tad, ja adrese nav atrodama.
+    }
+  };
+
   const addImages = async (files: FileList | null) => {
     if (!files) return;
     const available = Math.max(0, 8 - images.length);
@@ -1531,8 +1583,57 @@ export default function RequestForm({
                   maxLength={500}
                 />
               </label>
+              <button
+                type="button"
+                onClick={addAdditionalDropoff}
+                className="text-left text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                + Pievienot vēl vienu adresi
+              </button>
             </div>
           </FormCard>
+
+          {additionalDropoffs.map((item, index) => {
+            const phoneInvalid = item.phone.length > 0 && !isValidPhone(item.phoneCode, item.phone);
+            return (
+              <FormCard key={item.id} title={`Uz kurieni ${index + 2}`}>
+                <div className="space-y-4">
+                  <div className="flex justify-end">
+                    <button type="button" onClick={() => setAdditionalDropoffs((current) => current.filter((entry) => entry.id !== item.id))} className="text-sm text-slate-500 hover:text-red-600">
+                      Noņemt adresi
+                    </button>
+                  </div>
+                  <div>
+                    <FieldLabel required>Adrese</FieldLabel>
+                    <AddressField
+                      id={`additional_dropoff_${item.id}`}
+                      value={item.address}
+                      onChange={(address) => updateAdditionalDropoff(item.id, { address })}
+                      onMapFocus={(point) => updateAdditionalDropoff(item.id, { point, focusPoint: point })}
+                      onLocationImport={(point) => void updateAdditionalDropoffPoint(item.id, point)}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel required>Precīza vieta kartē</FieldLabel>
+                    <LocationPicker point={item.point} focusPoint={item.focusPoint} onChange={(point) => void updateAdditionalDropoffPoint(item.id, point)} markerColor="red" active={step === 3}/>
+                  </div>
+                  <div className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
+                    <label><FieldLabel required>Kontaktpersona</FieldLabel><input value={item.contactName} onChange={(event) => updateAdditionalDropoff(item.id, { contactName: event.target.value })} className="form-input" maxLength={120}/></label>
+                    <div>
+                      <FieldLabel required>Kontakttālrunis</FieldLabel>
+                      <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
+                        <select value={item.phoneCode} onChange={(event) => updateAdditionalDropoff(item.id, { phoneCode: event.target.value })} className="form-input">{countryCodes.map(([code]) => <option key={code} value={code}>{code}</option>)}</select>
+                        <input type="tel" inputMode="numeric" value={item.phone} onChange={(event) => { const normalized = normalizePhoneInput(event.target.value, item.phoneCode); updateAdditionalDropoff(item.id, { phoneCode: normalized.code, phone: normalized.subscriber }); }} onPaste={(event) => { const pasted = event.clipboardData.getData("text"); if (!pasted) return; event.preventDefault(); const normalized = normalizePhoneInput(pasted, item.phoneCode); updateAdditionalDropoff(item.id, { phoneCode: normalized.code, phone: normalized.subscriber }); }} className="form-input" maxLength={30} aria-invalid={phoneInvalid}/>
+                      </div>
+                      {phoneInvalid && <span className="mt-1 block text-sm text-red-600">{item.phoneCode === "+371" ? "Ievadiet tieši 8 tālruņa numura ciparus." : "Ievadiet korektu tālruņa numuru."}</span>}
+                    </div>
+                  </div>
+                  <DateTimeField label="Izkraušanas datums un laiks" date={item.date} time={item.time} min={dropoffMinimum()} onChange={(date, time) => updateAdditionalDropoff(item.id, { date, time })}/>
+                  <label><FieldLabel>Piezīmes par izkraušanu</FieldLabel><textarea value={item.notes} onChange={(event) => updateAdditionalDropoff(item.id, { notes: event.target.value })} className="form-input min-h-24 resize-y" maxLength={500}/></label>
+                </div>
+              </FormCard>
+            );
+          })}
         </div>
 
         <div className={`order-1 space-y-4 md:col-span-2 ${sectionClass(1)}`}>
