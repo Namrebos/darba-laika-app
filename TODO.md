@@ -34,17 +34,6 @@ Mērķis: vienam braucienam pēc uzkraušanas vietas var pievienot vairākas sec
 - [ ] Saglabāt esošo darbību braucieniem ar vienu izkraušanas vietu.
 - [ ] Pārbaudīt vairāku izkraušanas vietu darbību datorā un telefonā.
 
-### A-009 — Jauno pieteikumu skaits uz aplikācijas ikonas
-
-Mērķis: uz instalētās aplikācijas ikonas redzēt neatvērto jauno pieteikumu skaitu, saglabājot esošo paziņojumu par katru saņemto pieteikumu.
-
-- [x] Par katru jaunu pieteikumu turpināt nosūtīt esošo push paziņojumu.
-- [x] Ikonas aplītī rādīt datubāzē esošo pieteikumu skaitu ar statusu **Jauns**.
-- [x] Atverot pieteikumu un tam automātiski pārejot uz **Plānots**, uzreiz samazināt ikonas skaitli.
-- [x] Ja nav neviena jauna pieteikuma, noņemt aplīti no ikonas.
-- [x] Sinhronizēt skaitu starp lietotāja telefonu un datoru.
-- [ ] Pārbaudīt darbību instalētā PWA iPhone, Android un atbalstītā datora vidē.
-
 ## Plānots — prioritārā secībā
 
 ### A-001 — Kravas veida precizēšana un meklēšanas uzlabošana
