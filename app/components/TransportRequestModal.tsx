@@ -380,6 +380,12 @@ function PhoneEditField({
         inputMode="tel"
         value={phone}
         onChange={(event) => onChange(normalizeInternationalPhoneInput(event.target.value))}
+        onPaste={(event) => {
+          const pasted = event.clipboardData.getData("text");
+          if (!pasted) return;
+          event.preventDefault();
+          onChange(normalizeInternationalPhoneInput(pasted));
+        }}
         className="form-input bg-white"
         aria-invalid={invalid}
       />
