@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import InstallPortalButton from "@/app/partner-portal/InstallPortalButton";
 
 export default function PartnerLoginPage() {
   const router = useRouter();
@@ -69,6 +70,7 @@ export default function PartnerLoginPage() {
       <button type="button" onClick={() => { setMode((current) => current === "login" ? "reset" : "login"); setError(""); setMessage(""); }} className="w-full text-sm font-medium text-blue-700 underline">
         {mode === "login" ? "Aizmirsi paroli?" : "Atgriezties pie pieslēgšanās"}
       </button>
+      <InstallPortalButton className="w-full" />
       {error && <p className="text-sm text-red-600">{error}</p>}
       {message && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-700">{message}</p>}
     </form>

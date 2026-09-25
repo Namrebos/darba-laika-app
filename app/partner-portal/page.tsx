@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, LogOut, MapPin, Pencil, Plus, Trash2, Truck } from "lucide-react";
 import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
+import InstallPortalButton from "@/app/partner-portal/InstallPortalButton";
 import { supabase } from "@/lib/supabaseClient";
 
 type PlannedTask = {
@@ -129,6 +130,7 @@ export default function PartnerPortalPage() {
             <h1 className="text-2xl font-bold">{partnerName || "Ielādē..."}</h1>
           </div>
           <div className="flex items-center gap-2">
+            <InstallPortalButton />
             {newRequestUrl && (
               <a href={newRequestUrl} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 font-semibold text-white">
                 <Plus size={19} /> Jauns pieteikums
