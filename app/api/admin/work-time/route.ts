@@ -10,7 +10,7 @@ type CorrectionBody = {
   date?: string;
   workLogId?: number | null;
   startTime?: string;
-  endTime?: string;
+  endTime?: string | null;
   confirmTaskConflict?: boolean;
 };
 
@@ -114,20 +114,12 @@ export async function POST(request: NextRequest) {
   const ownerId = body.ownerId || "";
   const date = body.date || "";
   const start = new Date(body.startTime || "");
-  const end = new Date(body.endTime || "");
   if (
     !ownerId ||
     !isDate(date) ||
-    Number.isNaN(start.getTime()) ||
-    Number.isNaN(end.getTime())
+    Number.isNaN(start.getTime())
   ) {
-    return NextResponse.json({ error: "Aizpildi sākuma un beigu laiku." }, { status: 400 });
-  }
-  if (end <= start) {
-    return NextResponse.json({ error: "Beigu laikam jābūt pēc sākuma laika." }, { status: 400 });
-  }
-  if (end.getTime() - start.getTime() > 36 * 60 * 60 * 1000) {
-    return NextResponse.json({ error: "Darba diena nevar būt garāka par 36 stundām." }, { status: 400 });
+    return NextResponse.json({ error: "Aizpildi sākuma laiku." }, { status: 400 });
   }
 
   const { data: owner } = await admin.client
@@ -154,13 +146,25 @@ export async function POST(request: NextRequest) {
     previous = data;
   }
 
+  const isActiveWorkday = previous?.end_time === null;
+  const end = isActiveWorkday ? null : new Date(body.endTime || "");
+  if (!isActiveWorkday && (!end || Number.isNaN(end.getTime()))) {
+    return NextResponse.json({ error: "Aizpildi sākuma un beigu laiku." }, { status: 400 });
+  }
+  if (end && end <= start) {
+    return NextResponse.json({ error: "Beigu laikam jābūt pēc sākuma laika." }, { status: 400 });
+  }
+  if (end && end.getTime() - start.getTime() > 36 * 60 * 60 * 1000) {
+    return NextResponse.json({ error: "Darba diena nevar būt garāka par 36 stundām." }, { status: 400 });
+  }
+
   let overlapQuery = admin.client
     .from("work_logs")
     .select("id")
     .eq("user_id", ownerId)
     .eq("is_test", false)
-    .lt("start_time", end.toISOString())
     .or(`end_time.is.null,end_time.gt.${start.toISOString()}`);
+  if (end) overlapQuery = overlapQuery.lt("start_time", end.toISOString());
   if (body.workLogId) overlapQuery = overlapQuery.neq("id", body.workLogId);
   const { data: overlaps, error: overlapError } = await overlapQuery.limit(1);
   if (overlapError) {
@@ -187,7 +191,7 @@ export async function POST(request: NextRequest) {
   const outsideTasks = (taskRows || []).filter((task) => {
     const taskStart = new Date(task.start_time);
     const taskEnd = task.end_time ? new Date(task.end_time) : null;
-    return taskStart < start || !taskEnd || taskEnd > end;
+    return taskStart < start || (end ? !taskEnd || taskEnd > end : false);
   });
   if (outsideTasks.length > 0 && !body.confirmTaskConflict) {
     return NextResponse.json(
@@ -201,7 +205,7 @@ export async function POST(request: NextRequest) {
 
   const values = {
     start_time: start.toISOString(),
-    end_time: end.toISOString(),
+    end_time: end?.toISOString() || null,
   };
   const result = previous
     ? await admin.client

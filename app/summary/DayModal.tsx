@@ -36,7 +36,7 @@ type WorkLogCorrection = {
   previous_start_time: string | null;
   previous_end_time: string | null;
   new_start_time: string;
-  new_end_time: string;
+  new_end_time: string | null;
   created_at: string;
 };
 
@@ -267,7 +267,7 @@ export default function DayModal({
       setWorkEnd(
         work.end_time
           ? toDateTimeLocalValue(work.end_time)
-          : toDateTimeLocalValue(new Date()),
+          : "",
       );
     } else {
       setWorkStart(`${date}T08:00`);
@@ -406,14 +406,15 @@ export default function DayModal({
 
   async function saveWorkTime(confirmTaskConflict = false) {
     setWorkTimeError("");
-    if (!workStart || !workEnd) {
-      setWorkTimeError("Aizpildi sākuma un beigu laiku.");
+    const isActiveWorkday = Boolean(workLog && !workLog.end_time);
+    if (!workStart || (!isActiveWorkday && !workEnd)) {
+      setWorkTimeError(isActiveWorkday ? "Aizpildi sākuma laiku." : "Aizpildi sākuma un beigu laiku.");
       return;
     }
 
     const start = new Date(workStart);
-    const end = new Date(workEnd);
-    if (end <= start) {
+    const end = isActiveWorkday ? null : new Date(workEnd);
+    if (end && end <= start) {
       setWorkTimeError("Beigu laikam jābūt pēc sākuma laika.");
       return;
     }
@@ -438,7 +439,7 @@ export default function DayModal({
           date,
           workLogId: workLog?.id || null,
           startTime: start.toISOString(),
-          endTime: end.toISOString(),
+          endTime: end?.toISOString() || null,
           confirmTaskConflict,
         }),
       });
@@ -664,15 +665,21 @@ export default function DayModal({
                               className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-white"
                             />
                           </label>
-                          <label className="space-y-1 text-sm font-medium">
-                            <span>Beigu datums un laiks</span>
-                            <input
-                              type="datetime-local"
-                              value={workEnd}
-                              onChange={(event) => setWorkEnd(event.target.value)}
-                              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-white"
-                            />
-                          </label>
+                          {workLog?.end_time ? (
+                            <label className="space-y-1 text-sm font-medium">
+                              <span>Beigu datums un laiks</span>
+                              <input
+                                type="datetime-local"
+                                value={workEnd}
+                                onChange={(event) => setWorkEnd(event.target.value)}
+                                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-white"
+                              />
+                            </label>
+                          ) : (
+                            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+                              Darba diena ir aktīva — beigu laiks netiks mainīts.
+                            </div>
+                          )}
                         </div>
                         {workTimeError && (
                           <p className="text-sm font-medium text-red-600 dark:text-red-400">
@@ -718,7 +725,9 @@ export default function DayModal({
                               </p>
                               <p className="text-zinc-600 dark:text-zinc-300">
                                 {format(new Date(correction.new_start_time), "yyyy-MM-dd HH:mm")} –{" "}
-                                {format(new Date(correction.new_end_time), "yyyy-MM-dd HH:mm")}
+                                {correction.new_end_time
+                                  ? format(new Date(correction.new_end_time), "yyyy-MM-dd HH:mm")
+                                  : "Nav noslēgta"}
                               </p>
                               <p className="text-xs text-zinc-500">
                                 {format(new Date(correction.created_at), "yyyy-MM-dd HH:mm")}
