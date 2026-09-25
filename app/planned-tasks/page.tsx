@@ -1731,35 +1731,41 @@ export default function PlannedTasksPage() {
                         {task.title.trim() || "Bez nosaukuma"}
                       </h3>
                       {request ? (
-                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+                        <div className="mt-2 space-y-1 text-sm text-zinc-500 dark:text-zinc-400">
                           {plannedDate && (
                             <span className="inline-flex items-center gap-1.5">
                               <CalendarDays size={16} className="text-blue-600 dark:text-blue-400" />
-                              {shortDateLabel(plannedDate)}
+                              <span>
+                                {shortDateLabel(plannedDate)}
+                                {task.scheduled_time ? ` ${task.scheduled_time.slice(0, 5)}` : ""}
+                              </span>
                             </span>
                           )}
-                          <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <span className="flex min-w-0 items-center gap-1.5">
                             <Route size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
                             <span className="truncate">{route}</span>
                           </span>
-                          <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <span className="flex min-w-0 items-center gap-1.5">
                             <Truck size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
                             <span className="truncate">{request.cargo_type}</span>
                           </span>
-                          {currentUserRole === "admin" && <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]">
+                          {currentUserRole === "admin" && <span className="flex min-w-0 items-center gap-1.5 text-[11px]">
                             <UserRoundPen size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
                             <span>{requestSourceLabel(request)} · {receivedAtLabel(request.created_at)}</span>
                           </span>}
                         </div>
                       ) : (
-                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+                        <div className="mt-2 space-y-1 text-sm text-zinc-500 dark:text-zinc-400">
                           {plannedDate && (
                             <span className="inline-flex items-center gap-1.5">
                               <CalendarDays size={16} className="text-blue-600 dark:text-blue-400" />
-                              {shortDateLabel(plannedDate)}
+                              <span>
+                                {shortDateLabel(plannedDate)}
+                                {task.scheduled_time ? ` ${task.scheduled_time.slice(0, 5)}` : ""}
+                              </span>
                             </span>
                           )}
-                          <span className="truncate">{notePreview(task.note)}</span>
+                          <span className="block truncate">{notePreview(task.note)}</span>
                         </div>
                       )}
                     </div>
