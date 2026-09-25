@@ -24,5 +24,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function PartnerPortalLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      <link rel="manifest" href="/partner-portal/manifest.webmanifest" crossOrigin="use-credentials" />
+      {children}
+    </>
+  );
 }
