@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Building2, Check, Copy, Eye, Link2, Link2Off, Mail, MessageCircle, Pencil, Plus, RefreshCw, Share2, Trash2, UserRound, X } from "lucide-react";
+import { Building2, Check, Copy, Eye, KeyRound, Link2, Link2Off, Mail, MessageCircle, Pencil, Plus, RefreshCw, Share2, Trash2, UserRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
@@ -24,6 +24,7 @@ type Partner = {
   phone: string; email: string | null; contacts: PartnerContact[];
 };
 type PartnerRequestLink = { partnerId: number; active: boolean; url: string };
+type PartnerPortalAccess = { partnerId: number; active: boolean; url: string; hasAccount: boolean };
 
 const emptyForm = {
   display_name: "", partner_type: "company" as PartnerType,
@@ -50,6 +51,8 @@ export default function PartnersPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [requestLinks, setRequestLinks] = useState<Record<number, PartnerRequestLink>>({});
+  const [portalAccess, setPortalAccess] = useState<Record<number, PartnerPortalAccess>>({});
+  const [isAdmin, setIsAdmin] = useState(false);
   const [linkMenuPartnerId, setLinkMenuPartnerId] = useState<number | null>(null);
   const [shareMenuPartnerId, setShareMenuPartnerId] = useState<number | null>(null);
   const [visibleLinkPartnerId, setVisibleLinkPartnerId] = useState<number | null>(null);
@@ -93,13 +96,34 @@ export default function PartnersPage() {
     setRequestLinks(Object.fromEntries((result.links || []).map((link) => [link.partnerId, link])));
   }
 
+  async function loadPortalAccess() {
+    const { data } = await supabase.auth.getSession();
+    const response = await fetch("/api/admin/partner-portal", {
+      headers: { Authorization: `Bearer ${data.session?.access_token || ""}` },
+    });
+    if (!response.ok) return;
+    const result = await response.json() as {
+      accounts?: Array<{ partner_id: number }>;
+      invitations?: Array<{ partnerId: number; active: boolean; url: string }>;
+    };
+    const next: Record<number, PartnerPortalAccess> = {};
+    for (const invitation of result.invitations || []) {
+      next[invitation.partnerId] = { ...invitation, hasAccount: false };
+    }
+    for (const account of result.accounts || []) {
+      next[account.partner_id] = { partnerId: account.partner_id, active: false, url: "", hasAccount: true };
+    }
+    setPortalAccess(next);
+  }
+
   useEffect(() => {
     async function load() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace("/login"); return; }
       const { data: profile } = await supabase.from("profiles").select("role, can_access_partners").eq("id", authData.user.id).single();
       if (profile?.role !== "admin" && profile?.can_access_partners !== true) { router.replace("/summary"); return; }
-      await Promise.all([loadPartners(), loadPartnerLinks()]);
+      setIsAdmin(profile?.role === "admin");
+      await Promise.all([loadPartners(), loadPartnerLinks(), ...(profile?.role === "admin" ? [loadPortalAccess()] : [])]);
       setLoading(false);
     }
     void load();
@@ -297,6 +321,39 @@ export default function PartnersPage() {
     }
   }
 
+  async function createOrCopyPortalLink(partnerId: number) {
+    const current = portalAccess[partnerId];
+    if (current?.hasAccount) {
+      setMessage("Šim partnerim konts jau ir izveidots.");
+      return;
+    }
+    if (current?.active && current.url) {
+      await navigator.clipboard.writeText(current.url);
+      setMessage("Partnera konta reģistrācijas saite nokopēta.");
+      return;
+    }
+    const { data } = await supabase.auth.getSession();
+    const response = await fetch("/api/admin/partner-portal", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${data.session?.access_token || ""}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ partnerId, action: "create" }),
+    });
+    const result = await response.json() as { active?: boolean; url?: string; error?: string };
+    if (!response.ok || !result.url) {
+      setMessage(result.error || "Partnera konta saiti neizdevās izveidot.");
+      return;
+    }
+    setPortalAccess((existing) => ({
+      ...existing,
+      [partnerId]: { partnerId, active: true, url: result.url || "", hasAccount: false },
+    }));
+    await navigator.clipboard.writeText(result.url);
+    setMessage("Partnera konta reģistrācijas saite izveidota un nokopēta.");
+  }
+
   if (loading) return <p className="p-6">Ielādē...</p>;
   const inputClass = "w-full rounded-lg border border-zinc-300 bg-transparent p-2.5 dark:border-zinc-600";
 
@@ -371,6 +428,7 @@ export default function PartnersPage() {
           <article key={partner.id} className="flex items-start justify-between gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
             <div className="flex min-w-0 gap-3"><div className="mt-0.5 rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">{partner.partner_type === "company" ? <Building2 size={20} /> : <UserRound size={20} />}</div><div className="min-w-0"><h3 className="font-semibold">{partner.display_name}</h3>{partner.company_name && partner.company_name !== partner.display_name && <p className="text-sm text-zinc-500">{partner.company_name}</p>}{partner.registration_number && <p className="text-sm text-zinc-500">Reģ./PVN: {partner.registration_number}</p>}{partner.contacts.map((contact) => <p key={contact.id ?? `${contact.name}-${contact.phone}`} className="text-sm text-zinc-500">{contact.name}: {contact.phone}</p>)}<p className="text-sm text-zinc-500">{partner.address}</p>{partner.email && <p className="text-sm text-zinc-500">{partner.email}</p>}</div></div>
             <div className="relative flex shrink-0 gap-2" data-partner-link-menu>
+              {isAdmin && <button type="button" onClick={() => void createOrCopyPortalLink(partner.id)} className={`rounded-lg border p-2 ${portalAccess[partner.id]?.hasAccount ? "border-green-300 text-green-600" : "border-zinc-300 text-violet-600 dark:border-zinc-600"}`} aria-label={portalAccess[partner.id]?.hasAccount ? "Partnera konts izveidots" : "Izveidot partnera konta saiti"} title={portalAccess[partner.id]?.hasAccount ? "Partnera konts izveidots" : "Izveidot vai kopēt partnera konta reģistrācijas saiti"}><KeyRound size={18} /></button>}
               <button type="button" onClick={() => { setLinkMenuPartnerId((current) => current === partner.id ? null : partner.id); setShareMenuPartnerId(null); }} className="rounded-lg border border-zinc-300 p-2 text-blue-600 dark:border-zinc-600" aria-label="Pieteikuma saite"><Link2 size={18} /></button>
               <button type="button" onClick={() => editPartner(partner)} className="rounded-lg border border-zinc-300 p-2 dark:border-zinc-600" aria-label="Rediģēt partneri"><Pencil size={18} /></button><button type="button" onClick={() => void deletePartner(partner)} className="rounded-lg border border-red-300 p-2 text-red-600 dark:border-red-800" aria-label="Dzēst partneri"><Trash2 size={18} /></button>
               {linkMenuPartnerId === partner.id && <div className="absolute right-0 top-11 z-30 w-64 space-y-1 rounded-xl border border-zinc-200 bg-white p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">

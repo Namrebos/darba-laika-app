@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
 import { isValidInternationalPhone } from "@/lib/phoneInput";
 import { shortPartnerName } from "@/lib/partnerName";
+import { getPartnerPortalSession } from "@/lib/partnerPortalServer";
 
 function cleanAdditionalDropoffs(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -48,7 +49,7 @@ export async function GET(
     );
   }
 
-  const [{ data: profile }, { data: task }] = await Promise.all([
+  const [{ data: profile }, { data: task }, partnerSession] = await Promise.all([
     adminClient
       .from("profiles")
       .select("role, can_access_planned_tasks")
@@ -59,13 +60,24 @@ export async function GET(
       .select("assignee_id, created_by, vehicle_id")
       .eq("transport_request_id", numericId)
       .maybeSingle(),
+    getPartnerPortalSession(request),
   ]);
+
+  const { data: ownedRequest } = partnerSession
+    ? await adminClient
+        .from("transport_requests")
+        .select("id")
+        .eq("id", numericId)
+        .eq("partner_id", partnerSession.partnerId)
+        .maybeSingle()
+    : { data: null };
 
   const hasAccess =
     profile?.role === "admin" ||
     profile?.can_access_planned_tasks === true ||
     task?.assignee_id === authData.user.id ||
-    task?.created_by === authData.user.id;
+    task?.created_by === authData.user.id ||
+    Boolean(ownedRequest);
   if (!hasAccess) {
     return NextResponse.json({ error: "Nav pieejas." }, { status: 403 });
   }
@@ -155,12 +167,35 @@ export async function PUT(
     return NextResponse.json({ error: "Pieteikums nav atrasts." }, { status: 404 });
   }
 
-  const { data: profile } = await adminClient
-    .from("profiles")
-    .select("role, can_access_planned_tasks")
-    .eq("id", authData.user.id)
-    .single();
-  if (profile?.role !== "admin" && profile?.can_access_planned_tasks !== true) {
+  const [{ data: profile }, partnerSession, { data: linkedTaskBeforeEdit }] = await Promise.all([
+    adminClient
+      .from("profiles")
+      .select("role, can_access_planned_tasks")
+      .eq("id", authData.user.id)
+      .single(),
+    getPartnerPortalSession(request),
+    adminClient
+      .from("planned_tasks")
+      .select("status")
+      .eq("transport_request_id", numericId)
+      .maybeSingle(),
+  ]);
+  const { data: partnerOwnedRequest } = partnerSession
+    ? await adminClient
+        .from("transport_requests")
+        .select("id")
+        .eq("id", numericId)
+        .eq("partner_id", partnerSession.partnerId)
+        .maybeSingle()
+    : { data: null };
+  const partnerMayEdit = Boolean(
+    partnerSession && partnerOwnedRequest && linkedTaskBeforeEdit?.status === "new",
+  );
+  if (
+    profile?.role !== "admin" &&
+    profile?.can_access_planned_tasks !== true &&
+    !partnerMayEdit
+  ) {
     return NextResponse.json({ error: "Nav tiesību rediģēt pieteikumu." }, { status: 403 });
   }
 

@@ -44,15 +44,6 @@ Mērķis: pārliecināties, ka lietotāji, partneru publiskās saites un pavadz�
 - [ ] Pārbaudīt attālinātās pavadzīmes parakstīšanas saites.
 - [ ] Pārbaudīt failu, attēlu un personas datu pieejamību.
 
-### A-003 — Partneru login, kopsavilkums un mēneša pārskats
-
-Mērķis: partnerim ir sava droša pieeja, kurā var izveidot pieteikumus un redzēt tikai sava uzņēmuma informāciju.
-
-- [ ] Izveidot partneru autentifikācijas un piekļuves loģiku.
-- [ ] Izveidot partnera pieteikumu un braucienu kopsavilkumu.
-- [ ] Izveidot partnera mēneša pārskatu.
-- [ ] Vienoties par pārskatā redzamajiem datiem, filtriem un eksportu.
-
 ### A-004 — Pieteikumu izveides statistika
 
 Mērķis: administrators var apskatīt statistiku par izveidotajiem pieteikumiem un to avotiem.
@@ -80,7 +71,17 @@ Mērķis: administratoram dzēšot lietotāju, kontrolēti izdzēst vai anonimiz
 
 ## Procesā
 
-_Pašlaik nav._
+### A-003 — Partneru login, kopsavilkums un mēneša pārskats
+
+Mērķis: partnerim ir savs izolēts portāls, kurā redzami tikai konkrētā partnera izveidotie pieteikumi.
+
+- [ ] Vienam partnerim izveidot vienu loginu ar administratora ģenerētu reģistrācijas saiti.
+- [ ] Saglabāt esošo publisko partnera pieteikuma saiti un visas tās funkcijas.
+- [ ] Portālā parādīt tikai konkrētajam partnerim piesaistītos pieteikumus.
+- [ ] Parādīt statusus: Nosūtīts, Plānots, Sākts, Pabeigts un Atcelts.
+- [ ] Atļaut partnerim labot un dzēst pieteikumu tikai statusā Jauns/Nosūtīts.
+- [ ] Izveidot partnera kopsavilkumu un mēneša pārskatu.
+- [ ] Nodrošināt, ka partnerim nav pieejamas darbinieku un administratora sadaļas.
 
 ## Testēšanā
 
