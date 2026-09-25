@@ -599,12 +599,14 @@ export default function RequestForm({
   internal = false,
   sourceRequestId,
   partnerPreset = null,
+  testPartnerId,
 }: {
   token: string;
   initiallyValid: boolean;
   internal?: boolean;
   sourceRequestId?: number;
   partnerPreset?: PartnerPreset | null;
+  testPartnerId?: number;
 }) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [pickupPoint, setPickupPoint] = useState<Point | null>(null);
@@ -621,7 +623,7 @@ export default function RequestForm({
   const [error, setError] = useState("");
   const [internalAccess, setInternalAccess] = useState<
     "checking" | "allowed" | "denied"
-  >(internal ? "checking" : "allowed");
+  >(internal || testPartnerId ? "checking" : "allowed");
   const [partners, setPartners] = useState<Partner[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
   const [newCustomerOpen, setNewCustomerOpen] = useState(
@@ -760,7 +762,7 @@ export default function RequestForm({
   }, []);
 
   useEffect(() => {
-    if (!internal) return;
+    if (!internal && !testPartnerId) return;
 
     async function checkInternalAccess() {
       const { data: authData } = await supabase.auth.getUser();
@@ -774,10 +776,10 @@ export default function RequestForm({
         .eq("id", authData.user.id)
         .single();
       const isAdmin = profile?.role === "admin";
-      const canManagePartners = isAdmin || profile?.can_access_partners === true;
+      const canManagePartners = !testPartnerId && (isAdmin || profile?.can_access_partners === true);
       setInternalCanManagePartners(canManagePartners);
       setInternalAccess(
-        isAdmin || profile?.can_access_planned_tasks === true
+        (testPartnerId ? isAdmin : isAdmin || profile?.can_access_planned_tasks === true)
           ? "allowed"
           : "denied",
       );
@@ -791,7 +793,7 @@ export default function RequestForm({
     }
 
     void checkInternalAccess();
-  }, [internal]);
+  }, [internal, testPartnerId]);
 
   const previews = useMemo(
     () => images.map((file) => ({ file, url: URL.createObjectURL(file) })),
@@ -1443,7 +1445,9 @@ export default function RequestForm({
       })),
     };
     const body = new FormData();
-    if (internal) {
+    if (testPartnerId) {
+      body.set("test_partner_id", String(testPartnerId));
+    } else if (internal) {
       body.set("mode", "internal");
     } else if (isPartnerRequest) {
       body.set("partner_token", token);
@@ -1453,18 +1457,21 @@ export default function RequestForm({
     body.set("payload", JSON.stringify(payload));
     images.forEach((file) => body.append("images", file));
 
-    const { data: sessionData } = internal
+    const { data: sessionData } = internal || testPartnerId
       ? await supabase.auth.getSession()
       : { data: { session: null } };
-    const response = await fetch("/api/transport-requests", {
+    const response = await fetch(
+      testPartnerId ? "/api/admin/partner-portal/test-requests" : "/api/transport-requests",
+      {
       method: "POST",
-      headers: internal
+      headers: internal || testPartnerId
         ? {
             Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
           }
         : undefined,
       body,
-    });
+      },
+    );
     const result = await response.json();
     setSubmitting(false);
     if (!response.ok) {
@@ -1511,9 +1518,9 @@ export default function RequestForm({
         <h1 className="mt-4 text-2xl font-bold">
           Paldies, pieteikums saņemts!
         </h1>
-        {internal && (
+        {(internal || testPartnerId) && (
           <Link
-            href="/planned-tasks"
+            href={testPartnerId ? `/partner-portal/test?partnerId=${testPartnerId}` : "/planned-tasks"}
             className="mt-5 inline-flex rounded-xl bg-blue-800 px-5 py-3 font-semibold text-white"
           >
             Atgriezties
@@ -1537,11 +1544,11 @@ export default function RequestForm({
             Pieteikums
           </h1>
         </div>
-        {(internal || isPartnerRequest) && (
+        {(internal || isPartnerRequest || testPartnerId) && (
           <div className="absolute right-0 top-0 flex gap-2">
           <button type="button" onClick={reverseRoute} aria-label="Samainīt uzkraušanas un izkraušanas vietas" title="Samainīt uzkraušanas un izkraušanas vietas" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm"><Repeat2 size={23}/></button>
-          {internal && <Link
-            href="/planned-tasks"
+          {(internal || testPartnerId) && <Link
+            href={testPartnerId ? `/partner-portal/test?partnerId=${testPartnerId}` : "/planned-tasks"}
             aria-label="Aizvērt formu bez saglabāšanas"
             title="Aizvērt"
             className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
@@ -2044,7 +2051,9 @@ export default function RequestForm({
             <Send size={18} />
             {submitting
               ? "Saglabā..."
-              : internal
+              : testPartnerId
+                ? "Nosūtīt testa pieteikumu"
+                : internal
                 ? "Izveidot braucienu"
                 : "Nosūtīt pieprasījumu"}
           </button>
@@ -2058,7 +2067,9 @@ export default function RequestForm({
           <Send size={18} />
           {submitting
             ? "Saglabā..."
-            : internal
+            : testPartnerId
+              ? "Nosūtīt testa pieteikumu"
+              : internal
               ? "Izveidot braucienu"
               : "Nosūtīt pieprasījumu"}
         </button>

@@ -12,6 +12,7 @@ type CreateProps = {
   internal?: boolean;
   sourceRequestId?: number;
   partnerPreset?: PartnerPreset | null;
+  testPartnerId?: number;
 };
 
 type ExistingProps = {
@@ -38,6 +39,7 @@ export default function UnifiedTransportRequestForm(
         internal={props.internal}
         sourceRequestId={props.sourceRequestId}
         partnerPreset={props.partnerPreset}
+        testPartnerId={props.testPartnerId}
       />
     );
   }
