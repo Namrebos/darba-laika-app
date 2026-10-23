@@ -3,8 +3,16 @@ import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportReques
 import type { PartnerPreset } from "@/app/request/[token]/RequestForm";
 import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
 
-export default async function PartnerRequestPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function PartnerRequestPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ repeat?: string }>;
+}) {
   const { token } = await params;
+  const { repeat } = await searchParams;
+  const repeatRequestId = Number(repeat);
   let preset: PartnerPreset | null = null;
   const client = getSupabaseAdmin();
   if (client && token) {
@@ -23,5 +31,5 @@ export default async function PartnerRequestPage({ params }: { params: Promise<{
       };
     }
   }
-  return <main className="min-h-screen bg-slate-50 px-3 py-5 text-slate-950 sm:px-6"><UnifiedTransportRequestForm mode="create" token={token} initiallyValid={Boolean(preset?.valid)} partnerPreset={preset} /></main>;
+  return <main className="min-h-screen bg-slate-50 px-3 py-5 text-slate-950 sm:px-6"><UnifiedTransportRequestForm mode="create" token={token} initiallyValid={Boolean(preset?.valid)} partnerPreset={preset} sourceRequestId={Number.isSafeInteger(repeatRequestId) && repeatRequestId > 0 ? repeatRequestId : undefined} partnerPortalRepeat /></main>;
 }

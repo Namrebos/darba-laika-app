@@ -13,6 +13,7 @@ type CreateProps = {
   sourceRequestId?: number;
   partnerPreset?: PartnerPreset | null;
   testPartnerId?: number;
+  partnerPortalRepeat?: boolean;
 };
 
 type ExistingProps = {
@@ -40,6 +41,7 @@ export default function UnifiedTransportRequestForm(
         sourceRequestId={props.sourceRequestId}
         partnerPreset={props.partnerPreset}
         testPartnerId={props.testPartnerId}
+        partnerPortalRepeat={props.partnerPortalRepeat}
       />
     );
   }

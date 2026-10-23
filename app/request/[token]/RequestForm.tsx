@@ -600,6 +600,7 @@ export default function RequestForm({
   sourceRequestId,
   partnerPreset = null,
   testPartnerId,
+  partnerPortalRepeat = false,
 }: {
   token: string;
   initiallyValid: boolean;
@@ -607,6 +608,7 @@ export default function RequestForm({
   sourceRequestId?: number;
   partnerPreset?: PartnerPreset | null;
   testPartnerId?: number;
+  partnerPortalRepeat?: boolean;
 }) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [pickupPoint, setPickupPoint] = useState<Point | null>(null);
@@ -692,7 +694,7 @@ export default function RequestForm({
   }, [submitted]);
 
   useEffect(() => {
-    if (!internal || !sourceRequestId) return;
+    if ((!internal && !partnerPortalRepeat) || !sourceRequestId) return;
     async function loadSource() {
       const { data } = await supabase.auth.getSession();
       const response = await fetch(`/api/transport-requests/${sourceRequestId}`, { headers: { Authorization: `Bearer ${data.session?.access_token || ""}` } });
@@ -707,22 +709,21 @@ export default function RequestForm({
       };
       const senderPhone = splitPhone(String(request.sender_phone || ""));
       const recipientPhone = splitPhone(String(request.recipient_phone || ""));
-      setForm({
+      const sourceForm: FormState = {
         sender_type: request.sender_type as PartyType, sender_first_name: String(request.sender_first_name || ""), sender_last_name: String(request.sender_last_name || ""), sender_company_name: String(request.sender_company_name || ""), sender_registration_number: String(request.sender_registration_number || ""), sender_phone_code: senderPhone.code, sender_phone: senderPhone.number, sender_address: String(request.sender_address || ""), sender_email: String(request.sender_email || ""),
         recipient_type: request.recipient_type as PartyType, recipient_first_name: String(request.recipient_first_name || ""), recipient_last_name: String(request.recipient_last_name || ""), recipient_company_name: String(request.recipient_company_name || ""), recipient_registration_number: String(request.recipient_registration_number || ""), recipient_phone_code: recipientPhone.code, recipient_phone: recipientPhone.number,
         pickup_contact_name: String(request.pickup_contact_name || request.sender_company_name || request.sender_first_name || ""), pickup_contact_phone_code: splitPhone(String(request.pickup_contact_phone || request.sender_phone || "")).code, pickup_contact_phone: splitPhone(String(request.pickup_contact_phone || request.sender_phone || "")).number,
         dropoff_contact_name: String(request.dropoff_contact_name || request.recipient_company_name || request.recipient_first_name || ""), dropoff_contact_phone_code: splitPhone(String(request.dropoff_contact_phone || request.recipient_phone || "")).code, dropoff_contact_phone: splitPhone(String(request.dropoff_contact_phone || request.recipient_phone || "")).number,
         pickup_address: String(request.pickup_address || ""), pickup_date: String(request.pickup_date || ""), pickup_time: String(request.pickup_time || "").slice(0, 5), pickup_notes: String(request.pickup_notes || ""),
         dropoff_address: String(request.dropoff_address || ""), dropoff_date: String(request.dropoff_date || ""), dropoff_time: String(request.dropoff_time || "").slice(0, 5), dropoff_notes: String(request.dropoff_notes || ""), cargo_type: String(request.cargo_type || ""), additional_notes: String(request.additional_notes || ""),
-      });
+      };
       setSelectedPartnerId(String(request.partner_id || ""));
       const pickup = { lat: Number(request.pickup_lat), lng: Number(request.pickup_lng) };
       const dropoff = { lat: Number(request.dropoff_lat), lng: Number(request.dropoff_lng) };
-      setPickupPoint(pickup); setPickupFocus(pickup); setDropoffPoint(dropoff); setDropoffFocus(dropoff);
       const storedDropoffs = Array.isArray(request.additional_dropoffs)
         ? request.additional_dropoffs as Array<Record<string, unknown>>
         : [];
-      setAdditionalDropoffs(storedDropoffs.map((item, index) => {
+      const loadedDropoffs = storedDropoffs.map((item, index) => {
         const contactPhone = splitPhone(String(item.contact_phone || ""));
         const lat = Number(item.lat);
         const lng = Number(item.lng);
@@ -739,14 +740,69 @@ export default function RequestForm({
           time: String(item.time || "").slice(0, 5),
           notes: String(item.notes || ""),
         };
-      }));
+      });
+      if (partnerPortalRepeat) {
+        const route: AdditionalDropoff[] = [
+          {
+            id: "source-pickup",
+            address: sourceForm.pickup_address,
+            point: pickup,
+            focusPoint: pickup,
+            contactName: sourceForm.pickup_contact_name,
+            phoneCode: sourceForm.pickup_contact_phone_code,
+            phone: sourceForm.pickup_contact_phone,
+            date: "",
+            time: "",
+            notes: sourceForm.pickup_notes,
+          },
+          {
+            id: "source-dropoff",
+            address: sourceForm.dropoff_address,
+            point: dropoff,
+            focusPoint: dropoff,
+            contactName: sourceForm.dropoff_contact_name,
+            phoneCode: sourceForm.dropoff_contact_phone_code,
+            phone: sourceForm.dropoff_contact_phone,
+            date: "",
+            time: "",
+            notes: sourceForm.dropoff_notes,
+          },
+          ...loadedDropoffs.map((item) => ({ ...item, date: "", time: "" })),
+        ].reverse();
+        const [newPickup, newPrimaryDropoff, ...newAdditionalDropoffs] = route;
+        setForm({
+          ...sourceForm,
+          pickup_address: newPickup.address,
+          pickup_contact_name: newPickup.contactName,
+          pickup_contact_phone_code: newPickup.phoneCode,
+          pickup_contact_phone: newPickup.phone,
+          pickup_date: "",
+          pickup_time: "",
+          pickup_notes: newPickup.notes,
+          dropoff_address: newPrimaryDropoff.address,
+          dropoff_contact_name: newPrimaryDropoff.contactName,
+          dropoff_contact_phone_code: newPrimaryDropoff.phoneCode,
+          dropoff_contact_phone: newPrimaryDropoff.phone,
+          dropoff_date: "",
+          dropoff_time: "",
+          dropoff_notes: newPrimaryDropoff.notes,
+        });
+        setPickupPoint(newPickup.point); setPickupFocus(newPickup.focusPoint);
+        setDropoffPoint(newPrimaryDropoff.point); setDropoffFocus(newPrimaryDropoff.focusPoint);
+        setAdditionalDropoffs(newAdditionalDropoffs.map((item, index) => ({ ...item, id: `reversed-${index}` })));
+      } else {
+        setForm(sourceForm);
+        setPickupPoint(pickup); setPickupFocus(pickup); setDropoffPoint(dropoff); setDropoffFocus(dropoff);
+        setAdditionalDropoffs(loadedDropoffs);
+      }
+      setRecipientSameAsSender(request.recipient_same_as_sender !== false);
       const copiedImages = await Promise.all((result.images || []).map(async (image: { url: string; fileName: string }) => {
         const fileResponse = await fetch(image.url); const blob = await fileResponse.blob(); return new File([blob], image.fileName, { type: blob.type });
       }));
       setImages(copiedImages);
     }
     void loadSource();
-  }, [internal, sourceRequestId]);
+  }, [internal, partnerPortalRepeat, sourceRequestId]);
 
   useEffect(() => {
     async function loadCargoTypes() {

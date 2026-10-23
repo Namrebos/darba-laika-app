@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, LogOut, MapPin, Pencil, Plus, Trash2, Truck } from "lucide-react";
+import { CalendarDays, LogOut, MapPin, Pencil, Plus, Repeat2, Trash2, Truck } from "lucide-react";
 import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 import InstallPortalButton from "@/app/partner-portal/InstallPortalButton";
 import { supabase } from "@/lib/supabaseClient";
@@ -182,6 +182,11 @@ export default function PartnerPortalPage() {
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[status]}`}>{statusLabels[status]}</span>
                 </div>
                 <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
+                  {status === "completed" && newRequestUrl && (
+                    <a href={`${newRequestUrl}?repeat=${item.id}`} className="inline-flex items-center gap-2 rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-700">
+                      <Repeat2 size={16} /> Atkārtot reversā
+                    </a>
+                  )}
                   <button type="button" onClick={() => setOpenRequestId(item.id)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
                     {editable ? <Pencil size={16} /> : <Truck size={16} />} {editable ? "Labot" : "Apskatīt"}
                   </button>
