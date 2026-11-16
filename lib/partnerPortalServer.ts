@@ -8,7 +8,7 @@ export async function getPartnerPortalSession(request: NextRequest) {
   if (!client || !accessToken) return null;
 
   const { data: auth } = await client.auth.getUser(accessToken);
-  if (!auth.user) return null;
+  if (!auth.user?.email_confirmed_at) return null;
 
   const { data: account } = await client
     .from("partner_portal_accounts")
@@ -20,6 +20,7 @@ export async function getPartnerPortalSession(request: NextRequest) {
   return {
     client,
     userId: auth.user.id,
+    email: auth.user.email || "",
     partnerId: Number(account.partner_id),
   };
 }

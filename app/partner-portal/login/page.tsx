@@ -15,8 +15,12 @@ export default function PartnerLoginPage() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("passwordReset") === "1") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("passwordReset") === "1") {
       setMessage("Parole ir nomainīta. Tagad vari pieslēgties ar jauno paroli.");
+      window.history.replaceState({}, "", "/partner-portal/login");
+    } else if (params.get("verified") === "1") {
+      setMessage("E-pasts apstiprināts. Tagad vari pieslēgties.");
       window.history.replaceState({}, "", "/partner-portal/login");
     }
   }, []);
@@ -41,7 +45,15 @@ export default function PartnerLoginPage() {
     const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
     if (loginError || !data.session) {
       setLoading(false);
-      setError("E-pasts vai parole nav pareiza.");
+      setError(loginError?.message.toLowerCase().includes("not confirmed")
+        ? "Vispirms apstiprini e-pastu, atverot saņemto apstiprinājuma saiti."
+        : "E-pasts vai parole nav pareiza.");
+      return;
+    }
+    if (!data.user.email_confirmed_at) {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setError("Vispirms apstiprini e-pastu, atverot saņemto apstiprinājuma saiti.");
       return;
     }
     const response = await fetch("/api/partner-portal/session", {

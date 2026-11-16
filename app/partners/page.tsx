@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Building2, Check, Copy, Eye, KeyRound, Link2, Link2Off, Mail, MessageCircle, Pencil, Plus, RefreshCw, Share2, Trash2, UserRound, X } from "lucide-react";
+import { Building2, Check, Copy, Eye, ImagePlus, KeyRound, Link2, Link2Off, Mail, MessageCircle, Pencil, Plus, RefreshCw, Share2, Trash2, UserRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddressField from "@/app/components/AddressField";
@@ -22,7 +22,7 @@ type Partner = {
   company_name: string | null; registration_number: string | null;
   contact_name: string | null; address: string;
   latitude: number | null; longitude: number | null;
-  phone: string; email: string | null; contacts: PartnerContact[];
+  phone: string; email: string | null; logo_url: string | null; profile_completed: boolean; contacts: PartnerContact[];
 };
 type PartnerRequestLink = { partnerId: number; active: boolean; url: string };
 type PartnerPortalAccess = { partnerId: number; active: boolean; url: string; hasAccount: boolean };
@@ -39,6 +39,21 @@ function identityName(form: typeof emptyForm) {
     : [form.first_name.trim(), form.last_name.trim()].filter(Boolean).join(" ");
 }
 
+function partnerProfileReady(partner: Partner) {
+  const identityValid = partner.partner_type === "company"
+    ? Boolean(partner.company_name?.trim() && partner.registration_number?.trim())
+    : Boolean(partner.first_name?.trim());
+  return Boolean(
+    identityValid
+    && partner.email?.trim()
+    && partner.address.trim()
+    && partner.latitude !== null
+    && partner.longitude !== null
+    && partner.contacts.length > 0
+    && partner.contacts.every((contact) => contact.name.trim() && isValidInternationalPhone(contact.phone)),
+  );
+}
+
 export default function PartnersPage() {
   const router = useRouter();
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -50,6 +65,10 @@ export default function PartnersPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [removeLogo, setRemoveLogo] = useState(false);
   const [message, setMessage] = useState("");
   const [toastMessage, setToastMessage] = useState("");
   const [requestLinks, setRequestLinks] = useState<Record<number, PartnerRequestLink>>({});
@@ -73,10 +92,14 @@ export default function PartnersPage() {
     return () => window.clearTimeout(timeout);
   }, [toastMessage]);
 
+  useEffect(() => () => {
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+  }, [logoPreview]);
+
   async function loadPartners() {
     const [{ data, error }, { data: contactRows, error: contactsError }] = await Promise.all([
       supabase.from("partners")
-        .select("id, display_name, partner_type, first_name, last_name, company_name, registration_number, contact_name, address, latitude, longitude, phone, email")
+        .select("id, display_name, partner_type, first_name, last_name, company_name, registration_number, contact_name, address, latitude, longitude, phone, email, logo_url, profile_completed")
         .order("display_name"),
       supabase.from("partner_contacts").select("id, partner_id, name, phone, sort_order").order("sort_order").order("id"),
     ]);
@@ -190,6 +213,7 @@ export default function PartnersPage() {
 
   function clearForm(close = true) {
     setEditingId(null); setForm(emptyForm); setPoint(null); setFocusPoint(null);
+    setLogoUrl(null); setLogoFile(null); setLogoPreview(null); setRemoveLogo(false);
     setContacts([{ name: "", phone: "+371", sort_order: 0 }]);
     setCompanySuggestions([]); setMessage(""); setFormOpen(!close);
   }
@@ -203,6 +227,7 @@ export default function PartnersPage() {
       address: partner.address, email: partner.email || "",
     });
     setContacts(partner.contacts.length > 0 ? partner.contacts.map((contact, index) => ({ ...contact, sort_order: index })) : [{ name: "", phone: "+371", sort_order: 0 }]);
+    setLogoUrl(partner.logo_url); setLogoFile(null); setLogoPreview(null); setRemoveLogo(false);
     const savedPoint = partner.latitude !== null && partner.longitude !== null ? { lat: partner.latitude, lng: partner.longitude } : null;
     setPoint(savedPoint); setFocusPoint(savedPoint); setMessage(""); setFormOpen(true);
     document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
@@ -232,35 +257,60 @@ export default function PartnersPage() {
       name: contact.name.trim(), phone: contact.phone.replace(/\s/g, ""), sort_order: index,
     }));
     const contactsValid = normalizedContacts.length > 0 && normalizedContacts.every((contact) => contact.name && isValidInternationalPhone(contact.phone));
-    if (!displayName || !identityValid || !contactsValid || !form.address.trim() || !point) {
-      setMessage("Aizpildi partnera nosaukumu, rekvizītus, kontaktpersonu, korektu tālruni un atzīmē lokāciju kartē.");
+    const hasDetails = Boolean(identityName(form) || form.registration_number.trim() || form.address.trim()
+      || form.email.trim() || point || normalizedContacts.some((contact) => contact.name || contact.phone !== "+371"));
+    const complete = Boolean(identityValid && contactsValid && form.address.trim() && form.email.trim() && point);
+    if (!displayName || (hasDetails && !complete)) {
+      setMessage(!displayName
+        ? "Ievadi partnera nosaukumu."
+        : "Lai saglabātu aizpildītu kartīti, norādi rekvizītus, e-pastu, kontaktpersonu, korektu tālruni, adresi un lokāciju kartē.");
       return;
     }
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) return;
     setSaving(true); setMessage("");
+    let nextLogoUrl = removeLogo ? null : logoUrl;
+    let uploadedPath = "";
+    if (logoFile) {
+      const extension = logoFile.name.split(".").pop()?.toLowerCase() || "png";
+      uploadedPath = `${editingId ?? `new-${authData.user.id}`}/logo-${Date.now()}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from("partner-logos").upload(uploadedPath, logoFile, { contentType: logoFile.type });
+      if (uploadError) { setSaving(false); setMessage("Partnera logo neizdevās augšupielādēt."); return; }
+      nextLogoUrl = supabase.storage.from("partner-logos").getPublicUrl(uploadedPath).data.publicUrl;
+    }
     const values = {
       display_name: displayName, partner_type: form.partner_type,
-      first_name: form.partner_type === "private" ? form.first_name.trim() : null,
-      last_name: form.partner_type === "private" ? form.last_name.trim() || null : null,
-      company_name: form.partner_type === "company" ? form.company_name.trim() : null,
-      registration_number: form.partner_type === "company" ? form.registration_number.trim() : null,
-      contact_name: normalizedContacts[0].name, address: form.address.trim(),
-      latitude: point.lat, longitude: point.lng, phone: normalizedContacts[0].phone,
-      email: form.email.trim() || null, created_by: authData.user.id,
+      first_name: complete && form.partner_type === "private" ? form.first_name.trim() : null,
+      last_name: complete && form.partner_type === "private" ? form.last_name.trim() || null : null,
+      company_name: complete && form.partner_type === "company" ? form.company_name.trim() : null,
+      registration_number: complete && form.partner_type === "company" ? form.registration_number.trim() : null,
+      contact_name: complete ? normalizedContacts[0].name : null, address: complete ? form.address.trim() : "",
+      latitude: complete ? point!.lat : null, longitude: complete ? point!.lng : null,
+      phone: complete ? normalizedContacts[0].phone : "",
+      email: complete ? form.email.trim() : null, profile_completed: complete,
+      logo_url: nextLogoUrl,
+      created_by: authData.user.id,
       updated_at: new Date().toISOString(),
     };
     const { data: savedPartner, error } = editingId
       ? await supabase.from("partners").update(values).eq("id", editingId).select("id").single()
       : await supabase.from("partners").insert(values).select("id").single();
-    if (error || !savedPartner) { setSaving(false); setMessage("Partneri neizdevās saglabāt."); return; }
+    if (error || !savedPartner) {
+      if (uploadedPath) await supabase.storage.from("partner-logos").remove([uploadedPath]);
+      setSaving(false); setMessage("Partneri neizdevās saglabāt."); return;
+    }
     const partnerId = Number(savedPartner.id);
     if (editingId) await supabase.from("partner_contacts").delete().eq("partner_id", partnerId);
-    const { error: contactsSaveError } = await supabase.from("partner_contacts").insert(
-      normalizedContacts.map((contact) => ({ ...contact, partner_id: partnerId })),
-    );
+    const { error: contactsSaveError } = complete
+      ? await supabase.from("partner_contacts").insert(normalizedContacts.map((contact) => ({ ...contact, partner_id: partnerId })))
+      : { error: null };
     setSaving(false);
     if (contactsSaveError) { setMessage("Partneris saglabāts, bet kontaktpersonas neizdevās saglabāt."); return; }
+    if ((uploadedPath || removeLogo) && logoUrl) {
+      const marker = "/storage/v1/object/public/partner-logos/";
+      const markerIndex = logoUrl.indexOf(marker);
+      if (markerIndex >= 0) await supabase.storage.from("partner-logos").remove([decodeURIComponent(logoUrl.slice(markerIndex + marker.length))]);
+    }
     const wasEditing = editingId !== null;
     clearForm(); await loadPartners();
     setMessage(wasEditing ? "Partnera izmaiņas saglabātas." : "Partneris pievienots.");
@@ -379,6 +429,14 @@ export default function PartnersPage() {
           <h2 className="font-semibold">{editingId ? "Rediģēt partneri" : "Pievienot partneri"}</h2>
           <button type="button" onClick={() => clearForm()} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Aizvērt formu" title="Aizvērt"><X size={20} /></button>
         </div>
+        <div className="space-y-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          <span className="block text-sm font-medium">Partnera logo</span>
+          <div className="flex flex-wrap items-center gap-3">
+            {(logoPreview || (!removeLogo && logoUrl)) && <div className="relative"><img src={logoPreview || logoUrl || ""} alt="Partnera logo priekšskatījums" className="h-24 w-24 rounded-xl border border-zinc-200 bg-white object-contain p-2" /><button type="button" onClick={() => { setLogoFile(null); setLogoPreview(null); setRemoveLogo(true); }} className="absolute -right-2 -top-2 rounded-full bg-red-600 p-1 text-white" aria-label="Dzēst partnera logo"><X size={16} /></button></div>}
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600"><ImagePlus size={18} />{logoUrl && !removeLogo ? "Mainīt logo" : "Pievienot logo"}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 5 * 1024 * 1024) { setMessage("Logo faila izmērs nedrīkst pārsniegt 5 MB."); event.target.value = ""; return; } if (logoPreview) URL.revokeObjectURL(logoPreview); setLogoFile(file); setLogoPreview(URL.createObjectURL(file)); setRemoveLogo(false); event.target.value = ""; }} /></label>
+          </div>
+          <p className="text-xs text-zinc-500">JPG, PNG vai WEBP fails līdz 5 MB.</p>
+        </div>
         <label className="block space-y-1 text-sm"><span className="font-medium">Partnera nosaukums</span><input value={form.display_name} onChange={(event) => setForm((current) => ({ ...current, display_name: event.target.value }))} placeholder="Ja atstāj tukšu, izmantos uzņēmuma nosaukumu vai vārdu" className={inputClass} /></label>
 
         <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
@@ -419,7 +477,7 @@ export default function PartnersPage() {
             <label className="space-y-1 text-sm"><span className="font-medium">Tālrunis *</span><input type="tel" value={contact.phone} onChange={(event) => setContacts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, phone: normalizeInternationalPhoneInput(event.target.value) } : item))} placeholder="+37120123456" maxLength={30} className={inputClass} /></label>
             <button type="button" disabled={contacts.length === 1} onClick={() => setContacts((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="justify-self-end rounded-lg border border-red-300 p-2.5 text-red-600 disabled:opacity-30 dark:border-red-800" aria-label="Dzēst kontaktpersonu"><Trash2 size={18} /></button>
           </div>)}
-          <label className="block space-y-1 text-sm"><span className="font-medium">E-pasts</span><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className={inputClass} /></label>
+          <label className="block space-y-1 text-sm"><span className="font-medium">E-pasts *</span><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className={inputClass} /></label>
         </div>
 
         <div className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
@@ -433,13 +491,15 @@ export default function PartnersPage() {
 
       <section className="space-y-3">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><h2 className="font-semibold">Partneri ({partners.length})</h2><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Meklēt partneri" className={`${inputClass} sm:max-w-xs`} /></div>
-        {filteredPartners.length === 0 ? <p className="rounded-xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-500 dark:border-zinc-700">Partneri nav atrasti.</p> : filteredPartners.map((partner) => (
+        {filteredPartners.length === 0 ? <p className="rounded-xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-500 dark:border-zinc-700">Partneri nav atrasti.</p> : filteredPartners.map((partner) => {
+          const profileReady = partnerProfileReady(partner);
+          return (
           <article key={partner.id} className="flex items-start justify-between gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-            <div className="flex min-w-0 gap-3"><div className="mt-0.5 rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">{partner.partner_type === "company" ? <Building2 size={20} /> : <UserRound size={20} />}</div><div className="min-w-0"><h3 className="font-semibold">{partner.display_name}</h3>{partner.company_name && partner.company_name !== partner.display_name && <p className="text-sm text-zinc-500">{partner.company_name}</p>}{partner.registration_number && <p className="text-sm text-zinc-500">Reģ./PVN: {partner.registration_number}</p>}{partner.contacts.map((contact) => <p key={contact.id ?? `${contact.name}-${contact.phone}`} className="text-sm text-zinc-500">{contact.name}: {contact.phone}</p>)}<p className="text-sm text-zinc-500">{partner.address}</p>{partner.email && <p className="text-sm text-zinc-500">{partner.email}</p>}</div></div>
+            <div className="flex min-w-0 gap-3">{partner.logo_url ? <img src={partner.logo_url} alt={`${partner.display_name} logo`} className="h-10 w-10 shrink-0 rounded-lg border border-zinc-200 bg-white object-contain p-1" /> : <div className="mt-0.5 rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">{partner.partner_type === "company" ? <Building2 size={20} /> : <UserRound size={20} />}</div>}<div className="min-w-0"><h3 className="font-semibold">{partner.display_name}</h3>{partner.company_name && partner.company_name !== partner.display_name && <p className="text-sm text-zinc-500">{partner.company_name}</p>}{partner.registration_number && <p className="text-sm text-zinc-500">Reģ./PVN: {partner.registration_number}</p>}{partner.contacts.map((contact) => <p key={contact.id ?? `${contact.name}-${contact.phone}`} className="text-sm text-zinc-500">{contact.name}: {contact.phone}</p>)}<p className="text-sm text-zinc-500">{partner.address}</p>{partner.email && <p className="text-sm text-zinc-500">{partner.email}</p>}</div></div>
             <div className="relative flex shrink-0 gap-2" data-partner-link-menu>
               {isAdmin && <button type="button" onClick={() => void createOrCopyPortalLink(partner.id)} className={`rounded-lg border p-2 ${portalAccess[partner.id]?.hasAccount ? "border-green-300 bg-green-50 text-green-600 dark:border-green-800 dark:bg-green-950" : portalAccess[partner.id]?.active ? "border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-700 dark:bg-amber-950" : "border-zinc-300 text-violet-600 dark:border-zinc-600"}`} aria-label={portalAccess[partner.id]?.hasAccount ? "Konts reģistrēts" : portalAccess[partner.id]?.active ? "Gaida reģistrāciju" : "Izveidot partnera konta saiti"} title={portalAccess[partner.id]?.hasAccount ? "Konts reģistrēts" : portalAccess[partner.id]?.active ? "Gaida reģistrāciju" : "Izveidot partnera konta reģistrācijas saiti"}><KeyRound size={18} /></button>}
-              {isAdmin && <button type="button" onClick={() => router.push(`/partner-portal/test?partnerId=${partner.id}`)} className="rounded-lg border border-amber-300 p-2 text-amber-600 dark:border-amber-700" aria-label="Atvērt testa portālu" title="Atvērt izolētu testa portālu"><HatGlassesIcon size={18} /></button>}
-              <button type="button" onClick={() => { setLinkMenuPartnerId((current) => current === partner.id ? null : partner.id); setShareMenuPartnerId(null); }} className="rounded-lg border border-zinc-300 p-2 text-blue-600 dark:border-zinc-600" aria-label="Pieteikuma saite"><Link2 size={18} /></button>
+              {isAdmin && <button type="button" disabled={!profileReady} onClick={() => router.push(`/partner-portal/test?partnerId=${partner.id}`)} className="rounded-lg border border-amber-300 p-2 text-amber-600 disabled:cursor-not-allowed disabled:opacity-35 dark:border-amber-700" aria-label="Atvērt testa portālu" title={profileReady ? "Atvērt izolētu testa portālu" : "Vispirms aizpildi obligātos partnera laukus"}><HatGlassesIcon size={18} /></button>}
+              <button type="button" disabled={!profileReady} onClick={() => { setLinkMenuPartnerId((current) => current === partner.id ? null : partner.id); setShareMenuPartnerId(null); }} className="rounded-lg border border-zinc-300 p-2 text-blue-600 disabled:cursor-not-allowed disabled:opacity-35 dark:border-zinc-600" aria-label="Pieteikuma saite" title={profileReady ? "Pieteikuma saite" : "Vispirms aizpildi obligātos partnera laukus"}><Link2 size={18} /></button>
               <button type="button" onClick={() => editPartner(partner)} className="rounded-lg border border-zinc-300 p-2 dark:border-zinc-600" aria-label="Rediģēt partneri"><Pencil size={18} /></button><button type="button" onClick={() => void deletePartner(partner)} className="rounded-lg border border-red-300 p-2 text-red-600 dark:border-red-800" aria-label="Dzēst partneri"><Trash2 size={18} /></button>
               {linkMenuPartnerId === partner.id && <div className="absolute right-0 top-11 z-30 w-64 space-y-1 rounded-xl border border-zinc-200 bg-white p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
                 {!requestLinks[partner.id]?.active ? <button type="button" disabled={linkBusyPartnerId === partner.id} onClick={() => void updatePartnerLink(partner.id, "create")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"><Link2 size={17} /> Izveidot pieteikuma saiti</button> : <>
@@ -456,7 +516,8 @@ export default function PartnersPage() {
               </div>}
             </div>
           </article>
-        ))}
+          );
+        })}
       </section>
 
       {visibleLinkPartnerId !== null && requestLinks[visibleLinkPartnerId]?.active && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onPointerDown={(event) => { if (event.target === event.currentTarget) setVisibleLinkPartnerId(null); }}>

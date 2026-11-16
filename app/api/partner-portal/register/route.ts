@@ -5,13 +5,12 @@ import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
 export async function POST(request: NextRequest) {
   const client = getSupabaseAdmin();
   if (!client) return NextResponse.json({ error: "Serveris nav konfigurēts." }, { status: 500 });
-  const body = (await request.json()) as { token?: string; email?: string; password?: string };
+  const body = (await request.json()) as { action?: "validate" | "claim"; token?: string; email?: string; userId?: string };
+  const action = body.action || "validate";
   const token = String(body.token || "").trim();
   const email = String(body.email || "").trim().toLowerCase();
-  const password = String(body.password || "");
-  if (!token || !email || password.length < 8) {
-    return NextResponse.json({ error: "Ievadi derīgu e-pastu un vismaz 8 zīmju paroli." }, { status: 400 });
-  }
+  const userId = String(body.userId || "").trim();
+  if (!token) return NextResponse.json({ error: "Reģistrācijas saite nav derīga." }, { status: 400 });
 
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const now = new Date().toISOString();
@@ -40,18 +39,19 @@ export async function POST(request: NextRequest) {
     .select("display_name")
     .eq("id", claimedInvitation.partner_id)
     .single();
-  const { data: created, error: createError } = await client.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { display_name: partner?.display_name || "Partneris", account_type: "partner" },
-  });
-  if (createError || !created.user) {
-    return NextResponse.json({
-      error: createError?.message.toLowerCase().includes("already")
-        ? "Šāds e-pasts jau ir reģistrēts."
-        : "Kontu neizdevās izveidot.",
-    }, { status: 400 });
+  if (action === "validate") {
+    return NextResponse.json({ valid: true, displayName: partner?.display_name || "Partneris" });
+  }
+  if (!userId || !email) return NextResponse.json({ error: "Kontu neizdevās piesaistīt." }, { status: 400 });
+
+  const { data: created, error: userError } = await client.auth.admin.getUserById(userId);
+  const createdEmail = created.user?.email?.trim().toLowerCase();
+  if (userError || !created.user || createdEmail !== email || created.user.user_metadata?.account_type !== "partner") {
+    return NextResponse.json({ error: "Partnera reģistrāciju neizdevās apstiprināt." }, { status: 400 });
+  }
+  if (created.user.email_confirmed_at) {
+    await client.auth.admin.deleteUser(userId);
+    return NextResponse.json({ error: "E-pasta apstiprināšana serverī nav aktivizēta. Sazinies ar administratoru." }, { status: 503 });
   }
 
   const { data: invitationOwner } = await client
@@ -61,18 +61,18 @@ export async function POST(request: NextRequest) {
     .single();
   const { error: accountError } = await client.from("partner_portal_accounts").insert({
     partner_id: claimedInvitation.partner_id,
-    user_id: created.user.id,
+    user_id: userId,
     created_by: invitationOwner?.created_by,
   });
   if (accountError) {
-    await client.auth.admin.deleteUser(created.user.id);
+    await client.auth.admin.deleteUser(userId);
     return NextResponse.json({ error: "Partnera kontu neizdevās piesaistīt." }, { status: 500 });
   }
 
   await Promise.all([
     client.from("partner_portal_invitations").update({
       used_at: now,
-      used_by: created.user.id,
+      used_by: userId,
       active: false,
       updated_at: now,
     }).eq("id", claimedInvitation.id),
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       can_access_fleet: false,
       can_access_cargo_types: false,
       can_access_partners: false,
-    }).eq("id", created.user.id),
+    }).eq("id", userId),
   ]);
   return NextResponse.json({ success: true });
 }

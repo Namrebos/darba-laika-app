@@ -1,32 +1,61 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 function RegisterForm() {
-  const router = useRouter();
   const token = useSearchParams().get("token") || "";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   async function register(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
     setError("");
-    const response = await fetch("/api/partner-portal/register", {
+    setMessage("");
+    const validationResponse = await fetch("/api/partner-portal/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, email, password }),
+      body: JSON.stringify({ action: "validate", token }),
     });
-    const result = (await response.json()) as { error?: string };
-    setLoading(false);
-    if (!response.ok) {
-      setError(result.error || "Kontu neizdevās izveidot.");
+    const validation = (await validationResponse.json()) as { error?: string; displayName?: string };
+    if (!validationResponse.ok) {
+      setLoading(false);
+      setError(validation.error || "Reģistrācijas saite nav derīga.");
       return;
     }
-    router.replace("/partner-portal/login");
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/partner-portal/login?verified=1`,
+        data: { display_name: validation.displayName || "Partneris", account_type: "partner" },
+      },
+    });
+    if (signUpError || !data.user || data.user.identities?.length === 0) {
+      setLoading(false);
+      setError(signUpError?.message.toLowerCase().includes("already") || data.user?.identities?.length === 0
+        ? "Šāds e-pasts jau ir reģistrēts."
+        : "Kontu neizdevās izveidot.");
+      return;
+    }
+    const claimResponse = await fetch("/api/partner-portal/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "claim", token, email, userId: data.user.id }),
+    });
+    const claim = (await claimResponse.json()) as { error?: string };
+    await supabase.auth.signOut();
+    setLoading(false);
+    if (!claimResponse.ok) {
+      setError(claim.error || "Kontu neizdevās piesaistīt partnerim.");
+      return;
+    }
+    setMessage("Konts izveidots. Atver e-pastā saņemto saiti, lai apstiprinātu adresi un varētu ielogoties.");
   }
 
   return (
@@ -42,6 +71,7 @@ function RegisterForm() {
         {loading ? "Izveido kontu..." : "Izveidot kontu"}
       </button>
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {message && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-700">{message}</p>}
     </form>
   );
 }

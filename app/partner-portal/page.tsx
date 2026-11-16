@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CalendarDays, LogOut, MapPin, Pencil, Plus, Repeat2, Trash2, Truck } from "lucide-react";
 import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 import InstallPortalButton from "@/app/partner-portal/InstallPortalButton";
+import PartnerProfileForm, { type PortalPartner } from "@/app/partner-portal/PartnerProfileForm";
 import { supabase } from "@/lib/supabaseClient";
 
 type PlannedTask = {
@@ -49,6 +50,7 @@ function linkedTask(item: PartnerRequest) {
 export default function PartnerPortalPage() {
   const router = useRouter();
   const [partnerName, setPartnerName] = useState("");
+  const [partner, setPartner] = useState<PortalPartner | null>(null);
   const [newRequestUrl, setNewRequestUrl] = useState("");
   const [items, setItems] = useState<PartnerRequest[]>([]);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -56,6 +58,7 @@ export default function PartnerPortalPage() {
   const [error, setError] = useState("");
   const [openRequestId, setOpenRequestId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
 
   const authorizedFetch = useCallback(async (url: string, init?: RequestInit) => {
     const { data } = await supabase.auth.getSession();
@@ -76,21 +79,32 @@ export default function PartnerPortalPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    const [sessionResponse, requestResponse] = await Promise.all([
-      authorizedFetch("/api/partner-portal/session"),
-      authorizedFetch(`/api/partner-portal/requests?month=${encodeURIComponent(month)}`),
-    ]);
-    if (!sessionResponse || !requestResponse) return;
-    if (!sessionResponse.ok || !requestResponse.ok) {
+    const sessionResponse = await authorizedFetch("/api/partner-portal/session");
+    if (!sessionResponse) return;
+    if (!sessionResponse.ok) {
       setLoading(false);
       if (sessionResponse.status === 403) router.replace("/partner-portal/login");
       else setError("Partnera portālu neizdevās ielādēt.");
       return;
     }
     const session = await sessionResponse.json();
-    const requests = await requestResponse.json();
-    setPartnerName(session.partner?.display_name || "Partneris");
+    const loadedPartner = session.partner as PortalPartner | null;
+    setPartner(loadedPartner);
+    setPartnerName(loadedPartner?.display_name || "Partneris");
     setNewRequestUrl(session.newRequestUrl || "");
+    if (!loadedPartner?.profile_completed) {
+      setEditingProfile(true);
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+    const requestResponse = await authorizedFetch(`/api/partner-portal/requests?month=${encodeURIComponent(month)}`);
+    if (!requestResponse?.ok) {
+      setLoading(false);
+      setError("Partnera pieteikumus neizdevās ielādēt.");
+      return;
+    }
+    const requests = await requestResponse.json();
     setItems((requests.requests || []) as PartnerRequest[]);
     setLoading(false);
   }, [authorizedFetch, month, router]);
@@ -123,6 +137,9 @@ export default function PartnerPortalPage() {
 
   return (
     <main className="min-h-screen w-full bg-slate-100 p-3 text-slate-950 sm:p-6">
+      {!loading && partner && (!partner.profile_completed || editingProfile) ? (
+        <PartnerProfileForm partner={partner} authorizedFetch={authorizedFetch} onSaved={async () => { setEditingProfile(false); await load(); }} onCancel={partner.profile_completed ? () => setEditingProfile(false) : undefined} />
+      ) : (
       <div className="mx-auto max-w-5xl space-y-5">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-5 shadow-sm">
           <div>
@@ -130,6 +147,7 @@ export default function PartnerPortalPage() {
             <h1 className="text-2xl font-bold">{partnerName || "Ielādē..."}</h1>
           </div>
           <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setEditingProfile(true)} className="rounded-xl border border-slate-300 p-2.5" aria-label="Rediģēt partnera kartīti" title="Rediģēt partnera kartīti"><Pencil size={19} /></button>
             <InstallPortalButton />
             {newRequestUrl && (
               <a href={newRequestUrl} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 font-semibold text-white">
@@ -201,8 +219,9 @@ export default function PartnerPortalPage() {
           })}
         </section>
       </div>
+      )}
 
-      {openRequestId && (
+      {partner?.profile_completed && openRequestId && (
         <UnifiedTransportRequestForm
           mode={linkedTask(items.find((item) => item.id === openRequestId)!)?.status === "new" ? "edit" : "readonly"}
           requestId={openRequestId}
