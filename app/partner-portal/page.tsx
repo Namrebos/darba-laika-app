@@ -197,12 +197,17 @@ export default function PartnerPortalPage() {
       </header>
 
       <div className="p-3 sm:p-6">
+      {!loading && partner?.profile_completed && newRequestUrl && (
+        <div className="mx-auto mb-5 flex max-w-5xl justify-center">
+          <a href={newRequestUrl} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white shadow-sm">
+            <Plus size={20} /> Jauns Brauciens
+          </a>
+        </div>
+      )}
       {!loading && partner && (!partner.profile_completed || editingProfile) ? (
         <PartnerProfileForm partner={partner} authorizedFetch={authorizedFetch} onSaved={async () => { setEditingProfile(false); await load(); }} onCancel={partner.profile_completed ? () => setEditingProfile(false) : undefined} />
       ) : (
       <div className="mx-auto max-w-5xl space-y-5">
-        {newRequestUrl && <div className="flex justify-center"><a href={newRequestUrl} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white shadow-sm"><Plus size={20} /> Jauns Brauciens</a></div>}
-
         <section className="rounded-2xl bg-white p-5 shadow-sm dark:bg-zinc-800">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
