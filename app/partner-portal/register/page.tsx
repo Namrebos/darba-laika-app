@@ -14,6 +14,10 @@ function RegisterForm() {
 
   async function register(event: React.FormEvent) {
     event.preventDefault();
+    if (password.length < 10 || !/\p{Lu}/u.test(password) || !/\p{Ll}/u.test(password) || !/\d/.test(password)) {
+      setError("Parolei jābūt vismaz 10 zīmes garai un jāsatur lielais burts, mazais burts un cipars.");
+      return;
+    }
     setLoading(true);
     setError("");
     setMessage("");
@@ -66,7 +70,10 @@ function RegisterForm() {
       </div>
       {!token && <p className="text-sm text-red-600">Reģistrācijas saite nav derīga.</p>}
       <input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="E-pasts" className="w-full rounded-xl border border-slate-300 p-3" />
-      <input type="password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Parole (vismaz 8 zīmes)" className="w-full rounded-xl border border-slate-300 p-3" />
+      <div className="space-y-1">
+        <input type="password" required minLength={10} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Parole" className="w-full rounded-xl border border-slate-300 p-3" />
+        <p className="text-xs text-slate-500">Vismaz 10 zīmes, viens lielais burts, viens mazais burts un viens cipars.</p>
+      </div>
       <button disabled={loading || !token} className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50">
         {loading ? "Izveido kontu..." : "Izveidot kontu"}
       </button>

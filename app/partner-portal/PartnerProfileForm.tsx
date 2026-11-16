@@ -166,9 +166,9 @@ export default function PartnerProfileForm({ partner, authorizedFetch, onSaved, 
     await onSaved();
   }
 
-  const inputClass = "w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-950";
+  const inputClass = "w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-950 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white";
   return (
-    <section className="mx-auto w-full max-w-3xl space-y-5 rounded-2xl bg-white p-5 shadow-sm sm:p-7">
+    <section className="mx-auto w-full max-w-3xl space-y-5 rounded-2xl bg-white p-5 shadow-sm dark:bg-zinc-800 sm:p-7">
       <div className="flex items-start justify-between gap-3">
         <div><h1 className="text-2xl font-bold">{partner.profile_completed ? "Partnera kartīte" : "Aizpildi partnera kartīti"}</h1>
         <p className="mt-1 text-sm text-slate-500">{partner.profile_completed ? "Izmaiņas būs redzamas arī AB-buss partneru sadaļā." : "Pirms portāla lietošanas nepieciešami partnera rekvizīti, kontakti un lokācija."}</p></div>

@@ -37,8 +37,8 @@ export default function PartnerResetPasswordPage() {
   async function savePassword(event: React.FormEvent) {
     event.preventDefault();
     setError("");
-    if (password.length < 8) {
-      setError("Parolei jābūt vismaz 8 zīmes garai.");
+    if (password.length < 10 || !/\p{Lu}/u.test(password) || !/\p{Ll}/u.test(password) || !/\d/.test(password)) {
+      setError("Parolei jābūt vismaz 10 zīmes garai un jāsatur lielais burts, mazais burts un cipars.");
       return;
     }
     if (password !== confirmation) {
@@ -61,7 +61,7 @@ export default function PartnerResetPasswordPage() {
       <form onSubmit={savePassword} className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <div>
           <h1 className="text-2xl font-bold">Izveidot jaunu paroli</h1>
-          <p className="mt-1 text-sm text-slate-500">Jaunajai parolei jābūt vismaz 8 zīmes garai.</p>
+          <p className="mt-1 text-sm text-slate-500">Vismaz 10 zīmes, viens lielais burts, viens mazais burts un viens cipars.</p>
         </div>
         {checking && <p className="text-sm text-slate-500">Pārbauda atjaunošanas saiti...</p>}
         {!checking && !sessionReady && (
@@ -71,8 +71,8 @@ export default function PartnerResetPasswordPage() {
           </div>
         )}
         {sessionReady && <>
-          <input type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Jaunā parole" className="w-full rounded-xl border border-slate-300 p-3" />
-          <input type="password" required minLength={8} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Atkārtoti ievadi paroli" className="w-full rounded-xl border border-slate-300 p-3" />
+          <input type="password" required minLength={10} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Jaunā parole" className="w-full rounded-xl border border-slate-300 p-3" />
+          <input type="password" required minLength={10} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Atkārtoti ievadi paroli" className="w-full rounded-xl border border-slate-300 p-3" />
           <button disabled={loading} className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50">{loading ? "Saglabā..." : "Saglabāt jauno paroli"}</button>
         </>}
         {error && <p className="text-sm text-red-600">{error}</p>}
