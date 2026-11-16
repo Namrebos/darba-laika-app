@@ -51,6 +51,7 @@ export default function PartnersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
   const [requestLinks, setRequestLinks] = useState<Record<number, PartnerRequestLink>>({});
   const [portalAccess, setPortalAccess] = useState<Record<number, PartnerPortalAccess>>({});
   const [isAdmin, setIsAdmin] = useState(false);
@@ -65,6 +66,12 @@ export default function PartnersPage() {
   const [companySearchLoading, setCompanySearchLoading] = useState(false);
   const selectedCompanyNameRef = useRef("");
   const reverseRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timeout = window.setTimeout(() => setToastMessage(""), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [toastMessage]);
 
   async function loadPartners() {
     const [{ data, error }, { data: contactRows, error: contactsError }] = await Promise.all([
@@ -325,12 +332,12 @@ export default function PartnersPage() {
   async function createOrCopyPortalLink(partnerId: number) {
     const current = portalAccess[partnerId];
     if (current?.hasAccount) {
-      setMessage("Šim partnerim konts jau ir izveidots.");
+      setToastMessage("Konts jau ir reģistrēts.");
       return;
     }
     if (current?.active && current.url) {
       await navigator.clipboard.writeText(current.url);
-      setMessage("Partnera konta reģistrācijas saite nokopēta.");
+      setToastMessage("Reģistrācijas saite nokopēta.");
       return;
     }
     const { data } = await supabase.auth.getSession();
@@ -352,7 +359,7 @@ export default function PartnersPage() {
       [partnerId]: { partnerId, active: true, url: result.url || "", hasAccount: false },
     }));
     await navigator.clipboard.writeText(result.url);
-    setMessage("Partnera konta reģistrācijas saite izveidota un nokopēta.");
+    setToastMessage("Reģistrācijas saite izveidota un nokopēta.");
   }
 
   if (loading) return <p className="p-6">Ielādē...</p>;
@@ -360,6 +367,7 @@ export default function PartnersPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 p-4">
+      {toastMessage && <div role="status" className="fixed left-1/2 top-4 z-[100] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-center text-sm font-semibold text-green-800 shadow-xl dark:border-green-800 dark:bg-green-950 dark:text-green-200">{toastMessage}</div>}
       <div className="flex items-start justify-between gap-3">
         <div><h1 className="text-2xl font-bold">Partneri</h1><p className="mt-1 text-sm text-zinc-500">Pārvaldi klientus, kontaktus, rekvizītus un lokācijas.</p></div>
         {!formOpen && <button type="button" onClick={() => clearForm(false)} className="flex shrink-0 items-center gap-2 rounded-lg bg-green-600 px-3 py-2 font-semibold text-white"><Plus size={18} /> Pievienot jaunu</button>}
@@ -429,7 +437,7 @@ export default function PartnersPage() {
           <article key={partner.id} className="flex items-start justify-between gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
             <div className="flex min-w-0 gap-3"><div className="mt-0.5 rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">{partner.partner_type === "company" ? <Building2 size={20} /> : <UserRound size={20} />}</div><div className="min-w-0"><h3 className="font-semibold">{partner.display_name}</h3>{partner.company_name && partner.company_name !== partner.display_name && <p className="text-sm text-zinc-500">{partner.company_name}</p>}{partner.registration_number && <p className="text-sm text-zinc-500">Reģ./PVN: {partner.registration_number}</p>}{partner.contacts.map((contact) => <p key={contact.id ?? `${contact.name}-${contact.phone}`} className="text-sm text-zinc-500">{contact.name}: {contact.phone}</p>)}<p className="text-sm text-zinc-500">{partner.address}</p>{partner.email && <p className="text-sm text-zinc-500">{partner.email}</p>}</div></div>
             <div className="relative flex shrink-0 gap-2" data-partner-link-menu>
-              {isAdmin && <button type="button" onClick={() => void createOrCopyPortalLink(partner.id)} className={`rounded-lg border p-2 ${portalAccess[partner.id]?.hasAccount ? "border-green-300 text-green-600" : "border-zinc-300 text-violet-600 dark:border-zinc-600"}`} aria-label={portalAccess[partner.id]?.hasAccount ? "Partnera konts izveidots" : "Izveidot partnera konta saiti"} title={portalAccess[partner.id]?.hasAccount ? "Partnera konts izveidots" : "Izveidot vai kopēt partnera konta reģistrācijas saiti"}><KeyRound size={18} /></button>}
+              {isAdmin && <button type="button" onClick={() => void createOrCopyPortalLink(partner.id)} className={`rounded-lg border p-2 ${portalAccess[partner.id]?.hasAccount ? "border-green-300 bg-green-50 text-green-600 dark:border-green-800 dark:bg-green-950" : portalAccess[partner.id]?.active ? "border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-700 dark:bg-amber-950" : "border-zinc-300 text-violet-600 dark:border-zinc-600"}`} aria-label={portalAccess[partner.id]?.hasAccount ? "Konts reģistrēts" : portalAccess[partner.id]?.active ? "Gaida reģistrāciju" : "Izveidot partnera konta saiti"} title={portalAccess[partner.id]?.hasAccount ? "Konts reģistrēts" : portalAccess[partner.id]?.active ? "Gaida reģistrāciju" : "Izveidot partnera konta reģistrācijas saiti"}><KeyRound size={18} /></button>}
               {isAdmin && <button type="button" onClick={() => router.push(`/partner-portal/test?partnerId=${partner.id}`)} className="rounded-lg border border-amber-300 p-2 text-amber-600 dark:border-amber-700" aria-label="Atvērt testa portālu" title="Atvērt izolētu testa portālu"><HatGlassesIcon size={18} /></button>}
               <button type="button" onClick={() => { setLinkMenuPartnerId((current) => current === partner.id ? null : partner.id); setShareMenuPartnerId(null); }} className="rounded-lg border border-zinc-300 p-2 text-blue-600 dark:border-zinc-600" aria-label="Pieteikuma saite"><Link2 size={18} /></button>
               <button type="button" onClick={() => editPartner(partner)} className="rounded-lg border border-zinc-300 p-2 dark:border-zinc-600" aria-label="Rediģēt partneri"><Pencil size={18} /></button><button type="button" onClick={() => void deletePartner(partner)} className="rounded-lg border border-red-300 p-2 text-red-600 dark:border-red-800" aria-label="Dzēst partneri"><Trash2 size={18} /></button>

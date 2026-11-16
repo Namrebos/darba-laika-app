@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       partnerId: item.partner_id,
       active: item.active && !item.used_at && new Date(item.expires_at).getTime() > Date.now(),
       url: item.active && !item.used_at
-        ? `${origin}/partner-portal/register?token=${encodeURIComponent(item.token_value)}`
+        ? `${origin}/p/${encodeURIComponent(item.token_value)}`
         : "",
       expiresAt: item.expires_at,
     })),
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
   const origin = request.nextUrl.origin.replace(/\/$/, "");
   return NextResponse.json({
     active: true,
-    url: `${origin}/partner-portal/register?token=${encodeURIComponent(token)}`,
+    url: `${origin}/p/${encodeURIComponent(token)}`,
     expiresAt,
   });
 }
