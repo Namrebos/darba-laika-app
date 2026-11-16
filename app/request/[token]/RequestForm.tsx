@@ -840,11 +840,30 @@ export default function RequestForm({
           : "denied",
       );
       if (canManagePartners) {
-        const { data: partnerRows } = await supabase
-          .from("partners")
-          .select(partnerSelect)
-          .order("display_name");
-        setPartners((partnerRows || []) as Partner[]);
+        const usageSince = new Date();
+        usageSince.setMonth(usageSince.getMonth() - 2);
+        const [{ data: partnerRows }, { data: recentRequests }] = await Promise.all([
+          supabase
+            .from("partners")
+            .select(partnerSelect)
+            .order("display_name"),
+          supabase
+            .from("transport_requests")
+            .select("partner_id")
+            .gte("created_at", usageSince.toISOString())
+            .not("partner_id", "is", null),
+        ]);
+        const usageCounts = new Map<number, number>();
+        for (const request of recentRequests || []) {
+          const partnerId = Number(request.partner_id);
+          if (!Number.isSafeInteger(partnerId)) continue;
+          usageCounts.set(partnerId, (usageCounts.get(partnerId) || 0) + 1);
+        }
+        const sortedPartners = ((partnerRows || []) as Partner[]).sort((a, b) => {
+          const usageDifference = (usageCounts.get(b.id) || 0) - (usageCounts.get(a.id) || 0);
+          return usageDifference || a.display_name.localeCompare(b.display_name, "lv");
+        });
+        setPartners(sortedPartners);
       }
     }
 
