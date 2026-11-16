@@ -32,8 +32,8 @@ function RegisterForm() {
   return (
     <form onSubmit={register} className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-200 bg-white p-6 text-slate-950 shadow-xl">
       <div>
-        <h1 className="text-2xl font-bold">Izveidot partnera kontu</h1>
-        <p className="mt-1 text-sm text-slate-500">Vienam partnerim tiek izveidots viens konts.</p>
+        <h1 className="text-2xl font-bold">AB-buss partneris</h1>
+        <p className="mt-1 text-sm text-slate-500">Izveido partnera kontu</p>
       </div>
       {!token && <p className="text-sm text-red-600">Reģistrācijas saite nav derīga.</p>}
       <input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="E-pasts" className="w-full rounded-xl border border-slate-300 p-3" />
