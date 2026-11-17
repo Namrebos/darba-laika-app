@@ -171,7 +171,8 @@ export default function PartnerProfileForm({ partner, authorizedFetch, onSaved, 
     <section className="mx-auto w-full max-w-3xl space-y-5 rounded-2xl bg-white p-5 shadow-sm dark:bg-zinc-800 sm:p-7">
       <div className="flex items-start justify-between gap-3">
         <div><h1 className="text-2xl font-bold">{partner.profile_completed ? "Partnera kartīte" : "Aizpildi partnera kartīti"}</h1>
-        <p className="mt-1 text-sm text-slate-500">{partner.profile_completed ? "Izmaiņas būs redzamas arī AB-buss partneru sadaļā." : "Pirms portāla lietošanas nepieciešami partnera rekvizīti, kontakti un lokācija."}</p></div>
+        {!partner.profile_completed && <p className="mt-1 text-sm text-slate-500">Pirms portāla lietošanas nepieciešami partnera rekvizīti, kontakti un lokācija.</p>}
+      </div>
         {onCancel && <button type="button" onClick={onCancel} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Aizvērt partnera kartīti"><X size={20} /></button>}
       </div>
       <label className="block space-y-1 text-sm font-medium">Partnera nosaukums *
