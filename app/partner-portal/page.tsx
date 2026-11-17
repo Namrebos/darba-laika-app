@@ -7,6 +7,7 @@ import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportReques
 import PartnerProfileForm, { type PortalPartner } from "@/app/partner-portal/PartnerProfileForm";
 import { supabase } from "@/lib/supabaseClient";
 import { APP_VERSION } from "@/lib/appVersion";
+import { shortAddress } from "@/lib/addressDisplay";
 
 type PlannedTask = {
   id: number;
@@ -271,7 +272,7 @@ export default function PartnerPortalPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="font-bold">{cargo || "Nepabeigts pieteikums"}</h3>
-                    {(draftForm.pickup_address || draftForm.dropoff_address) && <p className="mt-1 flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300"><MapPin size={16} /> {draftForm.pickup_address || "—"} → {draftForm.dropoff_address || "—"}</p>}
+                    {(draftForm.pickup_address || draftForm.dropoff_address) && <p className="mt-1 flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300"><MapPin size={16} /> {shortAddress(draftForm.pickup_address) || "—"} → {shortAddress(draftForm.dropoff_address) || "—"}</p>}
                   </div>
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Melnraksts</span>
                 </div>
@@ -292,7 +293,7 @@ export default function PartnerPortalPage() {
                   <div>
                     <h3 className="font-bold">{item.cargo_type}</h3>
                     <p className="mt-1 flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300"><CalendarDays size={16} /> {item.pickup_date}{item.pickup_time ? ` ${item.pickup_time.slice(0, 5)}` : ""}</p>
-                    <p className="mt-1 flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300"><MapPin size={16} /> {item.pickup_address} → {item.dropoff_address}</p>
+                    <p className="mt-1 flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300"><MapPin size={16} /> {shortAddress(item.pickup_address)} → {shortAddress(item.dropoff_address)}</p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[status]}`}>{statusLabels[status]}</span>
                 </div>

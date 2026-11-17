@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { shortAddress } from "@/lib/addressDisplay";
 
 type PhotonFeature = {
   geometry?: { coordinates?: [number, number] };
@@ -36,8 +37,6 @@ function addressLabel(properties: PhotonFeature["properties"]) {
     properties.name !== properties.street ? properties.name : null,
     street,
     properties.city || properties.district || properties.county,
-    properties.postcode,
-    properties.country,
   ]
     .filter(Boolean)
     .filter((value, index, values) => values.indexOf(value) === index)
@@ -140,7 +139,7 @@ export async function GET(request: NextRequest) {
         };
         geoapifyResults = (data.results || [])
           .map((result) => {
-            const label = result.formatted || result.name;
+            const label = shortAddress(result.formatted || result.name);
             return label && typeof result.lat === "number" && typeof result.lon === "number"
               ? { label, lat: result.lat, lng: result.lon }
               : null;
