@@ -250,12 +250,16 @@ export default function PartnerPortalPage() {
             </label>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {(Object.keys(statusLabels) as PlannedTask["status"][]).map((status) => (
+            {(["new", "planned", "started", "completed"] as PlannedTask["status"][]).map((status) => (
               <div key={status} className="rounded-xl bg-slate-50 p-3 dark:bg-zinc-900">
                 <p className="text-xs text-slate-500">{statusLabels[status]}</p>
                 <p className="text-2xl font-bold">{counts[status] || 0}</p>
               </div>
             ))}
+            <div className="rounded-xl bg-slate-50 p-3 dark:bg-zinc-900">
+              <p className="text-xs text-slate-500">Melnraksti</p>
+              <p className="text-2xl font-bold">{drafts.length}</p>
+            </div>
           </div>
         </section>
 
