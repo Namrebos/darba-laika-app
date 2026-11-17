@@ -36,6 +36,8 @@ type PartnerDraft = {
   payload: {
     form?: {
       cargo_type?: string;
+      pickup_date?: string;
+      pickup_time?: string;
       pickup_address?: string;
       dropoff_address?: string;
     };
@@ -44,6 +46,8 @@ type PartnerDraft = {
 };
 
 type OverviewFilter = Exclude<PlannedTask["status"], "canceled"> | "draft" | null;
+type DateScope = "month" | "today" | "tomorrow" | "week" | "date";
+type SortMode = "newest" | "nearest";
 
 const statusLabels: Record<PlannedTask["status"], string> = {
   new: "Nosūtīts",
@@ -65,12 +69,49 @@ function linkedTask(item: PartnerRequest) {
   return Array.isArray(item.planned_tasks) ? item.planned_tasks[0] : item.planned_tasks;
 }
 
+function localDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateRange(scope: DateScope, month: string, selectedDate: string) {
+  const today = new Date();
+  if (scope === "month") {
+    const [year, monthIndex] = month.split("-").map(Number);
+    const lastDay = new Date(year, monthIndex, 0).getDate();
+    return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, "0")}` };
+  }
+  if (scope === "today") {
+    const value = localDateValue(today);
+    return { from: value, to: value };
+  }
+  if (scope === "tomorrow") {
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const value = localDateValue(tomorrow);
+    return { from: value, to: value };
+  }
+  if (scope === "week") {
+    const monday = new Date(today);
+    const weekday = monday.getDay() || 7;
+    monday.setDate(monday.getDate() - weekday + 1);
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    return { from: localDateValue(monday), to: localDateValue(sunday) };
+  }
+  const value = selectedDate || localDateValue(today);
+  return { from: value, to: value };
+}
+
 export default function PartnerPortalPage() {
   const router = useRouter();
   const [partnerName, setPartnerName] = useState("");
   const [partner, setPartner] = useState<PortalPartner | null>(null);
   const [newRequestUrl, setNewRequestUrl] = useState("");
   const [items, setItems] = useState<PartnerRequest[]>([]);
+  const [overviewItems, setOverviewItems] = useState<PartnerRequest[]>([]);
   const [drafts, setDrafts] = useState<PartnerDraft[]>([]);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [loading, setLoading] = useState(true);
@@ -85,6 +126,9 @@ export default function PartnerPortalPage() {
   const [overviewFilter, setOverviewFilter] = useState<OverviewFilter>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateScope, setDateScope] = useState<DateScope>("month");
+  const [selectedDate, setSelectedDate] = useState(() => localDateValue(new Date()));
+  const [sortMode, setSortMode] = useState<SortMode>("newest");
 
   const authorizedFetch = useCallback(async (url: string, init?: RequestInit) => {
     const { data } = await supabase.auth.getSession();
@@ -125,21 +169,36 @@ export default function PartnerPortalPage() {
       setLoading(false);
       return;
     }
-    const requestResponse = await authorizedFetch(`/api/partner-portal/requests?month=${encodeURIComponent(month)}`);
-    if (!requestResponse?.ok) {
+    const range = dateRange(dateScope, month, selectedDate);
+    const monthUrl = `/api/partner-portal/requests?month=${encodeURIComponent(month)}`;
+    const listUrl = dateScope === "month"
+      ? monthUrl
+      : `/api/partner-portal/requests?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`;
+    const [requestResponse, overviewResponse] = await Promise.all([
+      authorizedFetch(listUrl),
+      dateScope === "month" ? Promise.resolve(null) : authorizedFetch(monthUrl),
+    ]);
+    if (!requestResponse?.ok || (overviewResponse && !overviewResponse.ok)) {
       setLoading(false);
       setError("Partnera pieteikumus neizdevās ielādēt.");
       return;
     }
     const requests = await requestResponse.json();
-    setItems((requests.requests || []) as PartnerRequest[]);
+    const loadedItems = (requests.requests || []) as PartnerRequest[];
+    setItems(loadedItems);
+    if (overviewResponse) {
+      const overviewRequests = await overviewResponse.json();
+      setOverviewItems((overviewRequests.requests || []) as PartnerRequest[]);
+    } else {
+      setOverviewItems(loadedItems);
+    }
     const draftsResponse = await authorizedFetch("/api/partner-portal/drafts");
     if (draftsResponse?.ok) {
       const draftResult = await draftsResponse.json();
       setDrafts((draftResult.drafts || []) as PartnerDraft[]);
     }
     setLoading(false);
-  }, [authorizedFetch, month, router]);
+  }, [authorizedFetch, dateScope, month, router, selectedDate]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -160,11 +219,11 @@ export default function PartnerPortalPage() {
     document.documentElement.classList.toggle("dark", useDark);
   }
 
-  const counts = useMemo(() => items.reduce<Record<string, number>>((result, item) => {
+  const counts = useMemo(() => overviewItems.reduce<Record<string, number>>((result, item) => {
     const status = linkedTask(item)?.status || "new";
     result[status] = (result[status] || 0) + 1;
     return result;
-  }, {}), [items]);
+  }, {}), [overviewItems]);
 
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase("lv");
 
@@ -174,26 +233,41 @@ export default function PartnerPortalPage() {
       : overviewFilter === "draft"
         ? []
         : items.filter((item) => (linkedTask(item)?.status || "new") === overviewFilter);
-    if (!normalizedSearch) return statusFiltered;
-    return statusFiltered.filter((item) => {
+    const searched = !normalizedSearch ? statusFiltered : statusFiltered.filter((item) => {
       const status = linkedTask(item)?.status || "new";
       return [item.cargo_type, item.pickup_address, item.dropoff_address, item.pickup_date, item.pickup_time, statusLabels[status]]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase("lv").includes(normalizedSearch));
     });
-  }, [items, normalizedSearch, overviewFilter]);
+    return [...searched].sort((left, right) => {
+      if (sortMode === "newest") return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+      const leftMoment = `${left.pickup_date}T${left.pickup_time?.slice(0, 5) || "23:59"}`;
+      const rightMoment = `${right.pickup_date}T${right.pickup_time?.slice(0, 5) || "23:59"}`;
+      return leftMoment.localeCompare(rightMoment);
+    });
+  }, [items, normalizedSearch, overviewFilter, sortMode]);
 
   const filteredDrafts = useMemo(() => {
     if (overviewFilter && overviewFilter !== "draft") return [];
-    if (!normalizedSearch) return drafts;
-    return drafts.filter((draft) => {
+    const range = dateRange(dateScope, month, selectedDate);
+    const dateFiltered = drafts.filter((draft) => {
+      const pickupDate = draft.payload?.form?.pickup_date || "";
+      return !pickupDate || (pickupDate >= range.from && pickupDate <= range.to);
+    });
+    const searched = !normalizedSearch ? dateFiltered : dateFiltered.filter((draft) => {
       const form = draft.payload?.form || {};
       const cargo = form.cargo_type === "Cits" ? draft.payload.customCargo : form.cargo_type;
       return [cargo, form.pickup_address, form.dropoff_address, "Melnraksts"]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase("lv").includes(normalizedSearch));
     });
-  }, [drafts, normalizedSearch, overviewFilter]);
+    return [...searched].sort((left, right) => {
+      if (sortMode === "newest") return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
+      const leftForm = left.payload?.form || {};
+      const rightForm = right.payload?.form || {};
+      return `${leftForm.pickup_date || "9999-12-31"}T${leftForm.pickup_time || "23:59"}`.localeCompare(`${rightForm.pickup_date || "9999-12-31"}T${rightForm.pickup_time || "23:59"}`);
+    });
+  }, [dateScope, drafts, month, normalizedSearch, overviewFilter, selectedDate, sortMode]);
 
   function selectOverviewFilter(filter: Exclude<OverviewFilter, null>) {
     setOverviewFilter((current) => current === filter ? null : filter);
@@ -305,7 +379,7 @@ export default function PartnerPortalPage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold">Mēneša pārskats</h2>
-              <p className="text-sm text-slate-500">Šajā mēnesī: {items.length} pieteikumi</p>
+              <p className="text-sm text-slate-500">Šajā mēnesī: {overviewItems.length} pieteikumi</p>
             </div>
             <label className="text-sm font-medium">Mēnesis
               <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="ml-2 rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900" />
@@ -355,6 +429,44 @@ export default function PartnerPortalPage() {
               </button>
             </div>
           </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="text-sm font-medium">
+              Rādīt
+              <select
+                value={dateScope}
+                onChange={(event) => setDateScope(event.target.value as DateScope)}
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 dark:border-zinc-600 dark:bg-zinc-800"
+              >
+                <option value="month">Izvēlētais mēnesis</option>
+                <option value="today">Šodien</option>
+                <option value="tomorrow">Rīt</option>
+                <option value="week">Šonedēļ</option>
+                <option value="date">Konkrēts datums</option>
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              Kārtot
+              <select
+                value={sortMode}
+                onChange={(event) => setSortMode(event.target.value as SortMode)}
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 dark:border-zinc-600 dark:bg-zinc-800"
+              >
+                <option value="newest">Pēc jaunākā pieteikuma</option>
+                <option value="nearest">Pēc tuvākā izpildes laika</option>
+              </select>
+            </label>
+          </div>
+          {dateScope === "date" && (
+            <label className="block text-sm font-medium">
+              Datums
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 dark:border-zinc-600 dark:bg-zinc-800 sm:max-w-xs"
+              />
+            </label>
+          )}
           {searchOpen && (
             <div className="relative">
               <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />

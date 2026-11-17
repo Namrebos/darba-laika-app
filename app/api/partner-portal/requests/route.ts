@@ -6,6 +6,8 @@ export async function GET(request: NextRequest) {
   if (!auth) return NextResponse.json({ error: "Nav partnera pieejas." }, { status: 403 });
 
   const month = request.nextUrl.searchParams.get("month") || "";
+  const from = request.nextUrl.searchParams.get("from") || "";
+  const to = request.nextUrl.searchParams.get("to") || "";
   let query = auth.client
     .from("transport_requests")
     .select(`
@@ -15,7 +17,9 @@ export async function GET(request: NextRequest) {
     `)
     .eq("partner_id", auth.partnerId)
     .order("created_at", { ascending: false });
-  if (/^\d{4}-\d{2}$/.test(month)) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    query = query.gte("pickup_date", from).lte("pickup_date", to);
+  } else if (/^\d{4}-\d{2}$/.test(month)) {
     const [year, monthNumber] = month.split("-").map(Number);
     const from = `${month}-01`;
     const to = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
