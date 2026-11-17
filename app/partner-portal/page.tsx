@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Laptop, MapPin, Menu, Moon, Pencil, Plus, Power, Repeat2, Sun, Trash2, TriangleAlert, Truck, UserRound, X } from "lucide-react";
+import { CalendarDays, Laptop, MapPin, Menu, Moon, Pencil, Plus, Power, Repeat2, Search, Sun, Trash2, TriangleAlert, Truck, UserRound, X } from "lucide-react";
 import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 import PartnerProfileForm, { type PortalPartner } from "@/app/partner-portal/PartnerProfileForm";
 import { supabase } from "@/lib/supabaseClient";
@@ -81,6 +81,8 @@ export default function PartnerPortalPage() {
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [overviewFilter, setOverviewFilter] = useState<OverviewFilter>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const authorizedFetch = useCallback(async (url: string, init?: RequestInit) => {
     const { data } = await supabase.auth.getSession();
@@ -161,10 +163,34 @@ export default function PartnerPortalPage() {
     return result;
   }, {}), [items]);
 
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase("lv");
+
   const filteredItems = useMemo(() => {
-    if (!overviewFilter || overviewFilter === "draft") return overviewFilter === "draft" ? [] : items;
-    return items.filter((item) => (linkedTask(item)?.status || "new") === overviewFilter);
-  }, [items, overviewFilter]);
+    const statusFiltered = !overviewFilter
+      ? items
+      : overviewFilter === "draft"
+        ? []
+        : items.filter((item) => (linkedTask(item)?.status || "new") === overviewFilter);
+    if (!normalizedSearch) return statusFiltered;
+    return statusFiltered.filter((item) => {
+      const status = linkedTask(item)?.status || "new";
+      return [item.cargo_type, item.pickup_address, item.dropoff_address, item.pickup_date, item.pickup_time, statusLabels[status]]
+        .filter(Boolean)
+        .some((value) => String(value).toLocaleLowerCase("lv").includes(normalizedSearch));
+    });
+  }, [items, normalizedSearch, overviewFilter]);
+
+  const filteredDrafts = useMemo(() => {
+    if (overviewFilter && overviewFilter !== "draft") return [];
+    if (!normalizedSearch) return drafts;
+    return drafts.filter((draft) => {
+      const form = draft.payload?.form || {};
+      const cargo = form.cargo_type === "Cits" ? draft.payload.customCargo : form.cargo_type;
+      return [cargo, form.pickup_address, form.dropoff_address, "Melnraksts"]
+        .filter(Boolean)
+        .some((value) => String(value).toLocaleLowerCase("lv").includes(normalizedSearch));
+    });
+  }, [drafts, normalizedSearch, overviewFilter]);
 
   function selectOverviewFilter(filter: Exclude<OverviewFilter, null>) {
     setOverviewFilter((current) => current === filter ? null : filter);
@@ -290,12 +316,39 @@ export default function PartnerPortalPage() {
         <section id="partner-requests" className="scroll-mt-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-xl font-bold">{overviewFilter ? overviewFilter === "draft" ? "Melnraksti" : statusLabels[overviewFilter] : "Mani pieteikumi"}</h2>
-            {overviewFilter && <button type="button" onClick={() => setOverviewFilter(null)} className="text-sm font-semibold text-blue-600 hover:underline">Rādīt visus</button>}
+            <div className="flex items-center gap-2">
+              {overviewFilter && <button type="button" onClick={() => setOverviewFilter(null)} className="text-sm font-semibold text-blue-600 hover:underline">Rādīt visus</button>}
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchOpen((current) => !current);
+                  if (searchOpen) setSearchQuery("");
+                }}
+                className={`rounded-lg p-2 ${searchOpen ? "bg-blue-600 text-white" : "hover:bg-slate-200 dark:hover:bg-zinc-700"}`}
+                aria-label={searchOpen ? "Aizvērt meklēšanu" : "Meklēt pieteikumos"}
+                title={searchOpen ? "Aizvērt meklēšanu" : "Meklēt"}
+              >
+                {searchOpen ? <X size={20} /> : <Search size={20} />}
+              </button>
+            </div>
           </div>
+          {searchOpen && (
+            <div className="relative">
+              <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                autoFocus
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Meklēt pieteikumos..."
+                className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-zinc-600 dark:bg-zinc-800"
+              />
+            </div>
+          )}
           {error && <p className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}
           {loading && <p className="rounded-xl bg-white p-5 dark:bg-zinc-800">Ielādē...</p>}
-          {!loading && ((overviewFilter === "draft" && drafts.length === 0) || (overviewFilter && overviewFilter !== "draft" && filteredItems.length === 0) || (!overviewFilter && items.length === 0 && drafts.length === 0)) && <p className="rounded-xl bg-white p-5 text-slate-500 dark:bg-zinc-800">Šajā sadaļā pieteikumu nav.</p>}
-          {(!overviewFilter || overviewFilter === "draft") && drafts.map((draft) => {
+          {!loading && filteredItems.length === 0 && filteredDrafts.length === 0 && <p className="rounded-xl bg-white p-5 text-slate-500 dark:bg-zinc-800">{normalizedSearch ? "Nekas netika atrasts." : "Šajā sadaļā pieteikumu nav."}</p>}
+          {filteredDrafts.map((draft) => {
             const draftForm = draft.payload?.form || {};
             const cargo = draftForm.cargo_type === "Cits" ? draft.payload.customCargo : draftForm.cargo_type;
             return (
