@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Laptop, MapPin, Menu, Moon, Pencil, Plus, Power, Repeat2, Search, Sun, Trash2, TriangleAlert, Truck, UserRound, X } from "lucide-react";
+import { CalendarDays, ChevronDown, House, Laptop, MapPin, Menu, Moon, Pencil, Plus, Power, Repeat2, Search, Sun, Trash2, TriangleAlert, Truck, UserRound, X } from "lucide-react";
 import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 import PartnerProfileForm, { type PortalPartner } from "@/app/partner-portal/PartnerProfileForm";
+import PartnerNotificationSettings from "@/app/partner-portal/PartnerNotificationSettings";
 import { supabase } from "@/lib/supabaseClient";
 import { APP_VERSION } from "@/lib/appVersion";
 import { shortAddress } from "@/lib/addressDisplay";
@@ -77,6 +78,7 @@ export default function PartnerPortalPage() {
   const [openRequestId, setOpenRequestId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [viewingProfile, setViewingProfile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -117,6 +119,7 @@ export default function PartnerPortalPage() {
     setPartnerName(loadedPartner?.display_name || "Partneris");
     setNewRequestUrl(session.newRequestUrl || "");
     if (!loadedPartner?.profile_completed) {
+      setViewingProfile(true);
       setEditingProfile(true);
       setItems([]);
       setLoading(false);
@@ -234,7 +237,8 @@ export default function PartnerPortalPage() {
           <button type="button" onClick={() => setSidebarOpen(false)} aria-label="Aizvērt izvēlni"><X size={24} /></button>
         </div>
         <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-          <button type="button" onClick={() => { setEditingProfile(true); setSidebarOpen(false); }} className="flex items-center gap-2 text-left text-base font-medium hover:text-blue-600"><UserRound size={19} /> Profils</button>
+          <button type="button" onClick={() => { setViewingProfile(false); setEditingProfile(false); setSidebarOpen(false); }} className="flex items-center gap-2 text-left text-base font-medium hover:text-blue-600"><House size={19} /> Sākums</button>
+          <button type="button" onClick={() => { setViewingProfile(true); setEditingProfile(false); setSidebarOpen(false); }} className="flex items-center gap-2 text-left text-base font-medium hover:text-blue-600"><UserRound size={19} /> Profils</button>
           <div className="mt-auto space-y-4 border-t border-zinc-300 pt-4 dark:border-zinc-700">
             <div>
               <p className="mb-2 text-sm font-semibold">Režīms:</p>
@@ -267,15 +271,34 @@ export default function PartnerPortalPage() {
       </header>
 
       <div className="p-3 sm:p-6">
-      {!loading && partner?.profile_completed && newRequestUrl && (
+      {!loading && !viewingProfile && partner?.profile_completed && newRequestUrl && (
         <div className="mx-auto mb-5 flex max-w-5xl justify-center">
           <a href={newRequestUrl} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white shadow-sm">
             <Plus size={20} /> Jauns Brauciens
           </a>
         </div>
       )}
-      {!loading && partner && (!partner.profile_completed || editingProfile) ? (
-        <PartnerProfileForm partner={partner} authorizedFetch={authorizedFetch} onSaved={async () => { setEditingProfile(false); await load(); }} onCancel={partner.profile_completed ? () => setEditingProfile(false) : undefined} />
+      {!loading && partner && !partner.profile_completed ? (
+        <PartnerProfileForm partner={partner} authorizedFetch={authorizedFetch} onSaved={async () => { setEditingProfile(false); setViewingProfile(true); await load(); }} />
+      ) : !loading && partner && viewingProfile ? (
+        <div className="mx-auto max-w-3xl space-y-5">
+          <section className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-zinc-800">
+            <button
+              type="button"
+              onClick={() => setEditingProfile((current) => !current)}
+              aria-expanded={editingProfile}
+              className="flex w-full items-center justify-between gap-3 p-5 text-left"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                {partner.logo_url ? <img src={partner.logo_url} alt="Partnera logo" className="h-12 w-12 shrink-0 rounded-xl bg-white object-contain p-1" /> : <UserRound size={30} className="shrink-0 text-blue-600" />}
+                <div className="min-w-0"><h2 className="truncate font-bold">Partnera kartīte</h2><p className="truncate text-sm text-slate-500">{partner.display_name}</p></div>
+              </div>
+              <ChevronDown className={`shrink-0 transition-transform ${editingProfile ? "rotate-180" : ""}`} size={22} />
+            </button>
+          </section>
+          {editingProfile && <PartnerProfileForm partner={partner} authorizedFetch={authorizedFetch} onSaved={async () => { setEditingProfile(false); await load(); }} onCancel={() => setEditingProfile(false)} />}
+          <PartnerNotificationSettings authorizedFetch={authorizedFetch} />
+        </div>
       ) : (
       <div className="mx-auto max-w-5xl space-y-5">
         <section className="rounded-2xl bg-white p-5 shadow-sm dark:bg-zinc-800">
@@ -371,7 +394,7 @@ export default function PartnerPortalPage() {
             const task = linkedTask(item);
             const status = task?.status || "new";
             const editable = status === "new" || status === "planned";
-            const deletable = status === "new";
+            const deletable = status === "new" || status === "planned";
             return (
               <article key={item.id} className="rounded-2xl bg-white p-4 shadow-sm dark:bg-zinc-800">
                 <div className="flex items-start justify-between gap-3">
