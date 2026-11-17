@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   ImagePlus,
   Send,
+  Save,
   Repeat2,
   Trash2,
   Truck,
@@ -602,6 +603,7 @@ export default function RequestForm({
   testPartnerId,
   partnerPortalRepeat = false,
   partnerPortal = false,
+  partnerDraftId,
 }: {
   token: string;
   initiallyValid: boolean;
@@ -611,6 +613,7 @@ export default function RequestForm({
   testPartnerId?: number;
   partnerPortalRepeat?: boolean;
   partnerPortal?: boolean;
+  partnerDraftId?: number;
 }) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [pickupPoint, setPickupPoint] = useState<Point | null>(null);
@@ -623,6 +626,7 @@ export default function RequestForm({
   const [customCargo, setCustomCargo] = useState("");
   const [cargoTypes, setCargoTypes] = useState(defaultCargoTypes);
   const [submitting, setSubmitting] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
   const [internalAccess, setInternalAccess] = useState<
@@ -686,14 +690,50 @@ export default function RequestForm({
   }, [partnerPreset]);
 
   useEffect(() => {
+    if (!partnerPortal || !partnerDraftId) return;
+    async function loadDraft() {
+      const { data } = await supabase.auth.getSession();
+      const response = await fetch(`/api/partner-portal/drafts/${partnerDraftId}`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${data.session?.access_token || ""}` },
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error || "Melnrakstu neizdevās ielādēt.");
+        return;
+      }
+      const payload = result.draft?.payload as {
+        form?: Partial<FormState>;
+        pickupPoint?: Point | null;
+        dropoffPoint?: Point | null;
+        additionalDropoffs?: AdditionalDropoff[];
+        customCargo?: string;
+        recipientSameAsSender?: boolean;
+      } | undefined;
+      if (!payload) return;
+      if (payload.form) setForm((current) => ({ ...current, ...payload.form }));
+      if (payload.pickupPoint) { setPickupPoint(payload.pickupPoint); setPickupFocus(payload.pickupPoint); }
+      if (payload.dropoffPoint) { setDropoffPoint(payload.dropoffPoint); setDropoffFocus(payload.dropoffPoint); }
+      if (Array.isArray(payload.additionalDropoffs)) setAdditionalDropoffs(payload.additionalDropoffs);
+      if (typeof payload.customCargo === "string") setCustomCargo(payload.customCargo);
+      if (typeof payload.recipientSameAsSender === "boolean") setRecipientSameAsSender(payload.recipientSameAsSender);
+    }
+    void loadDraft();
+  }, [partnerDraftId, partnerPortal]);
+
+  useEffect(() => {
     if (!submitted) return;
+    if (partnerPortal) {
+      const timeout = window.setTimeout(() => { window.location.href = "/partner-portal"; }, 1800);
+      return () => window.clearTimeout(timeout);
+    }
     window.requestAnimationFrame(() => {
       successTopRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
     });
-  }, [submitted]);
+  }, [partnerPortal, submitted]);
 
   useEffect(() => {
     if ((!internal && !partnerPortalRepeat) || !sourceRequestId) return;
@@ -1454,6 +1494,38 @@ export default function RequestForm({
     setImages((current) => [...current, ...compressed]);
   };
 
+  const saveDraft = async () => {
+    if (!partnerPortal) return;
+    setDraftSaving(true);
+    setError("");
+    const { data } = await supabase.auth.getSession();
+    const response = await fetch("/api/partner-portal/drafts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${data.session?.access_token || ""}`,
+      },
+      body: JSON.stringify({
+        id: partnerDraftId,
+        payload: {
+          form,
+          pickupPoint,
+          dropoffPoint,
+          additionalDropoffs,
+          customCargo,
+          recipientSameAsSender,
+        },
+      }),
+    });
+    const result = await response.json();
+    setDraftSaving(false);
+    if (!response.ok) {
+      setError(result.error || "Melnrakstu neizdevās saglabāt.");
+      return;
+    }
+    window.location.href = "/partner-portal";
+  };
+
   const submit = async () => {
     if (!dropoffNotBeforePickup()) {
       setError("Izkraušanas datums un laiks nevar būt agrāks par uzkraušanu.");
@@ -1557,6 +1629,13 @@ export default function RequestForm({
       setError(result.error || "Pieteikumu neizdevās nosūtīt.");
       return;
     }
+    if (partnerPortal && partnerDraftId) {
+      const { data } = await supabase.auth.getSession();
+      await fetch(`/api/partner-portal/drafts/${partnerDraftId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${data.session?.access_token || ""}` },
+      });
+    }
     setSubmitted(true);
   };
 
@@ -1592,7 +1671,8 @@ export default function RequestForm({
 
   if (submitted) {
     return (
-      <div ref={successTopRef} className="mx-auto max-w-lg scroll-mt-4 rounded-2xl bg-white p-8 text-center shadow">
+      <div className={partnerPortal ? "fixed inset-0 z-[1000] flex items-center justify-center bg-black/55 p-4" : ""}>
+      <div ref={successTopRef} className="mx-auto w-full max-w-lg scroll-mt-4 rounded-2xl bg-white p-8 text-center shadow-xl">
         <CheckCircle2 className="mx-auto text-green-600" size={56} />
         <h1 className="mt-4 text-2xl font-bold">
           Paldies, pieteikums saņemts!
@@ -1605,6 +1685,7 @@ export default function RequestForm({
             Atgriezties
           </Link>
         )}
+      </div>
       </div>
     );
   }
@@ -2101,6 +2182,17 @@ export default function RequestForm({
       )}
 
       <div className="mt-5 flex gap-3">
+        {partnerPortal && (
+          <button
+            type="button"
+            disabled={submitting || draftSaving}
+            onClick={() => void saveDraft()}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-800 disabled:opacity-60"
+          >
+            <Save size={18} />
+            {draftSaving ? "Saglabā..." : "Saglabāt melnrakstu"}
+          </button>
+        )}
         {step > 1 && (
           <button
             type="button"

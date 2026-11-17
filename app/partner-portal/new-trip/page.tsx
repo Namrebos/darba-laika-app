@@ -12,6 +12,7 @@ export default function PartnerPortalNewTripPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [sourceRequestId, setSourceRequestId] = useState<number>();
+  const [draftId, setDraftId] = useState<number>();
 
   useEffect(() => {
     async function load() {
@@ -32,6 +33,8 @@ export default function PartnerPortalNewTripPage() {
       }
       const repeat = Number(new URLSearchParams(window.location.search).get("repeat"));
       if (Number.isSafeInteger(repeat) && repeat > 0) setSourceRequestId(repeat);
+      const draft = Number(new URLSearchParams(window.location.search).get("draft"));
+      if (Number.isSafeInteger(draft) && draft > 0) setDraftId(draft);
       setPreset({ valid: true, partner: result.partner, contacts: result.partner.contacts || [] });
       setLoading(false);
     }
@@ -51,6 +54,7 @@ export default function PartnerPortalNewTripPage() {
         sourceRequestId={sourceRequestId}
         partnerPortalRepeat={Boolean(sourceRequestId)}
         partnerPortal
+        partnerDraftId={draftId}
       />
     </main>
   );

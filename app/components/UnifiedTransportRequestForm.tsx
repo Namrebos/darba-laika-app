@@ -15,6 +15,7 @@ type CreateProps = {
   testPartnerId?: number;
   partnerPortalRepeat?: boolean;
   partnerPortal?: boolean;
+  partnerDraftId?: number;
 };
 
 type ExistingProps = {
@@ -44,6 +45,7 @@ export default function UnifiedTransportRequestForm(
         testPartnerId={props.testPartnerId}
         partnerPortalRepeat={props.partnerPortalRepeat}
         partnerPortal={props.partnerPortal}
+        partnerDraftId={props.partnerDraftId}
       />
     );
   }

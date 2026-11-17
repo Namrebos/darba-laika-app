@@ -27,6 +27,20 @@ type PartnerRequest = {
   planned_tasks: PlannedTask[] | PlannedTask | null;
 };
 
+type PartnerDraft = {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  payload: {
+    form?: {
+      cargo_type?: string;
+      pickup_address?: string;
+      dropoff_address?: string;
+    };
+    customCargo?: string;
+  };
+};
+
 const statusLabels: Record<PlannedTask["status"], string> = {
   new: "Nosūtīts",
   planned: "Plānots",
@@ -53,6 +67,7 @@ export default function PartnerPortalPage() {
   const [partner, setPartner] = useState<PortalPartner | null>(null);
   const [newRequestUrl, setNewRequestUrl] = useState("");
   const [items, setItems] = useState<PartnerRequest[]>([]);
+  const [drafts, setDrafts] = useState<PartnerDraft[]>([]);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -109,6 +124,11 @@ export default function PartnerPortalPage() {
     }
     const requests = await requestResponse.json();
     setItems((requests.requests || []) as PartnerRequest[]);
+    const draftsResponse = await authorizedFetch("/api/partner-portal/drafts");
+    if (draftsResponse?.ok) {
+      const draftResult = await draftsResponse.json();
+      setDrafts((draftResult.drafts || []) as PartnerDraft[]);
+    }
     setLoading(false);
   }, [authorizedFetch, month, router]);
 
@@ -148,6 +168,16 @@ export default function PartnerPortalPage() {
       return;
     }
     await load();
+  }
+
+  async function deleteDraft(id: number) {
+    if (!window.confirm("Vai tiešām dzēst šo melnrakstu?")) return;
+    const response = await authorizedFetch(`/api/partner-portal/drafts/${id}`, { method: "DELETE" });
+    if (!response?.ok) {
+      setError("Melnrakstu neizdevās dzēst.");
+      return;
+    }
+    setDrafts((current) => current.filter((draft) => draft.id !== id));
   }
 
   async function logout() {
@@ -232,7 +262,26 @@ export default function PartnerPortalPage() {
           <h2 className="text-xl font-bold">Mani pieteikumi</h2>
           {error && <p className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}
           {loading && <p className="rounded-xl bg-white p-5 dark:bg-zinc-800">Ielādē...</p>}
-          {!loading && items.length === 0 && <p className="rounded-xl bg-white p-5 text-slate-500 dark:bg-zinc-800">Šajā mēnesī pieteikumu nav.</p>}
+          {!loading && items.length === 0 && drafts.length === 0 && <p className="rounded-xl bg-white p-5 text-slate-500 dark:bg-zinc-800">Šajā mēnesī pieteikumu nav.</p>}
+          {drafts.map((draft) => {
+            const draftForm = draft.payload?.form || {};
+            const cargo = draftForm.cargo_type === "Cits" ? draft.payload.customCargo : draftForm.cargo_type;
+            return (
+              <article key={`draft-${draft.id}`} className="rounded-2xl border border-dashed border-amber-400 bg-white p-4 shadow-sm dark:bg-zinc-800">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold">{cargo || "Nepabeigts pieteikums"}</h3>
+                    {(draftForm.pickup_address || draftForm.dropoff_address) && <p className="mt-1 flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300"><MapPin size={16} /> {draftForm.pickup_address || "—"} → {draftForm.dropoff_address || "—"}</p>}
+                  </div>
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Melnraksts</span>
+                </div>
+                <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
+                  <a href={`${newRequestUrl}?draft=${draft.id}`} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold"><Pencil size={16} /> Turpināt</a>
+                  <button type="button" onClick={() => void deleteDraft(draft.id)} className="inline-flex items-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-700"><Trash2 size={16} /> Dzēst</button>
+                </div>
+              </article>
+            );
+          })}
           {items.map((item) => {
             const task = linkedTask(item);
             const status = task?.status || "new";
