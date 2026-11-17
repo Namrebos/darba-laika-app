@@ -370,7 +370,8 @@ export default function PartnerPortalPage() {
           {filteredItems.map((item) => {
             const task = linkedTask(item);
             const status = task?.status || "new";
-            const editable = status === "new";
+            const editable = status === "new" || status === "planned";
+            const deletable = status === "new";
             return (
               <article key={item.id} className="rounded-2xl bg-white p-4 shadow-sm dark:bg-zinc-800">
                 <div className="flex items-start justify-between gap-3">
@@ -390,7 +391,7 @@ export default function PartnerPortalPage() {
                   <button type="button" onClick={() => setOpenRequestId(item.id)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
                     {editable ? <Pencil size={16} /> : <Truck size={16} />} {editable ? "Labot" : "Apskatīt"}
                   </button>
-                  {editable && (
+                  {deletable && (
                     <button type="button" disabled={deletingId === item.id} onClick={() => void deleteRequest(item.id)} className="inline-flex items-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">
                       <Trash2 size={16} /> Dzēst
                     </button>
@@ -405,7 +406,7 @@ export default function PartnerPortalPage() {
 
       {partner?.profile_completed && openRequestId && (
         <UnifiedTransportRequestForm
-          mode={linkedTask(items.find((item) => item.id === openRequestId)!)?.status === "new" ? "edit" : "readonly"}
+          mode={["new", "planned"].includes(linkedTask(items.find((item) => item.id === openRequestId)!)?.status || "") ? "edit" : "readonly"}
           requestId={openRequestId}
           onClose={() => setOpenRequestId(null)}
           onSaved={() => void load()}

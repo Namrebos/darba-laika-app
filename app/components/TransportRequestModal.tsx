@@ -77,6 +77,45 @@ type RequestImage = {
   url: string;
 };
 
+type TaskActivity = {
+  taskLog: {
+    id: number;
+    note: string | null;
+    start_time: string;
+    end_time: string | null;
+  } | null;
+  timers: Array<{
+    id: string;
+    label: string;
+    started_at: string;
+    ended_at: string | null;
+    duration_seconds: number | null;
+  }>;
+  images: Array<{ id: number; url: string }>;
+  timeline: Array<{ id: string; label: string; created_at: string }>;
+};
+
+function formatActivityDate(value: string | null) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("lv-LV", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatActivityDuration(seconds: number | null, startedAt: string, endedAt: string | null) {
+  const calculated = endedAt
+    ? Math.max(0, Math.floor((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000))
+    : Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+  const totalMinutes = Math.floor((seconds ?? calculated) / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours} h ${minutes} min` : `${minutes} min`;
+}
+
 type PartnerContact = {
   id: number;
   name: string;
@@ -635,6 +674,7 @@ export default function TransportRequestModal({
   const [isAdmin, setIsAdmin] = useState(false);
   const [partners, setPartners] = useState<PartnerSummary[]>([]);
   const [partnerSaving, setPartnerSaving] = useState(false);
+  const [taskActivity, setTaskActivity] = useState<TaskActivity | null>(null);
 
   useEffect(() => {
     if (!requestId) return;
@@ -658,6 +698,7 @@ export default function TransportRequestModal({
       setTransportRequest(result.request as TransportRequest);
       setImages((result.images || []) as RequestImage[]);
       setPartnerContacts((result.partnerContacts || []) as PartnerContact[]);
+      setTaskActivity((result.taskActivity || null) as TaskActivity | null);
     }
 
     void load();
@@ -1044,6 +1085,62 @@ export default function TransportRequestModal({
                       </a>
                     ))}
                   </div>
+                </section>
+              )}
+
+              {taskActivity && (
+                <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <h3 className="text-xl font-bold text-slate-900">Darba izpilde</h3>
+                  {taskActivity.taskLog && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <ReadonlyField label="Darbs sākts" value={formatActivityDate(taskActivity.taskLog.start_time)} />
+                      {taskActivity.taskLog.end_time && <ReadonlyField label="Darbs pabeigts" value={formatActivityDate(taskActivity.taskLog.end_time)} />}
+                    </div>
+                  )}
+                  {taskActivity.taskLog?.note?.trim() && (
+                    <div>
+                      <h4 className="mb-2 font-semibold text-slate-900">Pieraksti</h4>
+                      <p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{taskActivity.taskLog.note}</p>
+                    </div>
+                  )}
+                  {taskActivity.timers.length > 0 && (
+                    <div>
+                      <h4 className="mb-2 font-semibold text-slate-900">Taimeri</h4>
+                      <div className="space-y-2">
+                        {taskActivity.timers.map((timer) => (
+                          <div key={timer.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                            <span>{timer.label}</span>
+                            <strong>{formatActivityDuration(timer.duration_seconds, timer.started_at, timer.ended_at)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {taskActivity.timeline.length > 0 && (
+                    <div>
+                      <h4 className="mb-2 font-semibold text-slate-900">Darbību vēsture</h4>
+                      <div className="space-y-2 text-sm text-slate-700">
+                        {taskActivity.timeline.map((entry) => (
+                          <div key={entry.id} className="flex items-center justify-between gap-3">
+                            <span>{entry.label}</span>
+                            <span>{formatActivityDate(entry.created_at)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {taskActivity.images.length > 0 && (
+                    <div>
+                      <h4 className="mb-2 font-semibold text-slate-900">Darba attēli</h4>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                        {taskActivity.images.map((image) => (
+                          <a key={image.id} href={image.url} target="_blank" rel="noreferrer" className="relative aspect-square overflow-hidden rounded-lg">
+                            <Image src={image.url} alt="Darba attēls" fill unoptimized className="object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </section>
               )}
             </>

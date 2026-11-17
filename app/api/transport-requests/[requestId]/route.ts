@@ -57,7 +57,7 @@ export async function GET(
       .single(),
     adminClient
       .from("planned_tasks")
-      .select("assignee_id, created_by, vehicle_id")
+      .select("id, status, task_log_id, assignee_id, created_by, vehicle_id")
       .eq("transport_request_id", numericId)
       .maybeSingle(),
     getPartnerPortalSession(request),
@@ -130,12 +130,49 @@ export async function GET(
     }),
   );
 
+  let taskActivity = null;
+  if (
+    partnerSession &&
+    ownedRequest &&
+    task?.task_log_id &&
+    ["started", "completed"].includes(String(task.status))
+  ) {
+    const [{ data: taskLog }, { data: timers }, { data: taskImages }, { data: timeline }] = await Promise.all([
+      adminClient
+        .from("task_logs")
+        .select("id, note, start_time, end_time")
+        .eq("id", task.task_log_id)
+        .maybeSingle(),
+      adminClient
+        .from("task_timers")
+        .select("id, label, started_at, ended_at, duration_seconds")
+        .eq("task_log_id", task.task_log_id)
+        .order("started_at", { ascending: true }),
+      adminClient
+        .from("task_images")
+        .select("id, url")
+        .eq("task_log_id", task.task_log_id),
+      adminClient
+        .from("task_timeline_events")
+        .select("id, label, created_at")
+        .eq("task_log_id", task.task_log_id)
+        .order("created_at", { ascending: true }),
+    ]);
+    taskActivity = {
+      taskLog,
+      timers: timers || [],
+      images: taskImages || [],
+      timeline: timeline || [],
+    };
+  }
+
   return NextResponse.json(
     {
       request: transportRequest,
       vehicleId: task?.vehicle_id || null,
       partnerContacts: partnerContacts || [],
       images: signedImages.filter((image) => image.url),
+      taskActivity,
     },
     {
       headers: {
@@ -189,7 +226,9 @@ export async function PUT(
         .maybeSingle()
     : { data: null };
   const partnerMayEdit = Boolean(
-    partnerSession && partnerOwnedRequest && linkedTaskBeforeEdit?.status === "new",
+    partnerSession &&
+    partnerOwnedRequest &&
+    ["new", "planned"].includes(String(linkedTaskBeforeEdit?.status || "")),
   );
   if (
     profile?.role !== "admin" &&
