@@ -42,6 +42,8 @@ type PartnerDraft = {
   };
 };
 
+type OverviewFilter = Exclude<PlannedTask["status"], "canceled"> | "draft" | null;
+
 const statusLabels: Record<PlannedTask["status"], string> = {
   new: "Nosūtīts",
   planned: "Plānots",
@@ -78,6 +80,7 @@ export default function PartnerPortalPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [overviewFilter, setOverviewFilter] = useState<OverviewFilter>(null);
 
   const authorizedFetch = useCallback(async (url: string, init?: RequestInit) => {
     const { data } = await supabase.auth.getSession();
@@ -157,6 +160,16 @@ export default function PartnerPortalPage() {
     result[status] = (result[status] || 0) + 1;
     return result;
   }, {}), [items]);
+
+  const filteredItems = useMemo(() => {
+    if (!overviewFilter || overviewFilter === "draft") return overviewFilter === "draft" ? [] : items;
+    return items.filter((item) => (linkedTask(item)?.status || "new") === overviewFilter);
+  }, [items, overviewFilter]);
+
+  function selectOverviewFilter(filter: Exclude<OverviewFilter, null>) {
+    setOverviewFilter((current) => current === filter ? null : filter);
+    window.setTimeout(() => document.getElementById("partner-requests")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
 
   async function deleteRequest(id: number) {
     if (!window.confirm("Vai tiešām dzēst šo pieteikumu?")) return;
@@ -251,24 +264,38 @@ export default function PartnerPortalPage() {
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
             {(["new", "planned", "started", "completed"] as PlannedTask["status"][]).map((status) => (
-              <div key={status} className="rounded-xl bg-slate-50 p-3 dark:bg-zinc-900">
-                <p className="text-xs text-slate-500">{statusLabels[status]}</p>
+              <button
+                key={status}
+                type="button"
+                onClick={() => selectOverviewFilter(status as Exclude<OverviewFilter, null>)}
+                aria-pressed={overviewFilter === status}
+                className={`rounded-xl p-3 text-left transition hover:ring-2 hover:ring-blue-400 ${overviewFilter === status ? "bg-blue-600 text-white ring-2 ring-blue-300" : "bg-slate-50 dark:bg-zinc-900"}`}
+              >
+                <p className={`text-xs ${overviewFilter === status ? "text-blue-100" : "text-slate-500"}`}>{statusLabels[status]}</p>
                 <p className="text-2xl font-bold">{counts[status] || 0}</p>
-              </div>
+              </button>
             ))}
-            <div className="rounded-xl bg-slate-50 p-3 dark:bg-zinc-900">
-              <p className="text-xs text-slate-500">Melnraksti</p>
+            <button
+              type="button"
+              onClick={() => selectOverviewFilter("draft")}
+              aria-pressed={overviewFilter === "draft"}
+              className={`rounded-xl p-3 text-left transition hover:ring-2 hover:ring-blue-400 ${overviewFilter === "draft" ? "bg-blue-600 text-white ring-2 ring-blue-300" : "bg-slate-50 dark:bg-zinc-900"}`}
+            >
+              <p className={`text-xs ${overviewFilter === "draft" ? "text-blue-100" : "text-slate-500"}`}>Melnraksti</p>
               <p className="text-2xl font-bold">{drafts.length}</p>
-            </div>
+            </button>
           </div>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-bold">Mani pieteikumi</h2>
+        <section id="partner-requests" className="scroll-mt-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold">{overviewFilter ? overviewFilter === "draft" ? "Melnraksti" : statusLabels[overviewFilter] : "Mani pieteikumi"}</h2>
+            {overviewFilter && <button type="button" onClick={() => setOverviewFilter(null)} className="text-sm font-semibold text-blue-600 hover:underline">Rādīt visus</button>}
+          </div>
           {error && <p className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}
           {loading && <p className="rounded-xl bg-white p-5 dark:bg-zinc-800">Ielādē...</p>}
-          {!loading && items.length === 0 && drafts.length === 0 && <p className="rounded-xl bg-white p-5 text-slate-500 dark:bg-zinc-800">Šajā mēnesī pieteikumu nav.</p>}
-          {drafts.map((draft) => {
+          {!loading && ((overviewFilter === "draft" && drafts.length === 0) || (overviewFilter && overviewFilter !== "draft" && filteredItems.length === 0) || (!overviewFilter && items.length === 0 && drafts.length === 0)) && <p className="rounded-xl bg-white p-5 text-slate-500 dark:bg-zinc-800">Šajā sadaļā pieteikumu nav.</p>}
+          {(!overviewFilter || overviewFilter === "draft") && drafts.map((draft) => {
             const draftForm = draft.payload?.form || {};
             const cargo = draftForm.cargo_type === "Cits" ? draft.payload.customCargo : draftForm.cargo_type;
             return (
@@ -287,7 +314,7 @@ export default function PartnerPortalPage() {
               </article>
             );
           })}
-          {items.map((item) => {
+          {filteredItems.map((item) => {
             const task = linkedTask(item);
             const status = task?.status || "new";
             const editable = status === "new";
