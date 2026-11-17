@@ -133,10 +133,11 @@ export async function POST(request: NextRequest) {
 
   const formData = await request.formData();
   const internalRequest = formData.get("mode") === "internal";
+  const partnerPortalRequest = formData.get("mode") === "partner_portal";
   const token = String(formData.get("token") || "").trim();
   const partnerToken = String(formData.get("partner_token") || "").trim();
   const payloadText = String(formData.get("payload") || "");
-  if ((!internalRequest && !token && !partnerToken) || !payloadText) {
+  if ((!internalRequest && !partnerPortalRequest && !token && !partnerToken) || !payloadText) {
     return NextResponse.json(
       { error: "Trūkst pieteikuma datu." },
       { status: 400 },
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!validatePayload(payload, Boolean(partnerToken))) {
+  if (!validatePayload(payload, Boolean(partnerToken) || partnerPortalRequest)) {
     return NextResponse.json(
       { error: "Aizpildi visus obligātos laukus un atzīmē abas vietas kartē." },
       { status: 400 },
@@ -269,6 +270,48 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
+  } else if (partnerPortalRequest) {
+    const bearer = request.headers.get("authorization");
+    const accessToken = bearer?.startsWith("Bearer ") ? bearer.slice(7) : "";
+    const { data: authData } = await adminClient.auth.getUser(accessToken);
+    if (!authData.user?.email_confirmed_at) {
+      return NextResponse.json({ error: "Nav partnera pieejas." }, { status: 401 });
+    }
+    const { data: account } = await adminClient
+      .from("partner_portal_accounts")
+      .select("partner_id")
+      .eq("user_id", authData.user.id)
+      .maybeSingle();
+    if (!account) return NextResponse.json({ error: "Nav partnera pieejas." }, { status: 403 });
+    const portalPartnerId = Number((account as { partner_id: number }).partner_id);
+    const { data: partner } = await adminClient
+      .from("partners")
+      .select("id, partner_type, first_name, last_name, company_name, registration_number, address, phone, email, profile_completed")
+      .eq("id", portalPartnerId)
+      .single();
+    if (!partner?.profile_completed) {
+      return NextResponse.json({ error: "Vispirms aizpildi partnera kartīti." }, { status: 400 });
+    }
+    submissionSource = "partner";
+    safePayload.partner_id = partner.id;
+    safePayload.sender_type = partner.partner_type;
+    safePayload.sender_first_name = partner.partner_type === "private" ? partner.first_name || "" : "";
+    safePayload.sender_last_name = partner.partner_type === "private" ? partner.last_name || "" : "";
+    safePayload.sender_company_name = partner.partner_type === "company" ? partner.company_name || "" : "";
+    safePayload.sender_registration_number = partner.partner_type === "company" ? partner.registration_number || "" : "";
+    safePayload.sender_phone = partner.phone || safePayload.sender_phone;
+    safePayload.sender_address = partner.address;
+    safePayload.sender_email = partner.email || "";
+
+    submissionTokenHash = tokenHash(randomBytes(32).toString("base64url"));
+    const { error: linkError } = await adminClient.from("transport_request_links").insert({
+      token_hash: submissionTokenHash,
+      created_by: authData.user.id,
+      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    });
+    if (linkError) {
+      return NextResponse.json({ error: "Braucienu neizdevās sagatavot." }, { status: 500 });
+    }
   } else if (partnerToken) {
     submissionSource = "partner";
     const { data: partnerLink } = await adminClient
@@ -310,7 +353,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  if (Boolean(partnerToken) || payload.recipient_same_as_sender === true) {
+  if (Boolean(partnerToken) || partnerPortalRequest || payload.recipient_same_as_sender === true) {
     safePayload.recipient_type = safePayload.sender_type;
     safePayload.recipient_first_name = safePayload.sender_first_name;
     safePayload.recipient_last_name = safePayload.sender_last_name;

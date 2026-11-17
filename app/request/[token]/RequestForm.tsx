@@ -601,6 +601,7 @@ export default function RequestForm({
   partnerPreset = null,
   testPartnerId,
   partnerPortalRepeat = false,
+  partnerPortal = false,
 }: {
   token: string;
   initiallyValid: boolean;
@@ -609,6 +610,7 @@ export default function RequestForm({
   partnerPreset?: PartnerPreset | null;
   testPartnerId?: number;
   partnerPortalRepeat?: boolean;
+  partnerPortal?: boolean;
 }) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [pickupPoint, setPickupPoint] = useState<Point | null>(null);
@@ -1524,6 +1526,8 @@ export default function RequestForm({
       body.set("test_partner_id", String(testPartnerId));
     } else if (internal) {
       body.set("mode", "internal");
+    } else if (partnerPortal) {
+      body.set("mode", "partner_portal");
     } else if (isPartnerRequest) {
       body.set("partner_token", token);
     } else {
@@ -1532,14 +1536,14 @@ export default function RequestForm({
     body.set("payload", JSON.stringify(payload));
     images.forEach((file) => body.append("images", file));
 
-    const { data: sessionData } = internal || testPartnerId
+    const { data: sessionData } = internal || testPartnerId || partnerPortal
       ? await supabase.auth.getSession()
       : { data: { session: null } };
     const response = await fetch(
       testPartnerId ? "/api/admin/partner-portal/test-requests" : "/api/transport-requests",
       {
       method: "POST",
-      headers: internal || testPartnerId
+      headers: internal || testPartnerId || partnerPortal
         ? {
             Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
           }
