@@ -129,7 +129,6 @@ export default function PartnerPortalPage() {
   const [dateScope, setDateScope] = useState<DateScope>("month");
   const [selectedDate, setSelectedDate] = useState(() => localDateValue(new Date()));
   const [sortMode, setSortMode] = useState<SortMode>("newest");
-  const [filterMenu, setFilterMenu] = useState<"date" | "sort" | null>(null);
 
   const authorizedFetch = useCallback(async (url: string, init?: RequestInit) => {
     const { data } = await supabase.auth.getSession();
@@ -414,106 +413,62 @@ export default function PartnerPortalPage() {
         <section id="partner-requests" className="scroll-mt-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-xl font-bold">{overviewFilter ? overviewFilter === "draft" ? "Melnraksti" : statusLabels[overviewFilter] : "Mani pieteikumi"}</h2>
-            <div className="relative flex items-center gap-1">
+            <div className="flex min-w-0 items-center justify-end gap-1">
               {overviewFilter && <button type="button" onClick={() => setOverviewFilter(null)} className="text-sm font-semibold text-blue-600 hover:underline">Rādīt visus</button>}
-              <button
-                type="button"
-                onClick={() => setFilterMenu((current) => current === "date" ? null : "date")}
-                className={`rounded-lg p-2 ${filterMenu === "date" || dateScope !== "month" ? "bg-blue-600 text-white" : "hover:bg-slate-200 dark:hover:bg-zinc-700"}`}
-                aria-label="Atlasīt pēc datuma"
+              <label
+                className={`relative cursor-pointer rounded-lg p-2 ${dateScope !== "month" ? "bg-blue-600 text-white" : "hover:bg-slate-200 dark:hover:bg-zinc-700"}`}
                 title="Atlasīt pēc datuma"
               >
                 <CalendarRange size={20} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterMenu((current) => current === "sort" ? null : "sort")}
-                className={`rounded-lg p-2 ${filterMenu === "sort" || sortMode !== "newest" ? "bg-blue-600 text-white" : "hover:bg-slate-200 dark:hover:bg-zinc-700"}`}
-                aria-label="Mainīt kārtošanu"
+                <span className="sr-only">Atlasīt periodu</span>
+                <select
+                  value={dateScope}
+                  onChange={(event) => setDateScope(event.target.value as DateScope)}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  aria-label="Atlasīt periodu"
+                >
+                  <option value="month">Izvēlētais mēnesis</option>
+                  <option value="today">Šodien</option>
+                  <option value="tomorrow">Rīt</option>
+                  <option value="week">Šonedēļ</option>
+                  <option value="date">Konkrēts datums</option>
+                </select>
+              </label>
+              <label
+                className={`relative cursor-pointer rounded-lg p-2 ${sortMode !== "newest" ? "bg-blue-600 text-white" : "hover:bg-slate-200 dark:hover:bg-zinc-700"}`}
                 title="Kārtot"
               >
                 <ArrowUpDown size={20} />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchOpen((current) => !current);
-                  if (searchOpen) setSearchQuery("");
-                }}
-                className={`rounded-lg p-2 ${searchOpen ? "bg-blue-600 text-white" : "hover:bg-slate-200 dark:hover:bg-zinc-700"}`}
-                aria-label={searchOpen ? "Aizvērt meklēšanu" : "Meklēt pieteikumos"}
-                title={searchOpen ? "Aizvērt meklēšanu" : "Meklēt"}
-              >
-                {searchOpen ? <X size={20} /> : <Search size={20} />}
-              </button>
-              {filterMenu && <button type="button" aria-label="Aizvērt izvēlni" onClick={() => setFilterMenu(null)} className="fixed inset-0 z-20 cursor-default" />}
-              {filterMenu === "date" && (
-                <div className="absolute right-0 top-12 z-30 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
-                  <label className="text-sm font-medium">
-                    Rādīt
-                    <select
-                      value={dateScope}
-                      onChange={(event) => {
-                        const scope = event.target.value as DateScope;
-                        setDateScope(scope);
-                        if (scope !== "date") setFilterMenu(null);
-                      }}
-                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
-                    >
-                      <option value="month">Izvēlētais mēnesis</option>
-                      <option value="today">Šodien</option>
-                      <option value="tomorrow">Rīt</option>
-                      <option value="week">Šonedēļ</option>
-                      <option value="date">Konkrēts datums</option>
-                    </select>
-                  </label>
-                  {dateScope === "date" && (
-                    <input
-                      autoFocus
-                      type="date"
-                      value={selectedDate}
-                      onChange={(event) => {
-                        setSelectedDate(event.target.value);
-                        setFilterMenu(null);
-                      }}
-                      className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
-                    />
-                  )}
+                <span className="sr-only">Mainīt kārtošanu</span>
+                <select
+                  value={sortMode}
+                  onChange={(event) => setSortMode(event.target.value as SortMode)}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  aria-label="Mainīt kārtošanu"
+                >
+                  <option value="newest">Pēc jaunākā pieteikuma</option>
+                  <option value="nearest">Pēc tuvākā izpildes laika</option>
+                </select>
+              </label>
+              {searchOpen ? (
+                <div className="relative w-36 sm:w-56">
+                  <Search size={16} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    autoFocus
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Meklēt..."
+                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-8 text-sm outline-none focus:border-blue-500 dark:border-zinc-600 dark:bg-zinc-800"
+                  />
+                  <button type="button" onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1" aria-label="Aizvērt meklēšanu"><X size={16} /></button>
                 </div>
-              )}
-              {filterMenu === "sort" && (
-                <div className="absolute right-0 top-12 z-30 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
-                  <label className="text-sm font-medium">
-                    Kārtot
-                    <select
-                      value={sortMode}
-                      onChange={(event) => {
-                        setSortMode(event.target.value as SortMode);
-                        setFilterMenu(null);
-                      }}
-                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
-                    >
-                      <option value="newest">Pēc jaunākā pieteikuma</option>
-                      <option value="nearest">Pēc tuvākā izpildes laika</option>
-                    </select>
-                  </label>
-                </div>
+              ) : (
+                <button type="button" onClick={() => setSearchOpen(true)} className="rounded-lg p-2 hover:bg-slate-200 dark:hover:bg-zinc-700" aria-label="Meklēt pieteikumos" title="Meklēt"><Search size={20} /></button>
               )}
             </div>
           </div>
-          {searchOpen && (
-            <div className="relative">
-              <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                autoFocus
-                type="search"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Meklēt pieteikumos..."
-                className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-zinc-600 dark:bg-zinc-800"
-              />
-            </div>
-          )}
+          {dateScope === "date" && <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800 sm:max-w-xs" aria-label="Konkrēts datums" />}
           {error && <p className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}
           {loading && <p className="rounded-xl bg-white p-5 dark:bg-zinc-800">Ielādē...</p>}
           {!loading && filteredItems.length === 0 && filteredDrafts.length === 0 && <p className="rounded-xl bg-white p-5 text-slate-500 dark:bg-zinc-800">{normalizedSearch ? "Nekas netika atrasts." : "Šajā sadaļā pieteikumu nav."}</p>}
