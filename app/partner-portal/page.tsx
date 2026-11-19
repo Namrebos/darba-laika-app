@@ -508,7 +508,7 @@ export default function PartnerPortalPage() {
                 </div>
                 <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
                   {status === "completed" && newRequestUrl && (
-                    <a href={`${newRequestUrl}?repeat=${item.id}`} className="inline-flex items-center gap-2 rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-700">
+                    <a href={`${newRequestUrl}?repeat=${item.id}`} className="inline-flex items-center gap-2 rounded-lg border border-green-300 px-3 py-2 text-sm font-semibold text-green-600">
                       <Repeat2 size={16} /> Atkārtot reversā
                     </a>
                   )}
