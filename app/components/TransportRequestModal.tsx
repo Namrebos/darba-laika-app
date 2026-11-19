@@ -106,10 +106,10 @@ function formatActivityDate(value: string | null) {
   }).format(new Date(value));
 }
 
-function formatActivityDuration(seconds: number | null, startedAt: string, endedAt: string | null) {
+function formatActivityDuration(seconds: number | null, startedAt: string, endedAt: string | null, now = Date.now()) {
   const calculated = endedAt
     ? Math.max(0, Math.floor((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000))
-    : Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+    : Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
   const totalMinutes = Math.floor((seconds ?? calculated) / 60);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -675,6 +675,7 @@ export default function TransportRequestModal({
   const [partners, setPartners] = useState<PartnerSummary[]>([]);
   const [partnerSaving, setPartnerSaving] = useState(false);
   const [taskActivity, setTaskActivity] = useState<TaskActivity | null>(null);
+  const [activityClock, setActivityClock] = useState(() => Date.now());
 
   useEffect(() => {
     if (!requestId) return;
@@ -703,6 +704,13 @@ export default function TransportRequestModal({
 
     void load();
   }, [requestId]);
+
+  useEffect(() => {
+    if (!taskActivity?.taskLog || taskActivity.taskLog.end_time) return;
+    setActivityClock(Date.now());
+    const interval = window.setInterval(() => setActivityClock(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, [taskActivity]);
 
   useEffect(() => {
     supabase.from("cargo_types").select("name").order("name").then(({ data }) => setCargoTypes((data || []).map((item) => item.name)));
@@ -1092,10 +1100,10 @@ export default function TransportRequestModal({
                 <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <h3 className="text-xl font-bold text-slate-900">Darba izpilde</h3>
                   {taskActivity.taskLog && (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <ReadonlyField label="Darbs sākts" value={formatActivityDate(taskActivity.taskLog.start_time)} />
-                      {taskActivity.taskLog.end_time && <ReadonlyField label="Darbs pabeigts" value={formatActivityDate(taskActivity.taskLog.end_time)} />}
-                    </div>
+                    <ReadonlyField
+                      label="Darba ilgums"
+                      value={formatActivityDuration(null, taskActivity.taskLog.start_time, taskActivity.taskLog.end_time, activityClock)}
+                    />
                   )}
                   {taskActivity.taskLog?.note?.trim() && (
                     <div>
