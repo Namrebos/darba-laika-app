@@ -21,6 +21,7 @@ export default function CargoTypesPage() {
   const [message, setMessage] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [subtypeName, setSubtypeName] = useState("");
+  const [weightNames, setWeightNames] = useState<Record<number, string>>({});
 
   async function loadCargoTypes() {
     const { data, error } = await supabase
@@ -104,22 +105,23 @@ export default function CargoTypesPage() {
     setMessage("Kravas veids izdzēsts.");
   }
 
-  async function addSubtype(parentId: number) {
-    if (!subtypeName.trim()) {
+  async function addSubtype(parentId: number, value = subtypeName) {
+    if (!value.trim()) {
       setMessage("Ievadi tehnikas vienības nosaukumu.");
       return;
     }
     setSaving(true);
     const { error } = await supabase.rpc("add_cargo_subtype", {
       target_parent_id: parentId,
-      cargo_type_name: subtypeName,
+      cargo_type_name: value,
     });
     setSaving(false);
     if (error) {
       setMessage(error.message.includes("duplicate") ? "Šāda tehnikas vienība jau pastāv." : "Tehnikas vienību neizdevās pievienot.");
       return;
     }
-    setSubtypeName("");
+    if (value === subtypeName) setSubtypeName("");
+    setWeightNames((current) => ({ ...current, [parentId]: "" }));
     await loadCargoTypes();
     setMessage("Tehnikas vienība pievienota.");
   }
@@ -221,16 +223,17 @@ export default function CargoTypesPage() {
             {expanded && (
               <div className="mt-4 space-y-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
                 {subtypes.map((subtype) => (
-                  <div key={subtype.id} className="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900">
-                    <span className="text-sm">{subtype.name}</span>
-                    <div className="flex gap-1">
+                  <div key={subtype.id} className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
+                    <div className="flex items-center justify-between gap-2"><span className="font-medium">{subtype.name}</span><div className="flex gap-1">
                       <button type="button" onClick={() => { setEditingId(subtype.id); setName(subtype.name); setMessage(""); }} className="rounded-md p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700" aria-label={`Rediģēt ${subtype.name}`}><Pencil size={16} /></button>
                       <button type="button" onClick={() => void deleteCargoType(subtype)} className="rounded-md p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950" aria-label={`Dzēst ${subtype.name}`}><Trash2 size={16} /></button>
-                    </div>
+                    </div></div>
+                    <div className="mt-2 flex flex-wrap gap-2">{cargoTypes.filter((item) => item.parent_id === subtype.id).map((weight) => <span key={weight.id} className="inline-flex items-center gap-1 rounded-full border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600">{weight.name}<button type="button" onClick={() => void deleteCargoType(weight)} className="text-red-600" aria-label={`Dzēst ${weight.name}`}><X size={14} /></button></span>)}</div>
+                    <div className="mt-2 flex gap-2"><input value={weightNames[subtype.id] || ""} onChange={(event) => setWeightNames((current) => ({ ...current, [subtype.id]: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter") void addSubtype(subtype.id, weightNames[subtype.id] || ""); }} placeholder="Piem., 3,5 t" maxLength={100} className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-600" /><button type="button" onClick={() => void addSubtype(subtype.id, weightNames[subtype.id] || "")} className="rounded-lg border border-green-600 p-2 text-green-700" aria-label="Pievienot svaru"><Plus size={16} /></button></div>
                   </div>
                 ))}
                 <div className="flex gap-2 pt-2">
-                  <input value={subtypeName} onChange={(event) => setSubtypeName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void addSubtype(cargoType.id); }} placeholder="Piem., Ekskavators 5,0 t" maxLength={100} className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-600" />
+                  <input value={subtypeName} onChange={(event) => setSubtypeName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void addSubtype(cargoType.id); }} placeholder="Piem., Frontālais iekrāvējs" maxLength={100} className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-600" />
                   <button type="button" onClick={() => void addSubtype(cargoType.id)} disabled={saving} className="rounded-lg bg-green-600 p-2 text-white disabled:opacity-50" aria-label="Pievienot tehnikas vienību"><Plus size={18} /></button>
                 </div>
               </div>

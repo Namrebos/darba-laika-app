@@ -646,6 +646,7 @@ export default function RequestForm({
   const [step, setStep] = useState(1);
   const [customCargo, setCustomCargo] = useState("");
   const [selectedCargoDetails, setSelectedCargoDetails] = useState<string[]>([]);
+  const [selectedCargoCategoryId, setSelectedCargoCategoryId] = useState("");
   const [cargoTypes, setCargoTypes] = useState<CargoTypeOption[]>(
     defaultCargoTypes.map((name, index) => ({ id: -(index + 1), name, parent_id: null })),
   );
@@ -1224,8 +1225,12 @@ export default function RequestForm({
 
   const topCargoTypes = cargoTypes.filter((item) => item.parent_id === null);
   const selectedCargoParent = topCargoTypes.find((item) => item.name === form.cargo_type);
-  const cargoDetails = selectedCargoParent
+  const cargoCategories = selectedCargoParent
     ? cargoTypes.filter((item) => item.parent_id === selectedCargoParent.id)
+    : [];
+  const selectedCargoCategory = cargoCategories.find((item) => String(item.id) === selectedCargoCategoryId);
+  const cargoWeights = selectedCargoCategory
+    ? cargoTypes.filter((item) => item.parent_id === selectedCargoCategory.id)
     : [];
   const resolvedCargoType = () => {
     if (form.cargo_type === "Cits") return customCargo.trim();
@@ -1236,7 +1241,7 @@ export default function RequestForm({
     form.additional_notes.trim(),
   ].filter(Boolean).join("\n");
   const cargoSelectionComplete = () => Boolean(
-    resolvedCargoType() && (cargoDetails.length === 0 || selectedCargoDetails.length > 0),
+    resolvedCargoType() && (cargoCategories.length === 0 || selectedCargoDetails.length > 0),
   );
   const toggleCargoDetail = (name: string) => {
     setSelectedCargoDetails((current) => current.includes(name)
@@ -1320,7 +1325,7 @@ export default function RequestForm({
         if (!recipientSameAsSender && !identityComplete("recipient")) issues.push("saņēmējs");
         if (!recipientSameAsSender && !isValidPhone(form.recipient_phone_code, form.recipient_phone)) issues.push("saņēmēja tālrunis");
       }
-      if (!cargoSelectionComplete()) issues.push(cargoDetails.length ? "tehnikas vienība" : "kravas veids");
+      if (!cargoSelectionComplete()) issues.push(cargoCategories.length ? "tehnikas vienība un svars" : "kravas veids");
     }
     if (targetStep >= 2) {
       if (!form.pickup_contact_name.trim()) issues.push("uzkraušanas kontaktpersona");
@@ -2118,24 +2123,16 @@ export default function RequestForm({
           <FormCard title={isPartnerRequest ? "Krava" : "Kas jāved"}>
             <div className="space-y-3">
               <FieldLabel required>Kravas veids</FieldLabel>
-              <select value={form.cargo_type} onChange={(event) => { update({ cargo_type: event.target.value }); setSelectedCargoDetails([]); setCustomCargo(""); }} className="form-input">
+              <select value={form.cargo_type} onChange={(event) => { update({ cargo_type: event.target.value }); setSelectedCargoDetails([]); setSelectedCargoCategoryId(""); setCustomCargo(""); }} className="form-input">
                 <option value="">Izvēlieties</option>
                 {topCargoTypes.map((type) => <option key={type.id} value={type.name}>{type.name}</option>)}
                 <option value="Cits">Cits...</option>
               </select>
-              {cargoDetails.length > 0 && (
-                <fieldset className="rounded-xl border border-slate-200 p-3">
-                  <legend className="px-1 text-sm font-semibold text-slate-700">Izvēlieties tehnikas vienību</legend>
-                  <div className="grid gap-1 sm:grid-cols-2">
-                    {cargoDetails.map((detail) => (
-                      <label key={detail.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 hover:bg-slate-50">
-                        <input type="checkbox" checked={selectedCargoDetails.includes(detail.name)} onChange={() => toggleCargoDetail(detail.name)} className="h-5 w-5 rounded border-slate-300 text-blue-600" />
-                        <span className="text-sm">{detail.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              )}
+              {cargoCategories.length > 0 && <div className="space-y-3 rounded-xl border border-slate-200 p-3">
+                {selectedCargoDetails.length > 0 && <div className="flex flex-wrap gap-2">{selectedCargoDetails.map((detail) => <button key={detail} type="button" onClick={() => toggleCargoDetail(detail)} className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-800">{detail} ×</button>)}</div>}
+                <label><span className="mb-1 block text-sm font-semibold text-slate-700">Tehnikas vienība</span><select value={selectedCargoCategoryId} onChange={(event) => setSelectedCargoCategoryId(event.target.value)} className="form-input"><option value="">Izvēlieties</option>{cargoCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+                {selectedCargoCategory && <fieldset><legend className="mb-1 text-sm font-semibold text-slate-700">Precīzs svars</legend><div className="grid gap-1 sm:grid-cols-2">{cargoWeights.map((weight) => { const label = `${selectedCargoCategory.name} ${weight.name}`; return <label key={weight.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 hover:bg-slate-50"><input type="checkbox" checked={selectedCargoDetails.includes(label)} onChange={() => toggleCargoDetail(label)} className="h-5 w-5 rounded border-slate-300 text-blue-600" /><span className="text-sm">{weight.name}</span></label>; })}{cargoWeights.length === 0 && <p className="text-sm text-slate-500">Šai vienībai svari vēl nav pievienoti.</p>}</div></fieldset>}
+              </div>}
               {form.cargo_type === "Cits" && <input value={customCargo} onChange={(event) => setCustomCargo(event.target.value)} className="form-input" placeholder="Ierakstiet kravas veidu" maxLength={200} />}
             </div>
             {isPartnerRequest && (
