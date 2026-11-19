@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronDown, House, Laptop, MapPin, Menu, Moon, Pencil, Plus, Power, Repeat2, Search, Sun, Trash2, TriangleAlert, Truck, UserRound, X } from "lucide-react";
+import { ArrowUpDown, CalendarDays, CalendarRange, ChevronDown, House, Laptop, MapPin, Menu, Moon, Pencil, Plus, Power, Repeat2, Search, Sun, Trash2, TriangleAlert, Truck, UserRound, X } from "lucide-react";
 import UnifiedTransportRequestForm from "@/app/components/UnifiedTransportRequestForm";
 import PartnerProfileForm, { type PortalPartner } from "@/app/partner-portal/PartnerProfileForm";
 import PartnerNotificationSettings from "@/app/partner-portal/PartnerNotificationSettings";
@@ -129,6 +129,7 @@ export default function PartnerPortalPage() {
   const [dateScope, setDateScope] = useState<DateScope>("month");
   const [selectedDate, setSelectedDate] = useState(() => localDateValue(new Date()));
   const [sortMode, setSortMode] = useState<SortMode>("newest");
+  const [filterMenu, setFilterMenu] = useState<"date" | "sort" | null>(null);
 
   const authorizedFetch = useCallback(async (url: string, init?: RequestInit) => {
     const { data } = await supabase.auth.getSession();
@@ -413,8 +414,26 @@ export default function PartnerPortalPage() {
         <section id="partner-requests" className="scroll-mt-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-xl font-bold">{overviewFilter ? overviewFilter === "draft" ? "Melnraksti" : statusLabels[overviewFilter] : "Mani pieteikumi"}</h2>
-            <div className="flex items-center gap-2">
+            <div className="relative flex items-center gap-1">
               {overviewFilter && <button type="button" onClick={() => setOverviewFilter(null)} className="text-sm font-semibold text-blue-600 hover:underline">Rādīt visus</button>}
+              <button
+                type="button"
+                onClick={() => setFilterMenu((current) => current === "date" ? null : "date")}
+                className={`rounded-lg p-2 ${filterMenu === "date" || dateScope !== "month" ? "bg-blue-600 text-white" : "hover:bg-slate-200 dark:hover:bg-zinc-700"}`}
+                aria-label="Atlasīt pēc datuma"
+                title="Atlasīt pēc datuma"
+              >
+                <CalendarRange size={20} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMenu((current) => current === "sort" ? null : "sort")}
+                className={`rounded-lg p-2 ${filterMenu === "sort" || sortMode !== "newest" ? "bg-blue-600 text-white" : "hover:bg-slate-200 dark:hover:bg-zinc-700"}`}
+                aria-label="Mainīt kārtošanu"
+                title="Kārtot"
+              >
+                <ArrowUpDown size={20} />
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -427,46 +446,61 @@ export default function PartnerPortalPage() {
               >
                 {searchOpen ? <X size={20} /> : <Search size={20} />}
               </button>
+              {filterMenu && <button type="button" aria-label="Aizvērt izvēlni" onClick={() => setFilterMenu(null)} className="fixed inset-0 z-20 cursor-default" />}
+              {filterMenu === "date" && (
+                <div className="absolute right-0 top-12 z-30 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
+                  <label className="text-sm font-medium">
+                    Rādīt
+                    <select
+                      value={dateScope}
+                      onChange={(event) => {
+                        const scope = event.target.value as DateScope;
+                        setDateScope(scope);
+                        if (scope !== "date") setFilterMenu(null);
+                      }}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
+                    >
+                      <option value="month">Izvēlētais mēnesis</option>
+                      <option value="today">Šodien</option>
+                      <option value="tomorrow">Rīt</option>
+                      <option value="week">Šonedēļ</option>
+                      <option value="date">Konkrēts datums</option>
+                    </select>
+                  </label>
+                  {dateScope === "date" && (
+                    <input
+                      autoFocus
+                      type="date"
+                      value={selectedDate}
+                      onChange={(event) => {
+                        setSelectedDate(event.target.value);
+                        setFilterMenu(null);
+                      }}
+                      className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
+                    />
+                  )}
+                </div>
+              )}
+              {filterMenu === "sort" && (
+                <div className="absolute right-0 top-12 z-30 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
+                  <label className="text-sm font-medium">
+                    Kārtot
+                    <select
+                      value={sortMode}
+                      onChange={(event) => {
+                        setSortMode(event.target.value as SortMode);
+                        setFilterMenu(null);
+                      }}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
+                    >
+                      <option value="newest">Pēc jaunākā pieteikuma</option>
+                      <option value="nearest">Pēc tuvākā izpildes laika</option>
+                    </select>
+                  </label>
+                </div>
+              )}
             </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="text-sm font-medium">
-              Rādīt
-              <select
-                value={dateScope}
-                onChange={(event) => setDateScope(event.target.value as DateScope)}
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 dark:border-zinc-600 dark:bg-zinc-800"
-              >
-                <option value="month">Izvēlētais mēnesis</option>
-                <option value="today">Šodien</option>
-                <option value="tomorrow">Rīt</option>
-                <option value="week">Šonedēļ</option>
-                <option value="date">Konkrēts datums</option>
-              </select>
-            </label>
-            <label className="text-sm font-medium">
-              Kārtot
-              <select
-                value={sortMode}
-                onChange={(event) => setSortMode(event.target.value as SortMode)}
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 dark:border-zinc-600 dark:bg-zinc-800"
-              >
-                <option value="newest">Pēc jaunākā pieteikuma</option>
-                <option value="nearest">Pēc tuvākā izpildes laika</option>
-              </select>
-            </label>
-          </div>
-          {dateScope === "date" && (
-            <label className="block text-sm font-medium">
-              Datums
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(event) => setSelectedDate(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 dark:border-zinc-600 dark:bg-zinc-800 sm:max-w-xs"
-              />
-            </label>
-          )}
           {searchOpen && (
             <div className="relative">
               <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
