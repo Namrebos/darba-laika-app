@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 type CargoType = {
   id: number;
   name: string;
+  parent_id: number | null;
 };
 
 export default function CargoTypesPage() {
@@ -18,11 +19,13 @@ export default function CargoTypesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [subtypeName, setSubtypeName] = useState("");
 
   async function loadCargoTypes() {
     const { data, error } = await supabase
       .from("cargo_types")
-      .select("id, name")
+      .select("id, name, parent_id")
       .order("name");
     if (error) {
       setMessage("Kravas veidus neizdevās ielādēt.");
@@ -101,6 +104,26 @@ export default function CargoTypesPage() {
     setMessage("Kravas veids izdzēsts.");
   }
 
+  async function addSubtype(parentId: number) {
+    if (!subtypeName.trim()) {
+      setMessage("Ievadi tehnikas vienības nosaukumu.");
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase.rpc("add_cargo_subtype", {
+      target_parent_id: parentId,
+      cargo_type_name: subtypeName,
+    });
+    setSaving(false);
+    if (error) {
+      setMessage(error.message.includes("duplicate") ? "Šāda tehnikas vienība jau pastāv." : "Tehnikas vienību neizdevās pievienot.");
+      return;
+    }
+    setSubtypeName("");
+    await loadCargoTypes();
+    setMessage("Tehnikas vienība pievienota.");
+  }
+
   if (loading) return <p className="p-6">Ielādē...</p>;
 
   return (
@@ -157,14 +180,22 @@ export default function CargoTypesPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="font-semibold">Saraksts ({cargoTypes.length})</h2>
-        {cargoTypes.map((cargoType) => (
+        <h2 className="font-semibold">Saraksts ({cargoTypes.filter((item) => item.parent_id === null).length})</h2>
+        {cargoTypes.filter((item) => item.parent_id === null).map((cargoType) => {
+          const subtypes = cargoTypes.filter((item) => item.parent_id === cargoType.id);
+          const expanded = expandedId === cargoType.id;
+          return (
           <article
             key={cargoType.id}
-            className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
+            className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
           >
-            <span className="min-w-0 truncate font-medium">{cargoType.name}</span>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <button type="button" onClick={() => setExpandedId(expanded ? null : cargoType.id)} className="flex min-w-0 items-center gap-2 text-left font-medium">
+                {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                <span className="truncate">{cargoType.name}</span>
+                {subtypes.length > 0 && <span className="text-xs text-zinc-500">({subtypes.length})</span>}
+              </button>
+              <div className="flex shrink-0 gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -185,9 +216,27 @@ export default function CargoTypesPage() {
               >
                 <Trash2 size={18} />
               </button>
+              </div>
             </div>
+            {expanded && (
+              <div className="mt-4 space-y-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                {subtypes.map((subtype) => (
+                  <div key={subtype.id} className="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900">
+                    <span className="text-sm">{subtype.name}</span>
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => { setEditingId(subtype.id); setName(subtype.name); setMessage(""); }} className="rounded-md p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700" aria-label={`Rediģēt ${subtype.name}`}><Pencil size={16} /></button>
+                      <button type="button" onClick={() => void deleteCargoType(subtype)} className="rounded-md p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950" aria-label={`Dzēst ${subtype.name}`}><Trash2 size={16} /></button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-2">
+                  <input value={subtypeName} onChange={(event) => setSubtypeName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void addSubtype(cargoType.id); }} placeholder="Piem., Ekskavators 5,0 t" maxLength={100} className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-600" />
+                  <button type="button" onClick={() => void addSubtype(cargoType.id)} disabled={saving} className="rounded-lg bg-green-600 p-2 text-white disabled:opacity-50" aria-label="Pievienot tehnikas vienību"><Plus size={18} /></button>
+                </div>
+              </div>
+            )}
           </article>
-        ))}
+        )})}
       </section>
     </div>
   );

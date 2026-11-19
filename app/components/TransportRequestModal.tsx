@@ -679,7 +679,7 @@ export default function TransportRequestModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [cargoTypes, setCargoTypes] = useState<string[]>([]);
+  const [cargoTypes, setCargoTypes] = useState<Array<{ id: number; name: string; parent_id: number | null }>>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [partners, setPartners] = useState<PartnerSummary[]>([]);
   const [partnerSaving, setPartnerSaving] = useState(false);
@@ -722,7 +722,7 @@ export default function TransportRequestModal({
   }, [taskActivity]);
 
   useEffect(() => {
-    supabase.from("cargo_types").select("name").order("name").then(({ data }) => setCargoTypes((data || []).map((item) => item.name)));
+    supabase.from("cargo_types").select("id, name, parent_id").order("name").then(({ data }) => setCargoTypes((data || []) as Array<{ id: number; name: string; parent_id: number | null }>));
   }, []);
 
   useEffect(() => {
@@ -990,7 +990,14 @@ export default function TransportRequestModal({
               </div>
               <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-xl font-bold text-slate-900">Kravas informācija</h3>
-                <label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Kravas veids *</span><select value={transportRequest.cargo_type} onChange={(event) => updateRequest({ cargo_type: event.target.value })} className="form-input bg-white"><option value="">Izvēlies</option>{cargoTypes.map((name) => <option key={name} value={name}>{name}</option>)}{transportRequest.cargo_type && !cargoTypes.includes(transportRequest.cargo_type) && <option value={transportRequest.cargo_type}>{transportRequest.cargo_type}</option>}</select></label>
+                {(() => {
+                  const [selectedType, detailsText = ""] = transportRequest.cargo_type.split(":", 2);
+                  const selectedDetails = detailsText.split(";").map((item) => item.trim()).filter(Boolean);
+                  const parents = cargoTypes.filter((item) => item.parent_id === null);
+                  const parent = parents.find((item) => item.name === selectedType.trim());
+                  const details = parent ? cargoTypes.filter((item) => item.parent_id === parent.id) : [];
+                  return <div className="space-y-3"><label className="block"><span className="mb-1 block text-sm font-semibold text-slate-800">Kravas veids *</span><select value={selectedType.trim()} onChange={(event) => updateRequest({ cargo_type: event.target.value })} className="form-input bg-white"><option value="">Izvēlies</option>{parents.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></label>{details.length > 0 && <fieldset className="rounded-xl border border-slate-200 p-3"><legend className="px-1 text-sm font-semibold">Tehnikas vienības</legend><div className="grid gap-1 sm:grid-cols-2">{details.map((detail) => <label key={detail.id} className="flex items-center gap-2 rounded-lg px-2 py-2"><input type="checkbox" checked={selectedDetails.includes(detail.name)} onChange={() => { const next = selectedDetails.includes(detail.name) ? selectedDetails.filter((item) => item !== detail.name) : [...selectedDetails, detail.name]; updateRequest({ cargo_type: next.length ? `${selectedType.trim()}: ${next.join("; ")}` : selectedType.trim() }); }} className="h-5 w-5 rounded" /><span className="text-sm">{detail.name}</span></label>)}</div></fieldset>}</div>;
+                })()}
                 <EditField label="Papildu piezīmes" value={transportRequest.additional_notes} multiline onChange={(value) => updateRequest({ additional_notes: value })} />
               </section>
               <div className="sticky bottom-0 z-20 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 py-3">

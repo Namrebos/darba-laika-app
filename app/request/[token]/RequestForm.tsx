@@ -160,6 +160,16 @@ const defaultCargoTypes = [
   "Automašīna",
 ];
 
+type CargoTypeOption = { id: number; name: string; parent_id: number | null };
+
+function parseCargoValue(value: string) {
+  const [type, details = ""] = value.split(":", 2);
+  return {
+    type: type.trim(),
+    details: details.split(";").map((item) => item.trim()).filter(Boolean),
+  };
+}
+
 function FieldLabel({
   children,
   required = false,
@@ -624,7 +634,10 @@ export default function RequestForm({
   const [images, setImages] = useState<File[]>([]);
   const [step, setStep] = useState(1);
   const [customCargo, setCustomCargo] = useState("");
-  const [cargoTypes, setCargoTypes] = useState(defaultCargoTypes);
+  const [selectedCargoDetails, setSelectedCargoDetails] = useState<string[]>([]);
+  const [cargoTypes, setCargoTypes] = useState<CargoTypeOption[]>(
+    defaultCargoTypes.map((name, index) => ({ id: -(index + 1), name, parent_id: null })),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [draftSaving, setDraftSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -708,6 +721,7 @@ export default function RequestForm({
         dropoffPoint?: Point | null;
         additionalDropoffs?: AdditionalDropoff[];
         customCargo?: string;
+        selectedCargoDetails?: string[];
         recipientSameAsSender?: boolean;
       } | undefined;
       if (!payload) return;
@@ -715,7 +729,10 @@ export default function RequestForm({
       if (payload.pickupPoint) { setPickupPoint(payload.pickupPoint); setPickupFocus(payload.pickupPoint); }
       if (payload.dropoffPoint) { setDropoffPoint(payload.dropoffPoint); setDropoffFocus(payload.dropoffPoint); }
       if (Array.isArray(payload.additionalDropoffs)) setAdditionalDropoffs(payload.additionalDropoffs);
-      if (typeof payload.customCargo === "string") setCustomCargo(payload.customCargo);
+      if (typeof payload.customCargo === "string") {
+        setCustomCargo(payload.customCargo);
+      }
+      if (Array.isArray(payload.selectedCargoDetails)) setSelectedCargoDetails(payload.selectedCargoDetails);
       if (typeof payload.recipientSameAsSender === "boolean") setRecipientSameAsSender(payload.recipientSameAsSender);
     }
     void loadDraft();
@@ -759,6 +776,9 @@ export default function RequestForm({
         pickup_address: String(request.pickup_address || ""), pickup_date: String(request.pickup_date || ""), pickup_time: String(request.pickup_time || "").slice(0, 5), pickup_notes: String(request.pickup_notes || ""),
         dropoff_address: String(request.dropoff_address || ""), dropoff_date: String(request.dropoff_date || ""), dropoff_time: String(request.dropoff_time || "").slice(0, 5), dropoff_notes: String(request.dropoff_notes || ""), cargo_type: String(request.cargo_type || ""), additional_notes: String(request.additional_notes || ""),
       };
+      const parsedCargo = parseCargoValue(sourceForm.cargo_type);
+      sourceForm.cargo_type = parsedCargo.type;
+      setSelectedCargoDetails(parsedCargo.details);
       setSelectedPartnerId(String(request.partner_id || ""));
       const pickup = { lat: Number(request.pickup_lat), lng: Number(request.pickup_lng) };
       const dropoff = { lat: Number(request.dropoff_lat), lng: Number(request.dropoff_lng) };
@@ -850,10 +870,10 @@ export default function RequestForm({
     async function loadCargoTypes() {
       const { data, error: cargoTypesError } = await supabase
         .from("cargo_types")
-        .select("name")
+        .select("id, name, parent_id")
         .order("name");
       if (!cargoTypesError && data && data.length > 0) {
-        setCargoTypes(data.map((item) => item.name));
+        setCargoTypes(data as CargoTypeOption[]);
       }
     }
     void loadCargoTypes();
@@ -1189,6 +1209,25 @@ export default function RequestForm({
     setPickupPoint(dropoffPoint); setPickupFocus(dropoffPoint); setDropoffPoint(pickupPoint); setDropoffFocus(pickupPoint);
   };
 
+  const topCargoTypes = cargoTypes.filter((item) => item.parent_id === null);
+  const selectedCargoParent = topCargoTypes.find((item) => item.name === form.cargo_type);
+  const cargoDetails = selectedCargoParent
+    ? cargoTypes.filter((item) => item.parent_id === selectedCargoParent.id)
+    : [];
+  const resolvedCargoType = () => {
+    if (form.cargo_type === "Cits") return customCargo.trim();
+    if (selectedCargoDetails.length) return `${form.cargo_type}: ${selectedCargoDetails.join("; ")}`;
+    return form.cargo_type.trim();
+  };
+  const cargoSelectionComplete = () => Boolean(
+    resolvedCargoType() && (cargoDetails.length === 0 || selectedCargoDetails.length > 0),
+  );
+  const toggleCargoDetail = (name: string) => {
+    setSelectedCargoDetails((current) => current.includes(name)
+      ? current.filter((item) => item !== name)
+      : [...current, name]);
+  };
+
   const identityComplete = (prefix: "sender" | "recipient") => {
     const type = form[`${prefix}_type`];
     return type === "company"
@@ -1219,11 +1258,7 @@ export default function RequestForm({
   const stepValid = (targetStep: number): boolean => {
     if (targetStep === 1) {
       if (isPartnerRequest) {
-        return Boolean(
-          form.cargo_type === "Cits"
-            ? customCargo.trim()
-            : form.cargo_type.trim(),
-        );
+        return cargoSelectionComplete();
       }
       return Boolean(
         identityComplete("sender") &&
@@ -1234,9 +1269,7 @@ export default function RequestForm({
                 form.recipient_phone_code,
                 form.recipient_phone,
               ))) &&
-          (form.cargo_type === "Cits"
-            ? customCargo.trim()
-            : form.cargo_type.trim()),
+          cargoSelectionComplete(),
       );
     }
     if (targetStep === 2) {
@@ -1271,7 +1304,7 @@ export default function RequestForm({
         if (!recipientSameAsSender && !identityComplete("recipient")) issues.push("saņēmējs");
         if (!recipientSameAsSender && !isValidPhone(form.recipient_phone_code, form.recipient_phone)) issues.push("saņēmēja tālrunis");
       }
-      if (!(form.cargo_type === "Cits" ? customCargo.trim() : form.cargo_type.trim())) issues.push("kravas veids");
+      if (!cargoSelectionComplete()) issues.push(cargoDetails.length ? "tehnikas vienība" : "kravas veids");
     }
     if (targetStep >= 2) {
       if (!form.pickup_contact_name.trim()) issues.push("uzkraušanas kontaktpersona");
@@ -1542,6 +1575,7 @@ export default function RequestForm({
           dropoffPoint,
           additionalDropoffs,
           customCargo,
+          selectedCargoDetails,
           recipientSameAsSender,
         },
       }),
@@ -1603,8 +1637,7 @@ export default function RequestForm({
         : `${form.recipient_phone_code}${phoneDigits(form.recipient_phone)}`,
       pickup_contact_phone: `${form.pickup_contact_phone_code}${phoneDigits(form.pickup_contact_phone)}`,
       dropoff_contact_phone: `${form.dropoff_contact_phone_code}${phoneDigits(form.dropoff_contact_phone)}`,
-      cargo_type:
-        form.cargo_type === "Cits" ? customCargo.trim() : form.cargo_type,
+      cargo_type: resolvedCargoType(),
       pickup_lat: pickupPoint.lat,
       pickup_lng: pickupPoint.lng,
       dropoff_lat: dropoffPoint.lat,
@@ -2066,46 +2099,28 @@ export default function RequestForm({
             </>
           )}
           <FormCard title={isPartnerRequest ? "Krava" : "Kas jāved"}>
-            <label>
+            <div className="space-y-3">
               <FieldLabel required>Kravas veids</FieldLabel>
-              {form.cargo_type === "Cits" ? (
-                <div className="flex gap-2">
-                  <input
-                    value={customCargo}
-                    onChange={(event) => setCustomCargo(event.target.value)}
-                    className="form-input"
-                    placeholder="Ierakstiet kravas veidu"
-                    maxLength={100}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      update({ cargo_type: "" });
-                      setCustomCargo("");
-                    }}
-                    className="rounded-lg border border-slate-300 px-3 text-sm"
-                  >
-                    Mainīt
-                  </button>
-                </div>
-              ) : (
-                <select
-                  value={form.cargo_type}
-                  onChange={(event) =>
-                    update({ cargo_type: event.target.value })
-                  }
-                  className="form-input"
-                >
-                  <option value="">Izvēlieties</option>
-                  {cargoTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type === "Cits" ? "Cits..." : type}
-                    </option>
-                  ))}
-                  <option value="Cits">Cits...</option>
-                </select>
+              <select value={form.cargo_type} onChange={(event) => { update({ cargo_type: event.target.value }); setSelectedCargoDetails([]); setCustomCargo(""); }} className="form-input">
+                <option value="">Izvēlieties</option>
+                {topCargoTypes.map((type) => <option key={type.id} value={type.name}>{type.name}</option>)}
+                <option value="Cits">Cits...</option>
+              </select>
+              {cargoDetails.length > 0 && (
+                <fieldset className="rounded-xl border border-slate-200 p-3">
+                  <legend className="px-1 text-sm font-semibold text-slate-700">Izvēlieties tehnikas vienību</legend>
+                  <div className="grid gap-1 sm:grid-cols-2">
+                    {cargoDetails.map((detail) => (
+                      <label key={detail.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 hover:bg-slate-50">
+                        <input type="checkbox" checked={selectedCargoDetails.includes(detail.name)} onChange={() => toggleCargoDetail(detail.name)} className="h-5 w-5 rounded border-slate-300 text-blue-600" />
+                        <span className="text-sm">{detail.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               )}
-            </label>
+              {form.cargo_type === "Cits" && <input value={customCargo} onChange={(event) => setCustomCargo(event.target.value)} className="form-input" placeholder="Ierakstiet kravas veidu" maxLength={200} />}
+            </div>
             {isPartnerRequest && (
               <>
               <label className="mt-4 block">

@@ -91,7 +91,7 @@ function validatePayload(
       cleanText(input.dropoff_address, 250) &&
       cleanText(input.pickup_date, 10) &&
       cleanText(input.dropoff_date, 10) &&
-      cleanText(input.cargo_type, 100) &&
+      cleanText(input.cargo_type, 500) &&
       validDropoffOrder(input) &&
       validCoordinate(input.pickup_lat, -90, 90) &&
       validCoordinate(input.pickup_lng, -180, 180) &&
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
     dropoff_date: cleanText(payload.dropoff_date, 10),
     dropoff_time: cleanText(payload.dropoff_time, 5),
     dropoff_notes: cleanText(payload.dropoff_notes, 500),
-    cargo_type: cleanText(payload.cargo_type, 100),
+    cargo_type: cleanText(payload.cargo_type, 500),
     additional_notes: cleanText(payload.additional_notes, 500),
     additional_dropoffs: cleanAdditionalDropoffs(payload.additional_dropoffs),
   };
