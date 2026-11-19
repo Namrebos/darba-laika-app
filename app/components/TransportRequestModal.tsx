@@ -106,6 +106,13 @@ function formatActivityDate(value: string | null) {
   }).format(new Date(value));
 }
 
+function formatActivityTime(value: string) {
+  return new Intl.DateTimeFormat("lv-LV", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 function formatActivityDuration(seconds: number | null, startedAt: string, endedAt: string | null, now = Date.now()) {
   const calculated = endedAt
     ? Math.max(0, Math.floor((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000))
@@ -1101,8 +1108,8 @@ export default function TransportRequestModal({
                   <h3 className="text-xl font-bold text-slate-900">Darba izpilde</h3>
                   {taskActivity.taskLog && (
                     <ReadonlyField
-                      label="Darba ilgums"
-                      value={formatActivityDuration(null, taskActivity.taskLog.start_time, taskActivity.taskLog.end_time, activityClock)}
+                      label="Darbs"
+                      value={`${formatActivityTime(taskActivity.taskLog.start_time)}–${taskActivity.taskLog.end_time ? formatActivityTime(taskActivity.taskLog.end_time) : "notiek"} · ${formatActivityDuration(null, taskActivity.taskLog.start_time, taskActivity.taskLog.end_time, activityClock)}`}
                     />
                   )}
                   {taskActivity.taskLog?.note?.trim() && (
