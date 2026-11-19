@@ -1707,8 +1707,8 @@ export default function RequestForm({
         {(internal || isPartnerRequest || testPartnerId) && (
           <div className="absolute right-0 top-0 flex gap-2">
           <button type="button" onClick={reverseRoute} aria-label="Samainīt uzkraušanas un izkraušanas vietas" title="Samainīt uzkraušanas un izkraušanas vietas" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm"><Repeat2 size={23}/></button>
-          {(internal || testPartnerId) && <Link
-            href={testPartnerId ? `/partner-portal/test?partnerId=${testPartnerId}` : "/planned-tasks"}
+          {(internal || testPartnerId || partnerPortal) && <Link
+            href={partnerPortal ? "/partner-portal" : testPartnerId ? `/partner-portal/test?partnerId=${testPartnerId}` : "/planned-tasks"}
             aria-label="Aizvērt formu bez saglabāšanas"
             title="Aizvērt"
             className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
