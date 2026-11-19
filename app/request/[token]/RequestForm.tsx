@@ -170,6 +170,17 @@ function parseCargoValue(value: string) {
   };
 }
 
+const cargoDetailsPrefix = "Krava: ";
+
+function parseCargoNotes(value: string) {
+  const lines = value.split("\n");
+  if (!lines[0]?.startsWith(cargoDetailsPrefix)) return { details: [] as string[], notes: value };
+  return {
+    details: lines[0].slice(cargoDetailsPrefix.length).split(";").map((item) => item.trim()).filter(Boolean),
+    notes: lines.slice(1).join("\n").trim(),
+  };
+}
+
 function FieldLabel({
   children,
   required = false,
@@ -777,8 +788,10 @@ export default function RequestForm({
         dropoff_address: String(request.dropoff_address || ""), dropoff_date: String(request.dropoff_date || ""), dropoff_time: String(request.dropoff_time || "").slice(0, 5), dropoff_notes: String(request.dropoff_notes || ""), cargo_type: String(request.cargo_type || ""), additional_notes: String(request.additional_notes || ""),
       };
       const parsedCargo = parseCargoValue(sourceForm.cargo_type);
+      const parsedNotes = parseCargoNotes(sourceForm.additional_notes);
       sourceForm.cargo_type = parsedCargo.type;
-      setSelectedCargoDetails(parsedCargo.details);
+      sourceForm.additional_notes = parsedNotes.notes;
+      setSelectedCargoDetails(parsedNotes.details.length ? parsedNotes.details : parsedCargo.details);
       setSelectedPartnerId(String(request.partner_id || ""));
       const pickup = { lat: Number(request.pickup_lat), lng: Number(request.pickup_lng) };
       const dropoff = { lat: Number(request.dropoff_lat), lng: Number(request.dropoff_lng) };
@@ -1216,9 +1229,12 @@ export default function RequestForm({
     : [];
   const resolvedCargoType = () => {
     if (form.cargo_type === "Cits") return customCargo.trim();
-    if (selectedCargoDetails.length) return `${form.cargo_type}: ${selectedCargoDetails.join("; ")}`;
     return form.cargo_type.trim();
   };
+  const resolvedAdditionalNotes = () => [
+    selectedCargoDetails.length ? `${cargoDetailsPrefix}${selectedCargoDetails.join("; ")}` : "",
+    form.additional_notes.trim(),
+  ].filter(Boolean).join("\n");
   const cargoSelectionComplete = () => Boolean(
     resolvedCargoType() && (cargoDetails.length === 0 || selectedCargoDetails.length > 0),
   );
@@ -1638,6 +1654,7 @@ export default function RequestForm({
       pickup_contact_phone: `${form.pickup_contact_phone_code}${phoneDigits(form.pickup_contact_phone)}`,
       dropoff_contact_phone: `${form.dropoff_contact_phone_code}${phoneDigits(form.dropoff_contact_phone)}`,
       cargo_type: resolvedCargoType(),
+      additional_notes: resolvedAdditionalNotes(),
       pickup_lat: pickupPoint.lat,
       pickup_lng: pickupPoint.lng,
       dropoff_lat: dropoffPoint.lat,

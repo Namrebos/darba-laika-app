@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     .from("transport_requests")
     .select(`
       id, created_at, pickup_date, pickup_time, pickup_address,
-      dropoff_date, dropoff_address, cargo_type,
+      dropoff_date, dropoff_address, cargo_type, additional_notes,
       planned_tasks!planned_tasks_transport_request_id_fkey(id, status, scheduled_date, scheduled_time)
     `)
     .eq("partner_id", auth.partnerId)

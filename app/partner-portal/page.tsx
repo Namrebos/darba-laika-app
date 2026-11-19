@@ -26,6 +26,7 @@ type PartnerRequest = {
   dropoff_date: string;
   dropoff_address: string;
   cargo_type: string;
+  additional_notes: string;
   planned_tasks: PlannedTask[] | PlannedTask | null;
 };
 
@@ -227,7 +228,9 @@ export default function PartnerPortalPage() {
   }, {}), [overviewItems]);
 
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase("lv");
-  const cargoTitle = (value: string | undefined) => {
+  const cargoTitle = (value: string | undefined, notes?: string) => {
+    const detailLine = String(notes || "").split("\n")[0];
+    if (detailLine.startsWith("Krava: ")) return detailLine.slice(7).trim();
     const [, details] = String(value || "").split(":", 2);
     return details?.trim() || value || "Nepabeigts pieteikums";
   };
@@ -240,7 +243,7 @@ export default function PartnerPortalPage() {
         : items.filter((item) => (linkedTask(item)?.status || "new") === overviewFilter);
     const searched = !normalizedSearch ? statusFiltered : statusFiltered.filter((item) => {
       const status = linkedTask(item)?.status || "new";
-      return [item.cargo_type, item.pickup_address, item.dropoff_address, item.pickup_date, item.pickup_time, statusLabels[status]]
+      return [item.cargo_type, item.additional_notes, item.pickup_address, item.dropoff_address, item.pickup_date, item.pickup_time, statusLabels[status]]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase("lv").includes(normalizedSearch));
     });
@@ -513,7 +516,7 @@ export default function PartnerPortalPage() {
               <article key={item.id} className="rounded-2xl bg-white p-4 shadow-sm dark:bg-zinc-800">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-bold">{cargoTitle(item.cargo_type)}</h3>
+                    <h3 className="font-bold">{cargoTitle(item.cargo_type, item.additional_notes)}</h3>
                     <p className="mt-1 flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300"><CalendarDays size={16} /> {item.pickup_date}{item.pickup_time ? ` ${item.pickup_time.slice(0, 5)}` : ""}</p>
                     <p className="mt-1 flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300"><MapPin size={16} /> {shortAddress(item.pickup_address)} → {shortAddress(item.dropoff_address)}</p>
                   </div>
