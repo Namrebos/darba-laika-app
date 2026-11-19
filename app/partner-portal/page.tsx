@@ -532,6 +532,7 @@ export default function PartnerPortalPage() {
         <UnifiedTransportRequestForm
           mode={["new", "planned"].includes(linkedTask(items.find((item) => item.id === openRequestId)!)?.status || "") ? "edit" : "readonly"}
           requestId={openRequestId}
+          activityOnly={linkedTask(items.find((item) => item.id === openRequestId)!)?.status === "completed"}
           onClose={() => setOpenRequestId(null)}
           onSaved={() => void load()}
         />

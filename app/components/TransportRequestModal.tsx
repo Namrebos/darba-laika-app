@@ -662,11 +662,13 @@ export default function TransportRequestModal({
   requestId,
   onClose,
   editable = false,
+  activityOnly = false,
   onSaved,
 }: {
   requestId: number | null;
   onClose: () => void;
   editable?: boolean;
+  activityOnly?: boolean;
   onSaved?: () => void;
 }) {
   const [transportRequest, setTransportRequest] =
@@ -932,7 +934,7 @@ export default function TransportRequestModal({
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3">
       <div className="isolate max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-slate-50 text-slate-950 shadow-2xl">
         <div className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
-          <h2 className="text-xl font-bold">Pārvadājuma pieteikums</h2>
+          <h2 className="text-xl font-bold">{activityOnly ? "Darba izpilde" : "Pārvadājuma pieteikums"}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -1009,6 +1011,8 @@ export default function TransportRequestModal({
 
           {transportRequest && !editable && (
             <>
+              {!activityOnly && (
+              <>
               <div className="grid gap-4 md:grid-cols-2">
                 <PartySection
                   title="Pasūtītājs"
@@ -1101,6 +1105,8 @@ export default function TransportRequestModal({
                     ))}
                   </div>
                 </section>
+              )}
+              </>
               )}
 
               {taskActivity && (

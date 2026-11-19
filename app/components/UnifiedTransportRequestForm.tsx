@@ -23,6 +23,7 @@ type ExistingProps = {
   requestId: number | null;
   onClose: () => void;
   onSaved?: () => void;
+  activityOnly?: boolean;
 };
 
 export type UnifiedTransportRequestFormProps = CreateProps | ExistingProps;
@@ -55,6 +56,7 @@ export default function UnifiedTransportRequestForm(
       requestId={props.requestId}
       onClose={props.onClose}
       editable={props.mode === "edit"}
+      activityOnly={props.activityOnly}
       onSaved={props.onSaved}
     />
   );
