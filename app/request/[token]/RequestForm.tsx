@@ -1494,6 +1494,35 @@ export default function RequestForm({
     setImages((current) => [...current, ...compressed]);
   };
 
+  const imageInputs = (
+    <>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="image-upload-button">
+          <Camera size={22} />
+          Uzņemt foto
+          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => { void addImages(event.target.files); event.target.value = ""; }} />
+        </label>
+        <label className="image-upload-button">
+          <ImagePlus size={22} />
+          Pievienot attēlus
+          <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => { void addImages(event.target.files); event.target.value = ""; }} />
+        </label>
+      </div>
+      {previews.length > 0 && (
+        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {previews.map(({ url }, index) => (
+            <div key={url} className="relative aspect-square overflow-hidden rounded-lg">
+              <Image src={url} alt="" fill unoptimized className="object-cover" />
+              <button type="button" onClick={() => setImages((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1 top-1 rounded-full bg-red-600 p-1 text-white" aria-label="Dzēst attēlu">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
   const saveDraft = async () => {
     if (!partnerPortal) return;
     setDraftSaving(true);
@@ -2078,6 +2107,7 @@ export default function RequestForm({
               )}
             </label>
             {isPartnerRequest && (
+              <>
               <label className="mt-4 block">
                 <FieldLabel>Papildu piezīmes</FieldLabel>
                 <textarea
@@ -2089,6 +2119,11 @@ export default function RequestForm({
                   maxLength={500}
                 />
               </label>
+              <div className="mt-4 border-t border-slate-200 pt-4">
+                <FieldLabel>Attēli</FieldLabel>
+                {imageInputs}
+              </div>
+              </>
             )}
           </FormCard>
 
@@ -2109,68 +2144,7 @@ export default function RequestForm({
             </FormCard>
             )}
 
-            <FormCard title="Attēli">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="image-upload-button">
-                  <Camera size={22} />
-                  Uzņemt foto
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={(event) => {
-                      void addImages(event.target.files);
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
-                <label className="image-upload-button">
-                  <ImagePlus size={22} />
-                  Pievienot attēlus
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(event) => {
-                      void addImages(event.target.files);
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
-              </div>
-              {previews.length > 0 && (
-                <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {previews.map(({ file, url }, index) => (
-                    <div
-                      key={url}
-                      className="relative aspect-square overflow-hidden rounded-lg"
-                    >
-                      <Image
-                        src={url}
-                        alt=""
-                        fill
-                        unoptimized
-                        className="object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setImages((current) =>
-                            current.filter((_, itemIndex) => itemIndex !== index),
-                          )
-                        }
-                        className="absolute right-1 top-1 rounded-full bg-red-600 p-1 text-white"
-                        aria-label="Dzēst attēlu"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </FormCard>
+            {!isPartnerRequest && <FormCard title="Attēli">{imageInputs}</FormCard>}
           </div>
         </div>
       </div>
